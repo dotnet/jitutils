@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0-*",
+  "buildOptions": {
+    "emitEntryPoint": true
+  },
+  
+  "dependencies": {
+    "Microsoft.NETCore.App": "1.0.0-rc2-3002668",
+    "System.Runtime.Serialization.Primitives": "4.1.1-rc2-24018",
+    "Microsoft.DotNet.Cli.Utils": "1.0.0-dev-*",
+    "System.CommandLine": "0.1.0-*",
+    "Newtonsoft.Json": "8.0.3"
+  },
+  
+  "frameworks": {
+    "netcoreapp1.0": {
+        "imports": "dnxcore50"
+    }
+  },
+  
+  "runtimes": {
+      "win81-x64": {},
+      "ubuntu.14.04-x64": {}, 
+      "osx.10.10-x64": {},
+      "osx.10.11-x64": {} 
+  }
+}

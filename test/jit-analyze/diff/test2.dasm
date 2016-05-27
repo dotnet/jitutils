@@ -1,0 +1,200 @@
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Total bytes of code 157, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_ReversePInvoke(long,int,ubyte,long,long,long,long)
+; Total bytes of code 92, prolog size 15 for method DomainNeutralILStubClass:IL_STUB_ReversePInvoke(long,int,ubyte,long,long,long,long)
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid:.ctor(bool):this
+; Total bytes of code 21, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid:.ctor(bool):this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid:.ctor():this
+; Total bytes of code 45, prolog size 8 for method Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid:.ctor():this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid:get_IsInvalid():bool:this
+; Total bytes of code 38, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid:get_IsInvalid():bool:this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeWaitHandle:.ctor():this
+; Total bytes of code 23, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeWaitHandle:.ctor():this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeWaitHandle:.ctor(long,bool):this
+; Total bytes of code 39, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeWaitHandle:.ctor(long,bool):this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeWaitHandle:ReleaseHandle():bool:this
+; Total bytes of code 20, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeWaitHandle:ReleaseHandle():bool:this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeFindHandle:.ctor():this
+; Total bytes of code 23, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeFindHandle:.ctor():this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeFindHandle:ReleaseHandle():bool:this
+; Total bytes of code 20, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeFindHandle:ReleaseHandle():bool:this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeFileHandle:.ctor():this
+; Total bytes of code 23, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeFileHandle:.ctor():this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeFileHandle:.ctor(long,bool):this
+; Total bytes of code 39, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeFileHandle:.ctor(long,bool):this
+; Assembly listing for method Microsoft.Win32.SafeHandles.SafeFileHandle:ReleaseHandle():bool:this
+; Total bytes of code 20, prolog size 5 for method Microsoft.Win32.SafeHandles.SafeFileHandle:ReleaseHandle():bool:this
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,long,int,int,ref,int,long):int
+; Total bytes of code 631, prolog size 70 for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,long,int,int,ref,int,long):int
+; Assembly listing for method Microsoft.Win32.Win32Native:GetMessage(int):ref
+; Total bytes of code 275, prolog size 13 for method Microsoft.Win32.Win32Native:GetMessage(int):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,long):long
+; Total bytes of code 162, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,long):long
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):long
+; Total bytes of code 173, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):long
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,long)
+; Total bytes of code 163, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,long)
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Total bytes of code 157, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Total bytes of code 157, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int):long
+; Total bytes of code 184, prolog size 32 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int):long
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Total bytes of code 157, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long)
+; Total bytes of code 157, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long)
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Total bytes of code 313, prolog size 34 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,bool,bool,ref):ref
+; Total bytes of code 316, prolog size 36 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,bool,bool,ref):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,bool,ref):ref
+; Total bytes of code 293, prolog size 36 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,bool,ref):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,bool,ref):ref
+; Total bytes of code 276, prolog size 32 for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,bool,ref):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,int,long,long):int
+; Total bytes of code 192, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,int,long,long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,ref,long):int
+; Total bytes of code 616, prolog size 70 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,ref,long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref,int):int
+; Total bytes of code 603, prolog size 67 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref,int):int
+; Assembly listing for method Microsoft.Win32.Win32Native:SafeCreateFile(ref,int,int,ref,int,int,long):ref
+; Total bytes of code 139, prolog size 8 for method Microsoft.Win32.Win32Native:SafeCreateFile(ref,int,int,ref,int,int,long):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,int,ref,int,int,long):ref
+; Total bytes of code 359, prolog size 39 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,int,ref,int,int,long):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):bool
+; Total bytes of code 182, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):int
+; Total bytes of code 283, prolog size 34 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Total bytes of code 313, prolog size 34 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Total bytes of code 313, prolog size 34 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,long,int):int
+; Total bytes of code 322, prolog size 42 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,long,int):int
+; Assembly listing for method Microsoft.Win32.Win32Native:SetFilePointer(ref,long,int,byref):long
+; Total bytes of code 118, prolog size 19 for method Microsoft.Win32.Win32Native:SetFilePointer(ref,long,int,byref):long
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long,int,long,long):int
+; Total bytes of code 326, prolog size 46 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long,int,long,long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long,int,byref,long):int
+; Total bytes of code 339, prolog size 52 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long,int,byref,long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long):bool
+; Total bytes of code 319, prolog size 37 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,int,ref):ref
+; Total bytes of code 300, prolog size 36 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,int,ref):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,byref):bool
+; Total bytes of code 341, prolog size 46 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,byref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,byref):int
+; Total bytes of code 317, prolog size 43 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,byref):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(int):long
+; Total bytes of code 175, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(int):long
+; Assembly listing for method Microsoft.Win32.Win32Native:MakeHRFromErrorCode(int):int
+; Total bytes of code 100, prolog size 8 for method Microsoft.Win32.Win32Native:MakeHRFromErrorCode(int):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref):ref
+; Total bytes of code 563, prolog size 62 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref):ref
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref):bool
+; Total bytes of code 536, prolog size 47 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):bool
+; Total bytes of code 170, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,ref):int
+; Total bytes of code 571, prolog size 54 for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,ref):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,byref):bool
+; Total bytes of code 235, prolog size 36 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,int,byref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Total bytes of code 207, prolog size 32 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(int):int
+; Total bytes of code 156, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(int):int
+; Assembly listing for method Microsoft.Win32.Win32Native:SetErrorMode(int):int
+; Total bytes of code 147, prolog size 19 for method Microsoft.Win32.Win32Native:SetErrorMode(int):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,int,long,int,long,int,long,long):int
+; Total bytes of code 216, prolog size 26 for method DomainNeutralILStubClass:IL_STUB_PInvoke(int,int,long,int,long,int,long,long):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref):bool
+; Total bytes of code 232, prolog size 36 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,ref):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke():long
+; Total bytes of code 148, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke():long
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):bool
+; Total bytes of code 170, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke():int
+; Total bytes of code 164, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke():int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,byref):int
+; Total bytes of code 575, prolog size 64 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,byref):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(byref):int
+; Total bytes of code 170, prolog size 32 for method DomainNeutralILStubClass:IL_STUB_PInvoke(byref):int
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):long
+; Total bytes of code 157, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long):long
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,long):long
+; Total bytes of code 163, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,long):long
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long,int,byref,long):bool
+; Total bytes of code 354, prolog size 52 for method DomainNeutralILStubClass:IL_STUB_PInvoke(ref,long,int,byref,long):bool
+; Assembly listing for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,long,int):long
+; Total bytes of code 174, prolog size 23 for method DomainNeutralILStubClass:IL_STUB_PInvoke(long,long,int):long
+; Assembly listing for method Microsoft.Win32.Win32Native:.cctor()
+; Total bytes of code 111, prolog size 5 for method Microsoft.Win32.Win32Native:.cctor()
+; Assembly listing for method OSVERSIONINFO:.ctor():this
+; Total bytes of code 21, prolog size 5 for method OSVERSIONINFO:.ctor():this
+; Assembly listing for method OSVERSIONINFOEX:.ctor():this
+; Total bytes of code 21, prolog size 5 for method OSVERSIONINFOEX:.ctor():this
+; Assembly listing for method SECURITY_ATTRIBUTES:.ctor():this
+; Total bytes of code 12, prolog size 5 for method SECURITY_ATTRIBUTES:.ctor():this
+; Assembly listing for method WIN32_FILE_ATTRIBUTE_DATA:PopulateFrom(ref):this
+; Total bytes of code 60, prolog size 5 for method WIN32_FILE_ATTRIBUTE_DATA:PopulateFrom(ref):this
+; Assembly listing for method WIN32_FIND_DATA:.ctor():this
+; Total bytes of code 6, prolog size 5 for method WIN32_FIND_DATA:.ctor():this
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:IsEnum(ref):bool
+; Total bytes of code 61, prolog size 8 for method Microsoft.Reflection.ReflectionExtensions:IsEnum(ref):bool
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:IsAbstract(ref):bool
+; Total bytes of code 33, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:IsAbstract(ref):bool
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:IsSealed(ref):bool
+; Total bytes of code 33, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:IsSealed(ref):bool
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:IsValueType(ref):bool
+; Total bytes of code 21, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:IsValueType(ref):bool
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:IsGenericType(ref):bool
+; Total bytes of code 23, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:IsGenericType(ref):bool
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:BaseType(ref):ref
+; Total bytes of code 20, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:BaseType(ref):ref
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:Assembly(ref):ref
+; Total bytes of code 20, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:Assembly(ref):ref
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:GetTypeCode(ref):int
+; Total bytes of code 27, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:GetTypeCode(ref):int
+; Assembly listing for method Microsoft.Reflection.ReflectionExtensions:ReflectionOnly(ref):bool
+; Total bytes of code 20, prolog size 5 for method Microsoft.Reflection.ReflectionExtensions:ReflectionOnly(ref):bool
+; Assembly listing for method EmptyArray`1[__Canon][System.__Canon]:.cctor()
+; Total bytes of code 104, prolog size 19 for method EmptyArray`1[__Canon][System.__Canon]:.cctor()
+; Assembly listing for method System.PlatformNotSupportedException:.ctor():this
+; Total bytes of code 85, prolog size 9 for method System.PlatformNotSupportedException:.ctor():this
+; Assembly listing for method System.PlatformNotSupportedException:.ctor(ref):this
+; Total bytes of code 69, prolog size 5 for method System.PlatformNotSupportedException:.ctor(ref):this
+; Assembly listing for method System.PlatformNotSupportedException:.ctor(ref,ref):this
+; Total bytes of code 82, prolog size 5 for method System.PlatformNotSupportedException:.ctor(ref,ref):this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:.ctor(ref):this
+; Total bytes of code 96, prolog size 5 for method System.ArraySegment`1[__Canon][System.__Canon]:.ctor(ref):this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:.ctor(ref,int,int):this
+; Total bytes of code 326, prolog size 12 for method System.ArraySegment`1[__Canon][System.__Canon]:.ctor(ref,int,int):this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:get_Array():ref:this
+; Total bytes of code 106, prolog size 8 for method System.ArraySegment`1[__Canon][System.__Canon]:get_Array():ref:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:get_Offset():int:this
+; Total bytes of code 106, prolog size 8 for method System.ArraySegment`1[__Canon][System.__Canon]:get_Offset():int:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:get_Count():int:this
+; Total bytes of code 106, prolog size 8 for method System.ArraySegment`1[__Canon][System.__Canon]:get_Count():int:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:GetHashCode():int:this
+; Total bytes of code 52, prolog size 8 for method System.ArraySegment`1[__Canon][System.__Canon]:GetHashCode():int:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:Equals(ref):bool:this
+; Total bytes of code 117, prolog size 17 for method System.ArraySegment`1[__Canon][System.__Canon]:Equals(ref):bool:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:Equals(struct):bool:this
+; Total bytes of code 61, prolog size 10 for method System.ArraySegment`1[__Canon][System.__Canon]:Equals(struct):bool:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:op_Equality(struct,struct):bool
+; Total bytes of code 77, prolog size 14 for method System.ArraySegment`1[__Canon][System.__Canon]:op_Equality(struct,struct):bool
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:op_Inequality(struct,struct):bool
+; Total bytes of code 122, prolog size 38 for method System.ArraySegment`1[__Canon][System.__Canon]:op_Inequality(struct,struct):bool
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.get_Item(int):ref:this
+; Total bytes of code 169, prolog size 8 for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.get_Item(int):ref:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.set_Item(int,ref):this
+; Total bytes of code 156, prolog size 8 for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.set_Item(int,ref):this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.IndexOf(ref):int:this
+; Total bytes of code 250, prolog size 20 for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.IndexOf(ref):int:this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.Insert(int,ref):this
+; Total bytes of code 37, prolog size 5 for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.Insert(int,ref):this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.RemoveAt(int):this
+; Total bytes of code 37, prolog size 5 for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IList<T>.RemoveAt(int):this
+; Assembly listing for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IReadOnlyList<T>.get_Item(int):ref:this
+; Total bytes of code 167, prolog size 8 for method System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IReadOnlyList<T>.get_Item(int):ref:this

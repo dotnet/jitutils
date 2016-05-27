@@ -1,0 +1,16 @@
+Found files with textual diffs.
+
+Summary:
+(Note: Lower is better)
+
+Total bytes of diff: 0
+
+0 total files with size differences.
+
+Top method regessions by size (bytes):
+           2 : test2.dasm - DomainNeutralILStubClass:IL_STUB_ReversePInvoke(long,int,ubyte,long,long,long,long)
+
+Top method improvements by size (bytes):
+          -2 : test2.dasm - System.ArraySegment`1[__Canon][System.__Canon]:System.Collections.Generic.IReadOnlyList<T>.get_Item(int):ref:this
+
+2 total methods with size differences.

@@ -1,0 +1,15 @@
+##  Hides dotnet cli build artifacts as well as project system cookies.
+##
+
+# ignore default binary/obj locations
+**/bin
+**/obj
+/fx
+.vscode
+
+# project system lock files
+project.lock.json
+
+# vs files
+.vs
+browse.VC.db
