@@ -16,7 +16,7 @@ using Newtonsoft.Json.Linq;
 
 namespace ManagedCodeGen
 {
-    public class corediff
+    public class jitdiff
     {
         // Supported commands.  List to view information from the CI system, and Copy to download artifacts.
         public enum Commands
