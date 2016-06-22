@@ -4,9 +4,11 @@ This repo holds a collection of utilities used by RyuJIT developers to
 automate tasks when working on CoreCLR.  Initial utilities are around 
 producing diffs of codegen changes.
 
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
 ## Summary
 
-Copy down the appropraite `bootstrap.{cmd|sh}` for your platform and run it.  The script 
+Copy down the appropriate `bootstrap.{cmd|sh}` for your platform and run it.  The script 
 will enlist in the jitutils project and perform the basics listed in the details section 
 following.
 
