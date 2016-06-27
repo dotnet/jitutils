@@ -52,6 +52,7 @@ namespace ManagedCodeGen
 
             private JObject _jObj;
             private bool _asmdiffLoaded = false;
+            private bool _noJitDasmRoot = false;
 
             public Config(string[] args)
             {
@@ -140,7 +141,7 @@ namespace ManagedCodeGen
             {
                 if (_tag == null)
                 {
-                    int currentCount = 1;
+                    int currentCount = 0;
                     foreach (var dir in Directory.EnumerateDirectories(_outputPath))
                     {
                         var name = Path.GetFileName(dir);
@@ -163,6 +164,12 @@ namespace ManagedCodeGen
 
             private void ExpandToolTags()
             {
+                if (_noJitDasmRoot)
+                {
+                    // Early out if there is no JIT_DASM_ROOT.
+                    return;
+                }
+
                 var tools = _jObj["tools"];
 
                 foreach (var tool in tools)
@@ -361,7 +368,8 @@ namespace ManagedCodeGen
                 }
                 else
                 {
-                    Console.WriteLine("Environment variable JIT_DASM_ROOT not found.");
+                    Console.WriteLine("Environment variable JIT_DASM_ROOT not found - no configuration loaded.");
+                    _noJitDasmRoot = true;
                 }
             }
 
