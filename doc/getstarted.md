@@ -20,11 +20,11 @@ GitHub repo for directions on building.
 
 ## Tools included in the repo
 
-* jit-dasm - Produce *.dasm from baseline/diff tools for an assembly or set of assemblies.
+* jit-dasm - Produce `*.dasm` from baseline/diff tools for an assembly or set of assemblies.
 * cijobs - List builds by job from the Jenkins CI for dotnet coreclr and enable downloads of
   build artifacts from the cloud.  These tools can be used in base/diff comparisons so 
   developers can avoid replicating these builds on local machines.
-* jit-analyze - Compare and analyze *.dasm files from baseline/diff.  Produces a report on diffs, 
+* jit-analyze - Compare and analyze `*.dasm` files from baseline/diff.  Produces a report on diffs,
   total size regression/improvement, and size regression/improvement by file and method.
 * jit-diff - Driver tool that implements a common dev flow.  Includes a configuration file 
   for common defaults, and implements directory scheme for "installing" tools for use later.
@@ -120,7 +120,7 @@ $ jit-diff diff --analyze --frameworksonly --base <base_coreclr_repo>/bin/Produc
 ```
 $ ls <output_directory>/*
 ```
-The output directory will contain both a `base` and `diff` directory that in turn contains a set of *.dasm 
+The output directory will contain both a `base` and `diff` directory that in turn contains a set of `*.dasm`
 files produced by the code generator. These are what are diff'ed.
 
 ### Scenario 2 - Running mscorlib, frameworks, and test assets diffs using the resources generated for a CoreCLR test run.
@@ -146,16 +146,16 @@ $ jit-diff diff --analyze --base <coreclr_repo>/bin/Product/<platform>/crossgen 
 ```
 $ ls <output_directory>/*
 ```
-The base and diff output directories should contain a tree that mirrors the test tree containing a *.dasm for 
+The base and diff output directories should contain a tree that mirrors the test tree containing a `*.dasm` for
 each assembly it found.
 
 This scenario will take a fair bit longer than the first since it traverses and identifies test 
-assembles in addition to the mscorlib/frameworks *.dasm.
+assembles in addition to the mscorlib/frameworks `*.dasm`.
 
 ### Notes on tags
 
 jit-diff allows a user supplied '--tag' on the command-line.  This tag can be used to label different 
-directories of *.dasm in the output directory so multiple (more than two) runs can be done. 
+directories of `*.dasm` in the output directory so multiple (more than two) runs can be done.
 This supports a scenario like the following:
 
 * Build base CoreCLR
@@ -174,7 +174,7 @@ The above scenario should show that there is some flexibility in the work flow.
 
 The jitutils suite includes the jit-analyze tool for analyzing diffs produced by jit-diff/jit-dasms 
 utilities. In the example above the `--analyze` switch to jit-diff caused the tool to be invoked 
-on the diff directories created by jit-diff. Analyze cracks the *.dasm files produced in the 
+on the diff directories created by jit-diff. Analyze cracks the `*.dasm` files produced in the
 earlier steps and extracts the bytes difference between the two based on the output produced 
 by the JIT.  This data is keyed by file and method name - for instance two files with 
 different names will not diff even if passed as the base and diff since the tool is looking 
