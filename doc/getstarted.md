@@ -113,7 +113,7 @@ Steps:
 * Create an empty output directory.
 * Invoke command
 ``` 
-$ jit-diff diff --analyze --base <base_coreclr_repo>/bin/Product/<platform>/crossgen --diff <diff_coreclr_repo>/bin/Product/<platform>/crossgen --output <output_directory> --core_root <jitutils_repo>/fx
+$ jit-diff diff --analyze --frameworksonly --base <base_coreclr_repo>/bin/Product/<platform>/crossgen --diff <diff_coreclr_repo>/bin/Product/<platform>/crossgen --output <output_directory> --core_root <jitutils_repo>/fx
 ```
 * View summary output produced by jit-diff via jit-analyze.  Report returned on stdout.
 * Check output directory
