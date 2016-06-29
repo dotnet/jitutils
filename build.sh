@@ -55,7 +55,8 @@ declare -a projects=(jit-dasm jit-diff jit-analyze cijobs)
 for proj in "${projects[@]}"
 do
     if [ "$publish" == true ]; then
-        dotnet publish -c $buildType -o $appInstallDir/$proj ./src/$proj
+        dotnet publish -c $buildType -o $appInstallDir ./src/$proj
+        cp ./wrapper.sh $appInstallDir/$proj
     else
         dotnet build -c $buildType ./src/$proj
     fi
