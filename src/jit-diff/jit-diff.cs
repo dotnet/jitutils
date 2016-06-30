@@ -180,13 +180,15 @@ namespace ManagedCodeGen
                     if (_baseExe == tag)
                     {
                         // passed base tag matches installed tool, reset path.
-                        _baseExe = Path.Combine(path, "crossgen");
+                        _baseExe = Directory.EnumerateFiles(path, "crossgen*")
+                                            .SingleOrDefault();
                     }
 
                     if (_diffExe == tag)
                     {
                         // passed diff tag matches installed tool, reset path.
-                        _diffExe = Path.Combine(path, "crossgen");
+                        _diffExe = Directory.EnumerateFiles(path, "crossgen*")
+                                            .SingleOrDefault();
                     }
                 }
             }
@@ -318,14 +320,16 @@ namespace ManagedCodeGen
                             string basePath = GetToolPath("base", out found);
                             if (found)
                             {
-                                _baseExe = Path.Combine(basePath, "crossgen");
+                                _baseExe = Directory.EnumerateFiles(basePath, "crossgen*")
+                                                    .SingleOrDefault();
                             }
 
                             // Find diff tool if any
                             string diffPath = GetToolPath("diff", out found);
                             if (found)
                             {
-                                _diffExe = Path.Combine(diffPath, "crossgen");
+                                _diffExe = Directory.EnumerateFiles(diffPath, "crossgen*")
+                                                    .SingleOrDefault();
                             }
 
                             // Set up output
