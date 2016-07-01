@@ -112,7 +112,7 @@ namespace ManagedCodeGen
             {
                 // Extract system RID from dotnet cli
                 List<string> commandArgs = new List<string> { "--info" };
-                CommandResult result = TryCommand("dotnet", commandArgs);
+                CommandResult result = TryCommand("dotnet", commandArgs, true);
 
                 if (result.ExitCode != 0)
                 {
@@ -551,15 +551,24 @@ namespace ManagedCodeGen
             return ret;
         }
 
-        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs)
+        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs, bool capture = false)
         {
             try 
             {
                 Command command =  Command.Create(name, commandArgs);
 
-                // Wireup stdout/stderr so we can see outout.
-                command.ForwardStdOut();
-                command.ForwardStdErr();
+                if (capture)
+                {
+                    // Capture stdout/stderr for consumption within tool.
+                    command.CaptureStdOut();
+                    command.CaptureStdErr();
+                }
+                else
+                {
+                    // Wireup stdout/stderr so we can see output.
+                    command.ForwardStdOut();
+                    command.ForwardStdErr();
+                }
 
                 return command.Execute();
             }
