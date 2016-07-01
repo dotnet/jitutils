@@ -112,16 +112,11 @@ namespace ManagedCodeGen
             {
                 // Extract system RID from dotnet cli
                 List<string> commandArgs = new List<string> { "--info" };
-                Microsoft.DotNet.Cli.Utils.Command infoCmd = Microsoft.DotNet.Cli.Utils.Command.Create(
-                    "dotnet", commandArgs);
-                infoCmd.CaptureStdOut();
-                infoCmd.CaptureStdErr();
-
-                CommandResult result = infoCmd.Execute();
+                CommandResult result = TryCommand("dotnet", commandArgs);
 
                 if (result.ExitCode != 0)
                 {
-                    Console.WriteLine("dotnet --info returned non-zero");
+                    Console.Error.WriteLine("dotnet --info returned non-zero");
                 }
 
                 var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
@@ -286,7 +281,7 @@ namespace ManagedCodeGen
                     }
                     catch (System.FormatException e)
                     {
-                        Console.WriteLine("Bad format for default {0}.  See asmdiff.json", name, e);
+                        Console.Error.WriteLine("Bad format for default {0}.  See asmdiff.json", name, e);
                     }
                 }
 
@@ -367,7 +362,7 @@ namespace ManagedCodeGen
                     }
                     else
                     {
-                        Console.WriteLine("Can't find asmdiff.json on {0}", _jitDasmRoot);
+                        Console.Error.WriteLine("Can't find asmdiff.json on {0}", _jitDasmRoot);
                     }
                 }
                 else
@@ -412,7 +407,7 @@ namespace ManagedCodeGen
             {
                 if (!_asmdiffLoaded)
                 {
-                    Console.WriteLine("Error: asmdiff.json isn't loaded.");
+                    Console.Error.WriteLine("Error: asmdiff.json isn't loaded.");
                     return -1;
                 }
                 
@@ -556,6 +551,26 @@ namespace ManagedCodeGen
             return ret;
         }
 
+        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs)
+        {
+            try 
+            {
+                Command command =  Command.Create(name, commandArgs);
+
+                // Wireup stdout/stderr so we can see outout.
+                command.ForwardStdOut();
+                command.ForwardStdErr();
+
+                return command.Execute();
+            }
+            catch (CommandUnknownException e)
+            {
+                Console.Error.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
+                Environment.Exit(-1);
+                return CommandResult.Empty;
+            }
+        }
+
         public static int InstallCommand(Config config)
         {   
             var asmDiffPath = Path.Combine(config.JitDasmRoot, "asmdiff.json");
@@ -569,7 +584,7 @@ namespace ManagedCodeGen
             // Early out if the tool is already installed.
             if (tools.Where(x => (string)x["tag"] == tag).Any())
             {
-                Console.WriteLine("{0} is already installed in the asmdiff.json. Remove before re-install.", tag);
+                Console.Error.WriteLine("{0} is already installed in the asmdiff.json. Remove before re-install.", tag);
                 return -1;
             }
 
@@ -610,17 +625,11 @@ namespace ManagedCodeGen
                 Console.WriteLine("ci command: {0} {1}", "cijobs", String.Join(" ", cijobsArgs));
             }
             
-            Command cijobsCmd =  Command.Create("cijobs", cijobsArgs);
-
-            // Wireup stdout/stderr so we can see outout.
-            cijobsCmd.ForwardStdOut();
-            cijobsCmd.ForwardStdErr();
-
-            CommandResult result = cijobsCmd.Execute();
+            CommandResult result = TryCommand("cijobs", cijobsArgs);
 
             if (result.ExitCode != 0)
             {
-                Console.WriteLine("cijobs command returned with {0} failures", result.ExitCode);
+                Console.Error.WriteLine("cijobs command returned with {0} failures", result.ExitCode);
                 return result.ExitCode;
             }
 
@@ -723,7 +732,7 @@ namespace ManagedCodeGen
 
                     if (!File.Exists(fullPathAssembly))
                     {
-                        Console.WriteLine("can't find framework assembly {0}", fullPathAssembly);
+                        Console.Error.WriteLine("can't find framework assembly {0}", fullPathAssembly);
                         continue;
                     }
 
@@ -739,7 +748,7 @@ namespace ManagedCodeGen
 
                         if (!Directory.Exists(fullPathDir))
                         {
-                            Console.WriteLine("can't find test directory {0}", fullPathDir);
+                            Console.Error.WriteLine("can't find test directory {0}", fullPathDir);
                             continue;
                         }
 
@@ -750,19 +759,11 @@ namespace ManagedCodeGen
 
             Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", commandArgs));
 
-            Command diffCmd = Command.Create(
-                        s_asmTool,
-                        commandArgs);
-
-            // Wireup stdout/stderr so we can see outout.
-            diffCmd.ForwardStdOut();
-            diffCmd.ForwardStdErr();
-
-            CommandResult result = diffCmd.Execute();
+            CommandResult result = TryCommand(s_asmTool, commandArgs);
 
             if (result.ExitCode != 0)
             {
-                Console.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
+                Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
                 return result.ExitCode;
             }
 
@@ -781,13 +782,7 @@ namespace ManagedCodeGen
                 Console.WriteLine("Analyze command: {0} {1}",
                     s_analysisTool, String.Join(" ", analysisArgs));
 
-                Command analyzeCmd = Command.Create(s_analysisTool, analysisArgs);
-
-                // Wireup stdout/stderr so we can see outout.
-                analyzeCmd.ForwardStdOut();
-                analyzeCmd.ForwardStdErr();
-
-                CommandResult analyzeResult = analyzeCmd.Execute();
+                CommandResult analyzeResult = TryCommand(s_analysisTool, analysisArgs);
             }
 
             return result.ExitCode;

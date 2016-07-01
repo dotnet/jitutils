@@ -251,7 +251,7 @@ namespace ManagedCodeGen
                     }
                 default:
                     {
-                        Console.WriteLine("super bad!  why no command!");
+                        Console.Error.WriteLine("super bad!  why no command!");
                         error = 1;
                         break;
                     }
@@ -298,7 +298,7 @@ namespace ManagedCodeGen
                  }
                  else
                  {
-                     Console.WriteLine("Zip not found!");
+                     Console.Error.WriteLine("Zip not found!");
                  }
                  
                  return downloaded;
@@ -440,7 +440,7 @@ namespace ManagedCodeGen
                         break;
                     default:
                         {
-                            Console.WriteLine("Unknown list option!");
+                            Console.Error.WriteLine("Unknown list option!");
                         }
                         break;
                 }
