@@ -554,7 +554,7 @@ namespace ManagedCodeGen
             }
             catch (CommandUnknownException e)
             {
-                Console.WriteLine("\nError: git command not found!  Add git to the environment path.\n", e);
+                Console.Error.WriteLine("\nError: git command not found!  Add git to the environment path.\n", e);
                 Environment.Exit(-1);
             }
 

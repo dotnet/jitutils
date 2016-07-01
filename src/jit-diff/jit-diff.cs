@@ -116,7 +116,7 @@ namespace ManagedCodeGen
 
                 if (result.ExitCode != 0)
                 {
-                    Console.WriteLine("dotnet --info returned non-zero");
+                    Console.Error.WriteLine("dotnet --info returned non-zero");
                 }
 
                 var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
@@ -281,7 +281,7 @@ namespace ManagedCodeGen
                     }
                     catch (System.FormatException e)
                     {
-                        Console.WriteLine("Bad format for default {0}.  See asmdiff.json", name, e);
+                        Console.Error.WriteLine("Bad format for default {0}.  See asmdiff.json", name, e);
                     }
                 }
 
@@ -362,7 +362,7 @@ namespace ManagedCodeGen
                     }
                     else
                     {
-                        Console.WriteLine("Can't find asmdiff.json on {0}", _jitDasmRoot);
+                        Console.Error.WriteLine("Can't find asmdiff.json on {0}", _jitDasmRoot);
                     }
                 }
                 else
@@ -407,7 +407,7 @@ namespace ManagedCodeGen
             {
                 if (!_asmdiffLoaded)
                 {
-                    Console.WriteLine("Error: asmdiff.json isn't loaded.");
+                    Console.Error.WriteLine("Error: asmdiff.json isn't loaded.");
                     return -1;
                 }
                 
@@ -565,7 +565,7 @@ namespace ManagedCodeGen
             }
             catch (CommandUnknownException e)
             {
-                Console.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
+                Console.Error.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
                 Environment.Exit(-1);
                 return CommandResult.Empty;
             }
@@ -584,7 +584,7 @@ namespace ManagedCodeGen
             // Early out if the tool is already installed.
             if (tools.Where(x => (string)x["tag"] == tag).Any())
             {
-                Console.WriteLine("{0} is already installed in the asmdiff.json. Remove before re-install.", tag);
+                Console.Error.WriteLine("{0} is already installed in the asmdiff.json. Remove before re-install.", tag);
                 return -1;
             }
 
@@ -629,7 +629,7 @@ namespace ManagedCodeGen
 
             if (result.ExitCode != 0)
             {
-                Console.WriteLine("cijobs command returned with {0} failures", result.ExitCode);
+                Console.Error.WriteLine("cijobs command returned with {0} failures", result.ExitCode);
                 return result.ExitCode;
             }
 
@@ -732,7 +732,7 @@ namespace ManagedCodeGen
 
                     if (!File.Exists(fullPathAssembly))
                     {
-                        Console.WriteLine("can't find framework assembly {0}", fullPathAssembly);
+                        Console.Error.WriteLine("can't find framework assembly {0}", fullPathAssembly);
                         continue;
                     }
 
@@ -748,7 +748,7 @@ namespace ManagedCodeGen
 
                         if (!Directory.Exists(fullPathDir))
                         {
-                            Console.WriteLine("can't find test directory {0}", fullPathDir);
+                            Console.Error.WriteLine("can't find test directory {0}", fullPathDir);
                             continue;
                         }
 
@@ -763,7 +763,7 @@ namespace ManagedCodeGen
 
             if (result.ExitCode != 0)
             {
-                Console.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
+                Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
                 return result.ExitCode;
             }
 

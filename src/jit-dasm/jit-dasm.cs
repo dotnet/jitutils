@@ -235,7 +235,7 @@ namespace ManagedCodeGen
 
                 if (baseDisasm.ErrorCount > 0)
                 {
-                    Console.WriteLine("{0} errors compiling base set.", baseDisasm.ErrorCount);
+                    Console.Error.WriteLine("{0} errors compiling base set.", baseDisasm.ErrorCount);
                     errorCount += baseDisasm.ErrorCount;
                 }
             }
@@ -266,7 +266,7 @@ namespace ManagedCodeGen
 
                 if (diffDisasm.ErrorCount > 0)
                 {
-                    Console.WriteLine("{0} errors compiling diff set.", diffDisasm.ErrorCount);
+                    Console.Error.WriteLine("{0} errors compiling diff set.", diffDisasm.ErrorCount);
                     errorCount += diffDisasm.ErrorCount;
                 }
             }
@@ -291,7 +291,7 @@ namespace ManagedCodeGen
 
                 if (crossgenDisasm.ErrorCount > 0)
                 {
-                    Console.WriteLine("{0} errors compiling set.", crossgenDisasm.ErrorCount);
+                    Console.Error.WriteLine("{0} errors compiling set.", crossgenDisasm.ErrorCount);
                     errorCount += crossgenDisasm.ErrorCount;
                 }
             }
@@ -523,7 +523,7 @@ namespace ManagedCodeGen
                     }
                     catch (CommandUnknownException e)
                     {
-                        Console.WriteLine("\nError: {0} command not found!\n", e);
+                        Console.Error.WriteLine("\nError: {0} command not found!\n", e);
                         Environment.Exit(-1);
                     }
 
@@ -581,7 +581,7 @@ namespace ManagedCodeGen
                         
                         if (result.ExitCode != 0)
                         {
-                            Console.WriteLine("Error running {0} on {1}", _executablePath, fullPathAssembly);
+                            Console.Error.WriteLine("Error running {0} on {1}", _executablePath, fullPathAssembly);
                             _errorCount++;
 
                             // If the tool still produced a output file rename it to indicate
