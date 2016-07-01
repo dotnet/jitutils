@@ -37,9 +37,9 @@ the developer in one shot.
 
 To build jitutils using the build script in the root of the repo: `build.{cmd,sh}`. By
 default the script just builds the tools and does not publish them in a separate directory.
-To publish the utilities add the '-p' flag which publishes each utility as a standalone app
-in a directory under ./bin in the root of the repo.  Additionally, to download the default set
-of framework assemblies that can be used for generating asm diffs, add '-f'.
+To publish the utilities add the '-p' flag which publishes each utility to the ./bin directory 
+in the root of the repo.  Additionally, to download the default set of framework assemblies 
+that can be used for generating asm diffs, add '-f'.
 
 ```
  $ ./build.sh -h
