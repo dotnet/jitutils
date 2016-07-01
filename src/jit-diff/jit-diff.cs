@@ -112,12 +112,7 @@ namespace ManagedCodeGen
             {
                 // Extract system RID from dotnet cli
                 List<string> commandArgs = new List<string> { "--info" };
-                Microsoft.DotNet.Cli.Utils.Command infoCmd = Microsoft.DotNet.Cli.Utils.Command.Create(
-                    "dotnet", commandArgs);
-                infoCmd.CaptureStdOut();
-                infoCmd.CaptureStdErr();
-
-                CommandResult result = infoCmd.Execute();
+                CommandResult result = TryCommand("dotnet", commandArgs);
 
                 if (result.ExitCode != 0)
                 {
@@ -556,6 +551,26 @@ namespace ManagedCodeGen
             return ret;
         }
 
+        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs)
+        {
+            try 
+            {
+                Command command =  Command.Create(name, commandArgs);
+
+                // Wireup stdout/stderr so we can see outout.
+                command.ForwardStdOut();
+                command.ForwardStdErr();
+
+                return command.Execute();
+            }
+            catch (CommandUnknownException e)
+            {
+                Console.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
+                Environment.Exit(-1);
+                return CommandResult.Empty;
+            }
+        }
+
         public static int InstallCommand(Config config)
         {   
             var asmDiffPath = Path.Combine(config.JitDasmRoot, "asmdiff.json");
@@ -610,13 +625,7 @@ namespace ManagedCodeGen
                 Console.WriteLine("ci command: {0} {1}", "cijobs", String.Join(" ", cijobsArgs));
             }
             
-            Command cijobsCmd =  Command.Create("cijobs", cijobsArgs);
-
-            // Wireup stdout/stderr so we can see outout.
-            cijobsCmd.ForwardStdOut();
-            cijobsCmd.ForwardStdErr();
-
-            CommandResult result = cijobsCmd.Execute();
+            CommandResult result = TryCommand("cijobs", cijobsArgs);
 
             if (result.ExitCode != 0)
             {
@@ -750,15 +759,7 @@ namespace ManagedCodeGen
 
             Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", commandArgs));
 
-            Command diffCmd = Command.Create(
-                        s_asmTool,
-                        commandArgs);
-
-            // Wireup stdout/stderr so we can see outout.
-            diffCmd.ForwardStdOut();
-            diffCmd.ForwardStdErr();
-
-            CommandResult result = diffCmd.Execute();
+            CommandResult result = TryCommand(s_asmTool, commandArgs);
 
             if (result.ExitCode != 0)
             {
@@ -781,13 +782,7 @@ namespace ManagedCodeGen
                 Console.WriteLine("Analyze command: {0} {1}",
                     s_analysisTool, String.Join(" ", analysisArgs));
 
-                Command analyzeCmd = Command.Create(s_analysisTool, analysisArgs);
-
-                // Wireup stdout/stderr so we can see outout.
-                analyzeCmd.ForwardStdOut();
-                analyzeCmd.ForwardStdErr();
-
-                CommandResult analyzeResult = analyzeCmd.Execute();
+                CommandResult analyzeResult = TryCommand(s_analysisTool, analysisArgs);
             }
 
             return result.ExitCode;

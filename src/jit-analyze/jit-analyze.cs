@@ -546,7 +546,18 @@ namespace ManagedCodeGen
             commandArgs.Add("--name-only");
             commandArgs.Add(diffPath);
             commandArgs.Add(basePath);
-            Command diffCmd = Command.Create(@"git", commandArgs);
+            Command diffCmd = null;
+
+            try 
+            {
+                diffCmd = Command.Create(@"git", commandArgs);
+            }
+            catch (CommandUnknownException e)
+            {
+                Console.WriteLine("\nError: git command not found!  Add git to the environment path.\n", e);
+                Environment.Exit(-1);
+            }
+
             diffCmd.CaptureStdOut();
             diffCmd.CaptureStdErr();
 

@@ -515,9 +515,17 @@ namespace ManagedCodeGen
                         commandArgs.Insert(1, String.Join(" ", _platformPaths));
                     }
 
-                    Command generateCmd = Command.Create(
-                        _executablePath,
-                        commandArgs);
+                    Command generateCmd = null;
+
+                    try 
+                    {
+                        generateCmd = Command.Create(_executablePath, commandArgs);
+                    }
+                    catch (CommandUnknownException e)
+                    {
+                        Console.WriteLine("\nError: {0} command not found!\n", e);
+                        Environment.Exit(-1);
+                    }
 
                     // Pick up ambient COMPlus settings.
                     foreach (string envVar in Environment.GetEnvironmentVariables().Keys)
