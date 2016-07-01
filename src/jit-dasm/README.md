@@ -10,7 +10,7 @@ To build/setup:
   your path.
 * Do 'dotnet restore' to create lock file and 
   pull down required packages.
-* Issue a 'dotnet build' command.  This will create a jit-dasm.exe in the bin
+* Issue a 'dotnet build' command.  This will create a jit-dasm in the bin
   directory that you can use to drive creation of diffs.
 * jit-dasm can be installed by running the project build script in the root of this repo 
 via

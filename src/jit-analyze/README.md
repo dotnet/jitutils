@@ -8,7 +8,7 @@ To build/setup:
 
 * Download dotnet cli.  Follow install instructions and get dotnet on your
   your path.
-* Follow publish directions for the mcgutils repo in the root.  This will 
+* Follow publish directions for the jitutils repo in the root.  This will 
   put the tools on your path.
 * Generate corediff disasm run.  See [Getting Started](../../doc/getstarted.md) 
   for directions how.

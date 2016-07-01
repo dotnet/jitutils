@@ -20,13 +20,13 @@ To prepare the tools for use, from the root of the cloned jitutils repo, do the 
  2. Build and publish the tools: `build.{cmd|sh} -f -p`
 
 This will create the following directories in the repo root:
- 1. `bin` - contains one directory for each built tool.
+ 1. `bin` - contains built tools and wrapper scrips to drive them on the commandline.
  2. `fx` - contains a set of frameworks assemblies that can be used for asm diffs.
 
-Add each tool subdirectory to your path so you can easily invoke them, e.g.:
+To enable tools on the commandline just add the `bin` directory to the path.
 ```
 set jitutils=<path to root of jitutils clone>
-set PATH=%PATH%;%jitutils%\bin\jit-dasm;%jitutils%\bin\jit-diff;%jitutils%\bin\jit-analyze
+set PATH=%PATH%;%jitutils%\bin
 ```
 
 For a more complete introduction look at the [getting started guide](doc/getstarted.md).
