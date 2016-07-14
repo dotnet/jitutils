@@ -42,6 +42,7 @@ namespace ManagedCodeGen
             private string _testPath = null;
             private bool _corlibOnly = false;
             private bool _frameworksOnly = false;
+            private bool _benchmarksOnly = false;
             private bool _verbose = false;
             private string _jobName;
             private string _number;
@@ -73,6 +74,7 @@ namespace ManagedCodeGen
                         "Name of root in output directory.  Allows for many sets of output.");
                     syntax.DefineOption("c|corlibonly", ref _corlibOnly, "Disasm *CorLib only");
                     syntax.DefineOption("f|frameworksonly", ref _frameworksOnly, "Disasm frameworks only");
+                    syntax.DefineOption("benchmarksonly", ref _benchmarksOnly, "Disasm core benchmarks only");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output");
                     syntax.DefineOption("core_root", ref _platformPath, "Path to test CORE_ROOT.");
                     syntax.DefineOption("test_root", ref _testPath, "Path to test tree.");
@@ -350,7 +352,11 @@ namespace ManagedCodeGen
                             // Set flag from default for frameworks only.
                             var frameworksOnly = ExtractDefault<bool>("frameworksonly", out found);
                             _frameworksOnly = (found) ? frameworksOnly : _frameworksOnly;
-                            
+
+                            // Set flag from default for frameworks only.
+                            var benchmarksOnly = ExtractDefault<bool>("benchmarksonly", out found);
+                            _benchmarksOnly = (found) ? frameworksOnly : _benchmarksOnly;
+
                             // Set flag from default for tag.
                             var tag = ExtractDefault<string>("tag", out found);
                             _tag = (found) ? tag : _tag;
@@ -426,6 +432,7 @@ namespace ManagedCodeGen
                     PrintDefault<string>("analyze");
                     PrintDefault<string>("corlibonly");
                     PrintDefault<string>("frameworksonly");
+                    PrintDefault<string>("benchmarksonly");
                     PrintDefault<string>("tag");
                     PrintDefault<string>("verbose");
                     
@@ -452,8 +459,9 @@ namespace ManagedCodeGen
             public bool HasTag { get { return (_tag != null); } }
             public bool CoreLibOnly { get { return _corlibOnly; } }
             public bool FrameworksOnly { get { return _frameworksOnly; } }
-            public bool DoMSCorelib { get { return true; } }
-            public bool DoFrameworks { get { return !_corlibOnly; } }
+            public bool BenchmarksOnly { get { return _benchmarksOnly; } }
+            public bool DoMSCorelib { get { return !_benchmarksOnly; } }
+            public bool DoFrameworks { get { return !_corlibOnly && !_benchmarksOnly; } }
             public bool DoTestTree { get { return (!_corlibOnly && !_frameworksOnly); } }
             public bool Verbose { get { return _verbose; } }
             public bool DoAnalyze { get { return _analyze; } }
@@ -471,6 +479,20 @@ namespace ManagedCodeGen
         {
             "Interop",
             "JIT"
+        };
+
+        private static string[] s_benchmarksPath =
+        {
+            "JIT",
+            "Performance",
+            "CodeQuality"
+        };
+
+        private static string[] s_benchmarkDirectories =
+        {
+            "BenchI",
+            "BenchF",
+            "BenchmarksGame"
         };
 
         private static string[] s_frameworkAssemblies =
@@ -671,16 +693,25 @@ namespace ManagedCodeGen
         
         public static int DiffCommand(Config config)
         {
-            string diffString = "System.Private.CoreLib.dll";
+            string diffString;
 
-            if (config.DoFrameworks)
+            if (config.BenchmarksOnly)
             {
-                diffString += ", framework assemblies";
+                diffString = "benchstones, benchmarks game";
             }
-
-            if (config.DoTestTree)
+            else
             {
-                diffString += ", " + config.TestRoot;
+                diffString = "System.Private.CoreLib.dll";
+
+                if (config.DoFrameworks)
+                {
+                    diffString += ", framework assemblies";
+                }
+
+                if (config.DoTestTree)
+                {
+                    diffString += ", " + config.TestRoot;
+                }
             }
 
             Console.WriteLine("Beginning diff of {0}!", diffString);
@@ -733,27 +764,35 @@ namespace ManagedCodeGen
             }
             else
             {
-                // Set up full framework paths
-                foreach (var assembly in s_frameworkAssemblies)
+                if (config.DoFrameworks)
                 {
-                    string coreRoot = config.CoreRoot;
-                    string fullPathAssembly = Path.Combine(coreRoot, assembly);
-
-                    if (!File.Exists(fullPathAssembly))
+                    // Set up full framework paths
+                    foreach (var assembly in s_frameworkAssemblies)
                     {
-                        Console.Error.WriteLine("can't find framework assembly {0}", fullPathAssembly);
-                        continue;
-                    }
+                        string coreRoot = config.CoreRoot;
+                        string fullPathAssembly = Path.Combine(coreRoot, assembly);
 
-                    commandArgs.Add(fullPathAssembly);
+                        if (!File.Exists(fullPathAssembly))
+                        {
+                            Console.Error.WriteLine("can't find framework assembly {0}", fullPathAssembly);
+                            continue;
+                        }
+
+                        commandArgs.Add(fullPathAssembly);
+                    }
                 }
 
                 if (config.TestRoot != null)
                 {
-                    foreach (var dir in s_testDirectories)
+                    string basepath = config.TestRoot;
+                    if (config.BenchmarksOnly) {
+                        foreach (var dir in s_benchmarksPath) {
+                            basepath = Path.Combine(basepath, dir);
+                        }
+                    }
+                    foreach (var dir in config.BenchmarksOnly ? s_benchmarkDirectories : s_testDirectories)
                     {
-                        string testRoot = config.TestRoot;
-                        string fullPathDir = Path.Combine(testRoot, dir);
+                        string fullPathDir = Path.Combine(basepath, dir);
 
                         if (!Directory.Exists(fullPathDir))
                         {
