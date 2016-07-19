@@ -22,8 +22,5 @@ popd
 
 :: set utilites in the current path
 
-set PATH=%PATH%;%root%\jitutils\bin\jit-dasm;%root%\jitutils\bin\jit-diff;%root%\jitutils\bin\jit-analyze;%root%\jitutils\bin\cijobs
+set PATH=%PATH%;%root%\jitutils\bin
 
-:: lunch getstarted.md doc
-
-start https://github.com/dotnet/jitutils/blob/master/doc/getstarted.md
