@@ -143,6 +143,20 @@ namespace ManagedCodeGen
                 }
             }
 
+            if (_crossgenExe != null)
+            {
+                if (!File.Exists(_crossgenExe))
+                {
+                    _syntaxResult.ReportError("Can't find --crossgen tool.");
+                }
+                else
+                {
+                    // Set to full path for command resolution logic.
+                    string fullCrossgenPath = Path.GetFullPath(_crossgenExe);
+                    _crossgenExe = fullCrossgenPath;
+                }
+            }
+
             if (_fileName != null)
             {
                 if (!File.Exists(_fileName))
