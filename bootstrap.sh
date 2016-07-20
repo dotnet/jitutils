@@ -30,10 +30,6 @@ popd
 
 # set utilites in the current path
 
-export PATH=$PATH:$root/jitutils/bin/jit-dasm:$root/jitutils/bin/jit-diff:$root/jitutils/bin/jit-analyze:$root/jitutils/bin/cijobs
-
-# launch getstarted.md doc
-
-open https://github.com/dotnet/jitutils/blob/master/doc/getstarted.md
+export PATH=$PATH:$root/jitutils/bin
 
 echo "Done setting up!"
