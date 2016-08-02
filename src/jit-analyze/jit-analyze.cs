@@ -28,7 +28,7 @@ namespace ManagedCodeGen
             private int _count = 5;
             private string _json;
             private string _tsv;
-            private bool _reconcile = false;
+            private bool _reconcile = true;
 
             public Config(string[] args)
             {
@@ -44,9 +44,6 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
-                    syntax.DefineOption("reconcile", ref _reconcile,
-                        "If there are methods that exist only in base or diff, create zero-sized "
-                      + "counterparts in diff, and vice-versa. Update size deltas accordingly.");
                     syntax.DefineOption("json", ref _json,
                         "Dump analysis data to specified file in JSON format.");
                     syntax.DefineOption("tsv", ref _tsv,
@@ -150,6 +147,8 @@ namespace ManagedCodeGen
         public class FileDelta
         {
             public string path;
+            public int baseBytes;
+            public int diffBytes;
             public int deltaBytes;
             public int reconciledBytesBase;
             public int reconciledCountBase;
@@ -174,6 +173,7 @@ namespace ManagedCodeGen
                         baseOffsets = m.functionOffsets,
                         diffOffsets = null
                     });
+                    baseBytes += m.totalBytes;
                     reconciledBytesBase += m.totalBytes;
                     reconciledCountBase++;
                 }
@@ -188,6 +188,7 @@ namespace ManagedCodeGen
                         baseOffsets = null,
                         diffOffsets = m.functionOffsets
                     });
+                    diffBytes += m.totalBytes;
                     reconciledBytesDiff += m.totalBytes;
                     reconciledCountDiff++;
                 }
@@ -288,7 +289,7 @@ namespace ManagedCodeGen
             MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
             return baseInfo.Join(diffInfo, b => b.path, d => d.path, (b, d) =>
             {
-                var deltaList = b.methodList.Join(d.methodList,
+                var jointList = b.methodList.Join(d.methodList,
                         x => x.name, y => y.name, (x, y) => new MethodDelta
                         {
                             name = x.name,
@@ -297,16 +298,17 @@ namespace ManagedCodeGen
                             baseOffsets = x.functionOffsets,
                             diffOffsets = y.functionOffsets
                         })
-                        .Where(r => r.deltaBytes != 0)
                         .OrderByDescending(r => r.deltaBytes);
 
                 FileDelta f = new FileDelta
                 {
                     path = b.path,
-                    deltaBytes = deltaList.Sum(x => x.deltaBytes),
+                    baseBytes = jointList.Sum(x => x.baseBytes),
+                    diffBytes = jointList.Sum(x => x.diffBytes),
+                    deltaBytes = jointList.Sum(x => x.deltaBytes),
                     methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer),
                     methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer),
-                    methodDeltaList = deltaList
+                    methodDeltaList = jointList.Where(x => x.deltaBytes != 0)
                 };
 
                 if (config.Reconcile)
@@ -327,14 +329,15 @@ namespace ManagedCodeGen
         //
         public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config)
         {
-            var totalBytes = fileDeltaList.Sum(x => x.deltaBytes);
+            var totalDiffBytes = fileDeltaList.Sum(x => x.deltaBytes);
+            var totalBaseBytes = fileDeltaList.Sum(x => x.baseBytes);
 
             Console.WriteLine("\nSummary:\n(Note: Lower is better)\n");
-            Console.WriteLine("Total bytes of diff: {0}", totalBytes);
+            Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDiffBytes, (double) totalDiffBytes/totalBaseBytes);
 
-            if (totalBytes != 0)
+            if (totalDiffBytes != 0)
             {
-                Console.WriteLine("    diff is {0}", totalBytes < 0 ? "an improvement." : "a regression.");
+                Console.WriteLine("    diff is {0}", totalDiffBytes < 0 ? "an improvement." : "a regression.");
             }
 
             if (config.Reconcile)
@@ -362,7 +365,8 @@ namespace ManagedCodeGen
                 foreach (var fileDelta in sortedFileDelta.GetRange(0, fileCount)
                                                          .Where(x => x.deltaBytes > 0))
                 {
-                    Console.WriteLine("    {1,8} : {0}", fileDelta.path, fileDelta.deltaBytes);
+                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.path,
+                        fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
                 }
             }
 
@@ -377,7 +381,8 @@ namespace ManagedCodeGen
                                                         .Where(x => x.deltaBytes < 0)
                                                         .OrderBy(x => x.deltaBytes))
                 {
-                    Console.WriteLine("    {1,8} : {0}", fileDelta.path, fileDelta.deltaBytes);
+                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.path,
+                        fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
                 }
             }
 
@@ -420,7 +425,7 @@ namespace ManagedCodeGen
 
             Console.WriteLine("\n{0} total methods with size differences.", sortedMethodCount);
 
-            return Math.Abs(totalBytes);
+            return Math.Abs(totalDiffBytes);
         }
 
         public static void WarnFiles(IEnumerable<FileInfo> diffList, IEnumerable<FileInfo> baseList)
