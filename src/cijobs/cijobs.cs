@@ -67,10 +67,12 @@ namespace ManagedCodeGen
             private Command _command = Command.List;
             private ListOption _listOption = ListOption.Invalid;
             private string _jobName;
+            private string _contentPath;
             private string _forkUrl;
+            private string _repoName = "dotnet_coreclr";
             private int _number = 0;
             private string _matchPattern = String.Empty;
-            private string _coreclrBranchName = "master";
+            private string _branchName = "master";
             private string _privateBranchName;
             private bool _lastSuccessful = false;
             private bool _unzip = false;
@@ -85,10 +87,12 @@ namespace ManagedCodeGen
                     // could move it to another command.  Take a careful look at how they're organized
                     // before changing.
                     syntax.DefineCommand("list", ref _command, Command.List, 
-                        "List jobs on dotnet-ci.cloudapp.net for dotnet_coreclr.");
+                        "List jobs on dotnet-ci.cloudapp.net for the repo.");
                     syntax.DefineOption("j|job", ref _jobName, "Name of the job.");
-                    syntax.DefineOption("b|branch", ref _coreclrBranchName, 
-                        "Name of the branch (dotnet/coreclr, def. is master).");
+                    syntax.DefineOption("b|branch", ref _branchName, 
+                        "Name of the branch (default is master).");
+                    syntax.DefineOption("r|repo", ref _repoName, 
+                        "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr). Default is dotnet_coreclr");
                     syntax.DefineOption("m|match", ref _matchPattern, 
                         "Regex pattern used to select jobs output.");
                     syntax.DefineOption("n|number", ref _number, "Job number.");
@@ -98,17 +102,20 @@ namespace ManagedCodeGen
 
                     syntax.DefineCommand("copy", ref _command, Command.Copy, 
                         "Copies job artifacts from dotnet-ci.cloudapp.net. " 
-                        + "Currently hardcoded to dotnet_coreclr, this command " 
-                        + "copies a zip of the artifacts under the Product sub-directory "
-                        + "that is the result of a build.");
+                        + "This command copies a zip of artifacts from a repo (defaulted to dotnet_coreclr)." 
+                        + " The default location of the zips is the Product sub-directory, though "
+                        + "that can be changed using the ContentPath(p) parameter");
                     syntax.DefineOption("j|job", ref _jobName, "Name of the job.");
                     syntax.DefineOption("n|number", ref _number, "Job number.");
                     syntax.DefineOption("l|last_successful", ref _lastSuccessful, 
                         "Copy last successful build.");
-                    syntax.DefineOption("b|branch", ref _coreclrBranchName, 
-                        "Name of branch  (dotnet_coreclr, def. is master)..");
+                    syntax.DefineOption("b|branch", ref _branchName, 
+                        "Name of the branch (default is master).");
+                    syntax.DefineOption("r|repo", ref _repoName, 
+                        "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr). Default is dotnet_coreclr");
                     syntax.DefineOption("o|output", ref _outputPath, "Output path.");
                     syntax.DefineOption("u|unzip", ref _unzip, "Unzip copied artifacts");
+                    syntax.DefineOption("p|ContentPath", ref _contentPath, "Relative product zip path. Default is artifact/bin/Product/*zip*/Product.zip");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
@@ -148,6 +155,10 @@ namespace ManagedCodeGen
                 {
                     _syntaxResult.ReportError("Must have --output <path> for copy.");
                 }
+                if (_contentPath == null)
+                {
+                    _contentPath = "artifact/bin/Product/*zip*/Product.zip";
+                }
             }
 
             private void validateList()
@@ -170,9 +181,11 @@ namespace ManagedCodeGen
             public Command DoCommand { get { return _command; } }
             public ListOption DoListOption { get { return _listOption; } }
             public string JobName { get { return _jobName; } }
+            public string ContentPath { get { return _contentPath; } }
             public int Number { get { return _number; } set { this._number = value; } }
             public string MatchPattern { get { return _matchPattern; } }
-            public string CoreclrBranchName { get { return _coreclrBranchName; } }
+            public string BranchName { get { return _branchName; } }
+            public string RepoName { get { return _repoName; } }
             public bool LastSuccessful { get { return _lastSuccessful; } }
             public bool DoUnzip { get { return _unzip; } }
             public string OutputPath { get { return _outputPath; } }
@@ -274,11 +287,11 @@ namespace ManagedCodeGen
                 _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             }
 
-            public async Task<bool> DownloadProduct(Config config, string outputPath)
+            public async Task<bool> DownloadProduct(Config config, string outputPath, string contentPath)
             {
                 string messageString
-                        = String.Format("job/dotnet_coreclr/job/{0}/job/{1}/{2}/artifact/bin/Product/*zip*/Product.zip",
-                            config.CoreclrBranchName, config.JobName, config.Number);
+                        = String.Format("job/{0}/job/{1}/job/{2}/{3}/{4}",
+                            config.RepoName, config.BranchName, config.JobName, config.Number, contentPath);
 
                  Console.WriteLine("Downloading: {0}", messageString);
 
@@ -288,7 +301,7 @@ namespace ManagedCodeGen
 
                  if (response.IsSuccessStatusCode)
                  {
-                    var zipPath = Path.Combine(outputPath, "Product.zip");
+                    var zipPath = Path.Combine(outputPath, Path.GetFileName(contentPath));
                     using (var outputStream = System.IO.File.Create(zipPath))
                     {
                         Stream inputStream = await response.Content.ReadAsStreamAsync();
@@ -327,7 +340,7 @@ namespace ManagedCodeGen
                 string jobName, bool lastSuccessfulBuild = false)
             {
                 var jobString
-                    = String.Format(@"job/dotnet_coreclr/job/master/job/{0}", jobName);
+                    = String.Format(@"job/{0}/job/{1}/job/{2}", productName, branchName, jobName);
                 var messageString
                     = String.Format("{0}/api/json?&tree=builds[number,url],lastSuccessfulBuild[number,url]",
                         jobString);
@@ -342,7 +355,7 @@ namespace ManagedCodeGen
                     {
                         var lastSuccessfulNumber = jobBuilds.lastSuccessfulBuild.number;
                         jobBuilds.lastSuccessfulBuild.info 
-                            = GetJobBuildInfo(jobName, lastSuccessfulNumber).Result;
+                            = GetJobBuildInfo(productName, branchName, jobName, lastSuccessfulNumber).Result;
                         return Enumerable.Repeat(jobBuilds.lastSuccessfulBuild, 1);
                     }
                     else
@@ -354,7 +367,7 @@ namespace ManagedCodeGen
                         {
                             var build = builds[i];
                             // fill in build info
-                            build.info = GetJobBuildInfo(jobName, build.number).Result;
+                            build.info = GetJobBuildInfo(productName, branchName, jobName, build.number).Result;
                             builds[i] = build;
                         }
 
@@ -367,10 +380,10 @@ namespace ManagedCodeGen
                 }
             }
 
-            public async Task<BuildInfo> GetJobBuildInfo(string jobName, int number)
+            public async Task<BuildInfo> GetJobBuildInfo(string repoName, string branchName, string jobName, int number)
             {
-                string buildString = String.Format("{0}/{1}/{2}", "job/dotnet_coreclr/job/master/job",
-                   jobName, number);
+                string buildString = String.Format("{0}/{1}/{2}", "job/{0}/job/{1}/job/{2}/{3}",
+                   repoName, branchName, jobName, number);
                 string buildMessage = String.Format("{0}/{1}", buildString,
                    "api/json?&tree=actions[lastBuiltRevision[SHA1]],artifacts[fileName,relativePath],result");
                 HttpResponseMessage response = await _client.GetAsync(buildMessage);
@@ -391,7 +404,7 @@ namespace ManagedCodeGen
         // Implementation of the list command.
         private class ListCommand
         {
-            // List jobs and their details from the dotnet_coreclr project on .NETCI Jenkins instance.
+            // List jobs and their details from the given project on .NETCI Jenkins instance.
             // List functionality:
             //    if --job is not specified, ListOption.Jobs, list jobs under branch.
             //        (default is "master" set in Config).
@@ -405,7 +418,7 @@ namespace ManagedCodeGen
                 {
                     case ListOption.Jobs:
                         {
-                            var jobs = cic.GetProductJobs("dotnet_coreclr", "master").Result;
+                            var jobs = cic.GetProductJobs(config.RepoName, config.BranchName).Result;
 
                             if (config.MatchPattern != null)
                             {
@@ -420,8 +433,7 @@ namespace ManagedCodeGen
                         break;
                     case ListOption.Builds:
                         {
-                            var builds = cic.GetJobBuilds("dotnet_coreclr",
-                                "master", config.JobName, config.LastSuccessful);
+                            var builds = cic.GetJobBuilds(config.RepoName, config.BranchName, config.JobName, config.LastSuccessful);
 
                             if (config.LastSuccessful && builds.Result.Any())
                             {
@@ -433,7 +445,7 @@ namespace ManagedCodeGen
                         break;
                     case ListOption.Number:
                         {
-                            var info = cic.GetJobBuildInfo(config.JobName, config.Number);
+                            var info = cic.GetJobBuildInfo(config.RepoName, config.BranchName, config.JobName, config.Number);
                             // Pretty build info
                             PrettyBuildInfo(info.Result, config.Artifacts);
                         }
@@ -503,8 +515,7 @@ namespace ManagedCodeGen
                 if (config.LastSuccessful)
                 {
                     // Querry last successful build and extract the number.
-                    var builds = cic.GetJobBuilds("dotnet_coreclr",
-                                "master", config.JobName, true);
+                    var builds = cic.GetJobBuilds(config.RepoName, config.BranchName, config.JobName, true);
                     
                     if (!builds.Result.Any())
                     {
@@ -523,19 +534,19 @@ namespace ManagedCodeGen
                 Directory.CreateDirectory(outputPath);
 
                 // Pull down the zip file.
-                DownloadZip(cic, config, outputPath).Wait();
+                DownloadZip(cic, config, outputPath, config.ContentPath).Wait();
             }
 
             // Download zip file.  It's arguable that this should be in the 
-            private static async Task DownloadZip(CIClient cic, Config config, string outputPath)
+            private static async Task DownloadZip(CIClient cic, Config config, string outputPath, string contentPath)
             {
                 // Copy product tools to output location. 
-                bool success = cic.DownloadProduct(config, outputPath).Result;
+                bool success = cic.DownloadProduct(config, outputPath, contentPath).Result;
 
                 if (config.DoUnzip)
                 {
                     // unzip archive in place.
-                    var zipPath = Path.Combine(outputPath, "Product.zip");
+                    var zipPath = Path.Combine(outputPath, Path.GetFileName(contentPath));
                     ZipFile.ExtractToDirectory(zipPath, outputPath);
                 }
             }
