@@ -393,7 +393,8 @@ namespace ManagedCodeGen
                                         {
                                             path = fd.path,
                                             name = md.name,
-                                            deltaBytes = md.deltaBytes
+                                            deltaBytes = md.deltaBytes,
+                                            count = md.baseOffsets != null ? md.baseOffsets.Count() : 1
                                         }).OrderByDescending(x => x.deltaBytes).ToList();
             int sortedMethodCount = sortedMethodDelta.Count();
             int methodCount = (sortedMethodCount < requestedCount)
@@ -405,7 +406,12 @@ namespace ManagedCodeGen
                 foreach (var method in sortedMethodDelta.GetRange(0, methodCount)
                                                         .Where(x => x.deltaBytes > 0))
                 {
-                    Console.WriteLine("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
+                    Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
+                    if (method.count > 1)
+                    {
+                        Console.Write(" ({0} methods)", method.count);
+                    }
+                    Console.WriteLine();
                 }
             }
 
@@ -419,7 +425,12 @@ namespace ManagedCodeGen
                                                         .Where(x => x.deltaBytes < 0)
                                                         .OrderBy(x => x.deltaBytes))
                 {
-                    Console.WriteLine("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
+                    Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
+                    if (method.count > 1)
+                    {
+                        Console.Write(" ({0} methods)", method.count);
+                    }
+                    Console.WriteLine();
                 }
             }
 
