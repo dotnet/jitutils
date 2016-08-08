@@ -17,6 +17,11 @@ GitHub repo for directions on building.
   since that build does not include all the required features.
 * git - The jit-analyze tool uses `git diff` to check for textual differences since this is
   consistent across platforms, and fast.
+* clang-format - The jit-format tool calls clang-format to run whitespace based formatting changes.
+  We require version 3.8.0 for jit-format. Clang-format and clang-tidy can be installed from the
+  [LLVM downloads page] (http://llvm.org/releases/download.html#3.8.0). We require clang-format and
+  clang-tidy to be on the path for jit-format.
+* clang-tidy - The jit-format tool calls clang-tidy to run more advanced formatting changes.
 
 ## Tools included in the repo
 
@@ -28,6 +33,7 @@ GitHub repo for directions on building.
   total size regression/improvement, and size regression/improvement by file and method.
 * jit-diff - Driver tool that implements a common dev flow.  Includes a configuration file
   for common defaults, and implements directory scheme for "installing" tools for use later.
+* jit-format - Run formatting tools on jit source code. Uses clang-tidy and clang-format.
 
 ## Build the tools
 
@@ -69,11 +75,12 @@ With this context, jit-diff drives the jit-dasm tool to make an output a particu
 structure for coreclr.  With this in mind what follows is an outline of a few ways to generate
 diffs for CoreCLR using the jitutils. This is a tactical approach and it tries to avoid extraneous
 discussion of internals.
-A note on defaults: jit-diff understands an environment variable, `JIT_DASM_ROOT`, that refers to a
-directory that contains a default config file in the json format.  This location, and the defaults in
-the config file can be used to simplify the command lines that are outlined below.  For the purposes
-of introduction the full command lines are shown below, but in the configuration section there is a
-discussion of how to include the defaults to simplify the command lines and the overall dev flow.
+A note on defaults: jit-diff and jit-format understand an environment variable, `JIT_UTILS_ROOT`,
+that refers to a directory that contains a default config file in the json format.  This location,
+and the defaults in the config file can be used to simplify the command lines that are outlined below.
+For the purposes of introduction the full command lines are shown below, but in the configuration
+section there is a discussion of how to include the defaults to simplify the command lines and the
+overall dev flow.
 
 Basic jit-diff commands:
 ```
@@ -344,13 +351,13 @@ Today we only use the Product sub-directory but this could be extended in the fu
 
 The command lines for many of the tools in the repo are large and can get involved.  Because of this,
 and to help speed up the typical dev flow implemented by jit-diff, a default config file and output
-location can be defined in the environment.  JIT_DASM_ROOT, when defined in the environment, tells
+location can be defined in the environment.  JIT_UTILS_ROOT, when defined in the environment, tells
 jit-diff where to generate output by default as well as where the asmdiff.json containing default
 values and installed tools can be found.
 
 ```
-$ export JIT_DASM_ROOT=~/Work/output
-$ ls -1 $JIT_DASM_ROOT
+$ export JIT_UTILS_ROOT=~/Work/output
+$ ls -1 $JIT_UTILS_ROOT
 asmdiff.json
 dasmset_1
 dasmset_2
@@ -360,57 +367,71 @@ dasmset_5
 tools
 ```
 
-The above example shows a populated JIT_DASM_ROOT.  The asmdiff.json file contains defaults,
+The above example shows a populated JIT_UTILS_ROOT.  The asmdiff.json file contains defaults,
 the `dasmset_(x)` contain multiple iterations of output from jit-diff, and the tools directory
 contains installed tools.
 
-### asmdiff.json
+### config.json
 
-A sample [asmdiff.json](TODO) is included in the jitutils repo as an example that can be modified
+A sample [config.json](TODO) is included in the jitutils repo as an example that can be modified
 for a developers own context.  We will go through the different elements here for added detail.
-The most interesting section of the file is the `"default"` section.  Each sub element of default
-maps directly to jit-diff option name.  Setting a default value here for any one of them will
-cause jit-diff to set them to the listed value on start up and then only override that value if
-new options are passed on the command line.  The `"base"` and `"diff"` entries are worth going
-into in more detail.  The `"base"` is set to `"checked_osx-1526"`.  Looking down in the `"tools"`
-section shows that the tool is installed in the `tools` sub-directory of JIT_DASM_ROOT.  Any
-of the so entered tools can be used in the default section as a value, but they can also be
-passed on the command line as the value for `--base` or `--diff`.
+This file supplies the configuration options for both jit-diff and jit-format. The most interesting
+section of each section of the file is the `"default"` section.  Each sub element of default
+maps directly to jit-diff or jit-format option name.  Setting a default value here for any one 
+of them will cause the tools to set them to the listed value on start up and then only override 
+that value if new options are passed on the command line.  In the jit-diff section, the `"base"` 
+and `"diff"` entries are worth going into in more detail.  The `"base"` is set to
+`"checked_osx-1526"`.  Looking down in the `"tools"` section shows that the tool is installed 
+in the `tools` sub-directory of JIT_UTILS_ROOT.  Any of the so entered tools can be used in the
+default section as a value, but they can also be passed on the command line as the value for 
+`--base` or `--diff`.
 
 ```
 {
-  "default": {
-    "base": "checked_osx-1526",
-    "diff": "/Users/russellhadley/Work/dotnet/coreclr/bin/Product/OSX.x64.Checked",
-    "analyze": "true",
-    "frameworksonly": "true",
-    "output": "/Users/russellhadley/Work/dotnet/output",
-    "core_root": "/Users/russellhadley/Work/dotnet/jitutils/fx"
-  },
-  "tools": [
-    {
-      "tag": "checked_osx-1439",
-      "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1439/Product/OSX.x64.Checked"
-    },
-    {
-      "tag": "checked_osx-1442",
-      "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1442/Product/OSX.x64.Checked"
-    },
-    {
-      "tag": "checked_osx-1443",
-      "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1443/Product/OSX.x64.Checked"
-    },
-    {
-      "tag": "checked_osx-1526",
-      "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1526/Product/OSX.x64.Checked"
+  "format": {
+    "default": {
+      "arch": "x64",
+      "build": "Checked",
+      "os": "Windows_NT",
+      "coreclr": "C:\\michelm\\coreclr",
+      "verbose": "true",
+      "fix": "true"
     }
-  ]
+  },
+  "asmdiff": {
+    "default": {
+      "base": "checked_osx-1526",
+      "diff": "/Users/russellhadley/Work/dotnet/coreclr/bin/Product/OSX.x64.Checked",
+      "analyze": "true",
+      "frameworksonly": "true",
+      "output": "/Users/russellhadley/Work/dotnet/output",
+      "core_root": "/Users/russellhadley/Work/dotnet/jitutils/fx"
+    },
+    "tools": [
+      {
+        "tag": "checked_osx-1439",
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1439/Product/OSX.x64.Checked"
+      },
+      {
+        "tag": "checked_osx-1442",
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1442/Product/OSX.x64.Checked"
+      },
+      {
+        "tag": "checked_osx-1443",
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1443/Product/OSX.x64.Checked"
+      },
+      {
+        "tag": "checked_osx-1526",
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1526/Product/OSX.x64.Checked"
+      }
+    ]
+  }
 }
 ```
 
 ### Listing current defaults
 
-The jit-diff command `list` will read the current JIT_DASM_ROOT path, open asmdiff.json, and list
+The jit-diff command `list` will read the current JIT_UTILS_ROOT path, open asmdiff.json, and list
 the results.  Adding `--verbose` will show the associated file system paths for installed tools as well.
 
 ```
@@ -450,3 +471,119 @@ usage: jit-diff install [-j <arg>] [-n <arg>] [-l] [-b <arg>]
 The options to `install` are the same as you would use for the cijobs copy command since jit-diff
 uses cijobs to download the appropriate tools.  I.e. the `install` command is just a wrapper over
 cijobs to simplify getting tools into the default location correctly.
+
+## Formatting Jit Source
+
+The jit-format tool is a tool that will simplify the process of confirming that all jit sources
+follow the [jit coding conventions] (https://github.com/dotnet/coreclr/blob/master/Documentation/coding-guidelines/clr-jit-coding-conventions.md).
+Jit-format will run clang-tidy and clang-format over all of the jit sources, or only over user
+specified files. Currently, clang-tidy will run the modernize-use-nullptr and readability-braces*
+checks. Clang-format will use the .clang-format specification found in the jit directory. A summary
+of what each of the options can be found [here] (http://llvm.org/releases/3.8.0/tools/clang/docs/ClangFormatStyleOptions.html).
+Because jit-format will build a compile_commands.json database from the build log on Windows,
+developers must do a full build of coreclr before running jit-format.
+
+Here's the base help output for jit-format:
+
+```
+jit-format --help
+usage: jit-format [-a <arg>] [-o <arg>] [-b <arg>] [-c <arg>]
+                  [--compile-commands <arg>] [-v] [--untidy]
+                  [--noformat] [-f] [-i] [--projects <arg>...] [--]
+                  <filenames>...
+
+    -a, --arch <arg>            The architecture of the build (options:
+                                x64, x86)
+    -o, --os <arg>              The operating system of the build
+                                (options: Windows, OSX, Ubuntu, Fedora,
+                                etc.)
+    -b, --build <arg>           The build type of the build (options:
+                                Release, Checked, Debug)
+    -c, --coreclr <arg>         Full path to base coreclr directory
+    --compile-commands <arg>    Full path to compile_commands.json
+    -v, --verbose               Enable verbose output.
+    --untidy                    Do not run clang-tidy
+    --noformat                  Do not run clang-format
+    -f, --fix                   Fix formatting errors discovered by
+                                clang-format and clang-tidy.
+    -i, --ignore-errors         Ignore clang-tidy errors
+    --projects <arg>...         List of build projects clang-tidy should
+                                consider (e.g. dll, standalone,
+                                protojit, etc.). Default: dll
+    <filenames>...              Optional list of files that should be
+                                formatted.
+```
+
+A common task for developers would be to format their changes before submitting a
+PR:
+
+```
+jit-format -a x64 -b Debug -o Windows_NT -c C:\michelm\coreclr
+```
+
+This will run both clang-tidy and clang-format on all of the jit code and list out all
+of the clang-tidy formatting changes, and the first clang-format change that would be
+made, without actually fixing them.
+
+Often a developer would only be interested in a few files:
+
+```
+jit-format -a x64 -b Debug -o Windows_NT -c C:\michelm\coreclr -v lower.cpp codegenxarch.cpp
+
+Formatting jit directory.
+Formatting dll project.
+Building compile_commands.json.
+Using compile_commands.json found at C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json
+Running clang-tidy.
+Running:
+        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\codegenxarch.cpp
+
+Running:
+        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\lower.cpp
+
+Running: clang-format   C:\michelm\coreclr\src\jit\codegenxarch.cpp
+Running: clang-format   C:\michelm\coreclr\src\jit\lower.cpp
+```
+
+jit-format will only run over those files. The verbose flag will show the user what
+clang-tidy and clang-format invocations are being executed.
+
+When the developer is ready to check in, they will want to make sure they fix any formatting
+errors that clang-tidy and clang-format identified. This can be done with the --fix flag:
+
+```
+jit-format -a x64 -b Debug -o Windows_NT -c C:\michelm\coreclr -v --fix lower.cpp codegenxarch.cpp
+
+Formatting jit directory.
+Formatting dll project.
+Building compile_commands.json.
+Using compile_commands.json found at C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json
+Running clang-tidy.
+Running:
+        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\codegenxarch.cpp
+
+Running:
+        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\lower.cpp
+
+Running: clang-format -i  C:\michelm\coreclr\src\jit\codegenxarch.cpp
+Running: clang-format -i  C:\michelm\coreclr\src\jit\lower.cpp
+```
+
+The developer may also only be interested in only running clang-tidy or clang-format without
+running the other tool. This can be done by using the --noformat (no clang-format) or
+--untidy (no clang-tidy) flags.
+
+Finally, the developer can pass their own compile_commands.json database to jit-format
+if they already have one built:
+
+```
+jit-format.cmd --fix --noformat --compile-commands C:\michelm\jitutils\test\jit-format\compile_commands.json --coreclr C:\michelm\jitutils\test\jit-format C:\michelm\jitutils\test\jit-format\test.cpp
+Formatting jit directory.
+Formatting dll project.
+Using compile_commands.json found at C:\michelm\jitutils\test\jit-format\compile_commands.json
+Running clang-tidy.
+Running:
+        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\jitutils\test\jit-format\compile_commands.json C:\michelm\jitutils\test\jit-format\test.cpp
+```
+
+

@@ -47,17 +47,17 @@ namespace ManagedCodeGen
             private string _jobName;
             private string _number;
             private bool _lastSuccessful;
-            private string _jitDasmRoot;
+            private string _jitUtilsRoot;
             private string _rid;
             private string _branchName;
 
             private JObject _jObj;
             private bool _asmdiffLoaded = false;
-            private bool _noJitDasmRoot = false;
+            private bool _noJitUtilsRoot = false;
 
             public Config(string[] args)
             {
-                // Get configuration values from JIT_DASM_ROOT/asmdiff.json
+                // Get configuration values from JIT_UTILS_ROOT/config.json
 
                 LoadFileConfig();
 
@@ -81,7 +81,7 @@ namespace ManagedCodeGen
 
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List, 
-                        "List defaults and available tools asmdiff.json.");
+                        "List defaults and available tools config.json.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output");
 
                     // Install command section.
@@ -161,13 +161,13 @@ namespace ManagedCodeGen
 
             private void ExpandToolTags()
             {
-                if (_noJitDasmRoot)
+                if (_noJitUtilsRoot)
                 {
-                    // Early out if there is no JIT_DASM_ROOT.
+                    // Early out if there is no JIT_UTILS_ROOT.
                     return;
                 }
 
-                var tools = _jObj["tools"];
+                var tools = _jObj["asmdiff"]["tools"];
 
                 foreach (var tool in tools)
                 {
@@ -247,17 +247,17 @@ namespace ManagedCodeGen
 
             public string GetToolPath(string tool, out bool found)
             {
-                var token = _jObj["default"][tool];
+                var token = _jObj["asmdiff"]["default"][tool];
 
                 if (token != null)
                 {
                     found = true;
 
-                    string tag = _jObj["default"][tool].Value<string>();
+                    string tag = _jObj["asmdiff"]["default"][tool].Value<string>();
 
                     // Extract set value for tool and see if we can find it
                     // in the installed tools.
-                    var path = _jObj["tools"].Children()
+                    var path = _jObj["asmdiff"]["tools"].Children()
                                         .Where(x => (string)x["tag"] == tag)
                                         .Select(x => (string)x["path"]);
                     // If the tag resolves to a tool return it, otherwise just return it 
@@ -271,7 +271,7 @@ namespace ManagedCodeGen
 
             public T ExtractDefault<T>(string name, out bool found)
             {
-                var token = _jObj["default"][name];
+                var token = _jObj["asmdiff"]["default"][name];
 
                 if (token != null)
                 {
@@ -283,7 +283,7 @@ namespace ManagedCodeGen
                     }
                     catch (System.FormatException e)
                     {
-                        Console.Error.WriteLine("Bad format for default {0}.  See asmdiff.json", name, e);
+                        Console.Error.WriteLine("Bad format for default {0}.  See config.json", name, e);
                     }
                 }
 
@@ -293,11 +293,11 @@ namespace ManagedCodeGen
 
             private void LoadFileConfig()
             {
-                _jitDasmRoot = Environment.GetEnvironmentVariable("JIT_DASM_ROOT");
+                _jitUtilsRoot = Environment.GetEnvironmentVariable("JIT_UTILS_ROOT");
 
-                if (_jitDasmRoot != null)
+                if (_jitUtilsRoot != null)
                 {
-                    string path = Path.Combine(_jitDasmRoot, "asmdiff.json");
+                    string path = Path.Combine(_jitUtilsRoot, "config.json");
 
                     if (File.Exists(path))
                     {
@@ -305,11 +305,11 @@ namespace ManagedCodeGen
 
                         _jObj = JObject.Parse(configJson);
                         
-                        // Flag that the asmdiff.json is loaded.
+                        // Flag that the config.json is loaded.
                         _asmdiffLoaded = true;
 
                         // Check if there is any default config specified.
-                        if (_jObj["default"] != null)
+                        if (_jObj["asmdiff"]["default"] != null)
                         {
                             bool found;
 
@@ -368,19 +368,19 @@ namespace ManagedCodeGen
                     }
                     else
                     {
-                        Console.Error.WriteLine("Can't find asmdiff.json on {0}", _jitDasmRoot);
+                        Console.Error.WriteLine("Can't find config.json on {0}", _jitUtilsRoot);
                     }
                 }
                 else
                 {
-                    Console.WriteLine("Environment variable JIT_DASM_ROOT not found - no configuration loaded.");
-                    _noJitDasmRoot = true;
+                    Console.WriteLine("Environment variable JIT_UTILS_ROOT not found - no configuration loaded.");
+                    _noJitUtilsRoot = true;
                 }
             }
 
             void PrintTools()
             {
-                var tools = _jObj["tools"];
+                var tools = _jObj["asmdiff"]["tools"];
 
                 if (tools != null)
                 {
@@ -413,14 +413,14 @@ namespace ManagedCodeGen
             {
                 if (!_asmdiffLoaded)
                 {
-                    Console.Error.WriteLine("Error: asmdiff.json isn't loaded.");
+                    Console.Error.WriteLine("Error: config.json isn't loaded.");
                     return -1;
                 }
                 
                 Console.WriteLine();
                 
                 // Check if there is any default config specified.
-                if (_jObj["default"] != null)
+                if (_jObj["asmdiff"]["default"] != null)
                 {
                     Console.WriteLine("Defaults:");
 
@@ -468,8 +468,8 @@ namespace ManagedCodeGen
             public Commands DoCommand { get { return _command; } }
             public string JobName { get { return _jobName; } }
             public bool DoLastSucessful { get { return _lastSuccessful; } }
-            public string JitDasmRoot { get { return _jitDasmRoot; } }
-            public bool HasJitDasmRoot { get { return (_jitDasmRoot != null); } }
+            public string JitUtilsRoot { get { return _jitUtilsRoot; } }
+            public bool HasJitUtilsRoot { get { return (_jitUtilsRoot != null); } }
             public string RID { get { return _rid; } }
             public string Number { get { return _number; } }
             public string BranchName { get { return _branchName; } }
@@ -559,7 +559,7 @@ namespace ManagedCodeGen
                     break;
                 case Commands.List:
                     {
-                        // List command: list loaded asmdiff.json in config object.
+                        // List command: list loaded config.json in config object.
                         ret = config.List();
                     }
                     break;
@@ -604,18 +604,18 @@ namespace ManagedCodeGen
 
         public static int InstallCommand(Config config)
         {   
-            var asmDiffPath = Path.Combine(config.JitDasmRoot, "asmdiff.json");
+            var asmDiffPath = Path.Combine(config.JitUtilsRoot, "config.json");
             string configJson = File.ReadAllText(asmDiffPath);
             string tag = String.Format("{0}-{1}", config.JobName, config.Number);
-            string toolPath = Path.Combine(config.JitDasmRoot, "tools", tag);
+            string toolPath = Path.Combine(config.JitUtilsRoot, "tools", tag);
             var jObj = JObject.Parse(configJson);
-            var tools = (JArray)jObj["tools"];
+            var tools = (JArray)jObj["asmdiff"]["tools"];
             int ret = 0;
 
             // Early out if the tool is already installed.
             if (tools.Where(x => (string)x["tag"] == tag).Any())
             {
-                Console.Error.WriteLine("{0} is already installed in the asmdiff.json. Remove before re-install.", tag);
+                Console.Error.WriteLine("{0} is already installed in the config.json. Remove before re-install.", tag);
                 return -1;
             }
 
@@ -679,7 +679,7 @@ namespace ManagedCodeGen
                 }
             }
 
-            // Overwrite current asmdiff.json with new data.
+            // Overwrite current config.json with new data.
             using (var file = File.CreateText(asmDiffPath))
             {
                 using (JsonTextWriter writer = new JsonTextWriter(file))
