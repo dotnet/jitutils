@@ -19,6 +19,26 @@ dotnet restore
 
 call .\build.cmd -p -f
 
+where /Q clang-format
+set formatExists=%errorlevel%
+
+where /Q clang-tidy
+set tidyExists=%errorlevel%
+echo blah
+IF %formatExits% EQU 1 GOTO DownloadTools
+IF %tidyExists% EQU 1 GOTO DownloadTools
+
+GOTO SetPath
+
+:DownloadTools
+
+:: Download clang-format and clang-tidy
+echo Downloading formatting tools
+call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" -OutFile bin\clang-format.exe
+call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" -OutFile bin\clang-tidy.exe
+
+:SetPath
+
 popd
 
 :: set utilites in the current path
