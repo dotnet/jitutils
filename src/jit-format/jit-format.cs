@@ -530,7 +530,7 @@ namespace ManagedCodeGen
                                 m32 = " -m32";
                             }
 
-                            compileCommandsWriter.Write("-target x86_64-pc-windows-msvc" + m32 + " -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions ");
+                            compileCommandsWriter.Write("-target x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions -DSOURCE_FORMATTING=1");
 
                             foreach (string iOption in iOptions)
                             {
