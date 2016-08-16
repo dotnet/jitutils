@@ -11,6 +11,8 @@ using System;
 using System.Diagnostics;
 using System.CommandLine;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Linq;
@@ -640,65 +642,121 @@ namespace ManagedCodeGen
             string checks = "readability-braces*,modernize-use-nullptr";
             string tidyFix = fix ? "-fix " : " ";
 
-            foreach (string filename in filenames)
+            if (fix)
             {
-                if (filename.EndsWith(".cpp"))
+                foreach (string filename in filenames)
                 {
-                    string fixErrors = ignoreErrors && fix ? " -fix-errors" : "";
-                    if (verbose)
+                    if (filename.EndsWith(".cpp"))
                     {
-                        Console.WriteLine("Running: ");
-                        Console.WriteLine("\tclang-tidy " + tidyFix + " -checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " + compileCommands + " " + filename);
-                    }
-
-                    Process process = new Process();
-                
-                    // Configure the process using the StartInfo properties.
-                    process.StartInfo.FileName = "clang-tidy";
-                    process.StartInfo.Arguments = tidyFix + "-checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " +
-                        compileCommands + " " + filename;
-                    process.StartInfo.UseShellExecute = false;
-                    process.StartInfo.RedirectStandardOutput = true;
-                    process.StartInfo.RedirectStandardError = true;
-                    process.StartInfo.CreateNoWindow = true;
-                    process.Start();
-
-                    string stdoutx = process.StandardOutput.ReadToEnd();         
-                    string stderrx = process.StandardError.ReadToEnd();             
-                    process.WaitForExit();
-
-
-                    if ((stdoutx.Contains("warning:") || (!ignoreErrors && stdoutx.Contains("error:"))))
-                    {
+                        string fixErrors = ignoreErrors && fix ? " -fix-errors" : "";
                         if (verbose)
                         {
-                            Console.WriteLine("clang-tidy: there are formatting errors in {0}", filename);
+                            Console.WriteLine("Running: ");
+                            Console.WriteLine("\tclang-tidy " + tidyFix + " -checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " + compileCommands + " " + filename);
                         }
-                        
-                        if (!fix)
-                        {
-                            formatOk = false;
-                        }
-                    }
 
-                    if (!ignoreErrors && stderrx.Contains("error:"))
-                    {
-                        Console.Error.WriteLine("Error in clang-tidy: {0}", stderrx);
-                        
-                        if (!fix)
+                        Process process = new Process();
+                    
+                        // Configure the process using the StartInfo properties.
+                        process.StartInfo.FileName = "clang-tidy";
+                        process.StartInfo.Arguments = tidyFix + "-checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " +
+                            compileCommands + " " + filename;
+                        process.StartInfo.UseShellExecute = false;
+                        process.StartInfo.RedirectStandardOutput = true;
+                        process.StartInfo.RedirectStandardError = true;
+                        process.StartInfo.CreateNoWindow = true;
+                        process.Start();
+
+                        string stdoutx = process.StandardOutput.ReadToEnd();         
+                        string stderrx = process.StandardError.ReadToEnd();             
+                        process.WaitForExit();
+
+
+                        if ((stdoutx.Contains("warning:") || (!ignoreErrors && stdoutx.Contains("error:"))))
                         {
-                            formatOk = false;
+                            if (verbose)
+                            {
+                                Console.WriteLine("clang-tidy: there are formatting errors in {0}", filename);
+                            }
                         }
-                    }
-                        
-                    if (verbose)
-                    {
-                        if (stdoutx.Contains("warning:") || !ignoreErrors)
+
+                        if (!ignoreErrors && stderrx.Contains("error:"))
                         {
-                            Console.WriteLine(stdoutx);
+                            Console.Error.WriteLine("Error in clang-tidy: {0}", stderrx);
+                        }
+                            
+                        if (verbose)
+                        {
+                            if (stdoutx.Contains("warning:") || !ignoreErrors)
+                            {
+                                Console.WriteLine(stdoutx);
+                            }
                         }
                     }
                 }
+            }
+            else
+            {
+                Parallel.ForEach(filenames, (filename) =>
+                        {
+                            if (filename.EndsWith(".cpp"))
+                            {
+                                string fixErrors = ignoreErrors && fix ? " -fix-errors" : "";
+                                if (verbose)
+                                {
+                                    Console.WriteLine("Running: ");
+                                    Console.WriteLine("\tclang-tidy " + tidyFix + " -checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " + compileCommands + " " + filename);
+                                }
+
+                                Process process = new Process();
+                            
+                                // Configure the process using the StartInfo properties.
+                                process.StartInfo.FileName = "clang-tidy";
+                                process.StartInfo.Arguments = tidyFix + "-checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " +
+                                    compileCommands + " " + filename;
+                                process.StartInfo.UseShellExecute = false;
+                                process.StartInfo.RedirectStandardOutput = true;
+                                process.StartInfo.RedirectStandardError = true;
+                                process.StartInfo.CreateNoWindow = true;
+                                process.Start();
+
+                                string stdoutx = process.StandardOutput.ReadToEnd();         
+                                string stderrx = process.StandardError.ReadToEnd();             
+                                process.WaitForExit();
+
+
+                                if ((stdoutx.Contains("warning:") || (!ignoreErrors && stdoutx.Contains("error:"))))
+                                {
+                                    if (verbose)
+                                    {
+                                        Console.WriteLine("clang-tidy: there are formatting errors in {0}", filename);
+                                    }
+                                    
+                                    if (!fix)
+                                    {
+                                        formatOk = false;
+                                    }
+                                }
+
+                                if (!ignoreErrors && stderrx.Contains("error:"))
+                                {
+                                    Console.Error.WriteLine("Error in clang-tidy: {0}", stderrx);
+                                    
+                                    if (!fix)
+                                    {
+                                        formatOk = false;
+                                    }
+                                }
+                                    
+                                if (verbose)
+                                {
+                                    if (stdoutx.Contains("warning:") || !ignoreErrors)
+                                    {
+                                        Console.WriteLine(stdoutx);
+                                    }
+                                }
+                            }
+                        });
             }
 
             return formatOk;
