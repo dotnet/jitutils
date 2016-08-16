@@ -24,332 +24,302 @@ using Newtonsoft.Json.Linq;
 
 namespace ManagedCodeGen
 {
-    // Define options to be parsed 
-    public class Config
+    public class jitformat
     {
-        private ArgumentSyntax _syntaxResult;
-        private string _arch = null;
-        private string _os = null;
-        private string _build = null;
-        private string _rootPath = null;
-        private IReadOnlyList<string> _filenames = Array.Empty<string>();
-        private IReadOnlyList<string> _projects = Array.Empty<string>();
-        private string _srcDirectory = null;
-        private bool _untidy = false;
-        private bool _noformat = false;
-        private bool _fix = false;
-        private bool _verbose = false;
-        private bool _ignoreErrors = false;
-        private string _buildLog = null;
-        private string _compileCommands = null;
-        private bool _buildCompileCommands = true;
-
-        private JObject _jObj;
-        private string _jitUtilsRoot = null;
-
-        public Config(string[] args)
+        // Define options to be parsed 
+        public class Config
         {
-            LoadFileConfig();
+            private ArgumentSyntax _syntaxResult;
+            private string _arch = null;
+            private string _os = null;
+            private string _build = null;
+            private string _rootPath = null;
+            private IReadOnlyList<string> _filenames = Array.Empty<string>();
+            private IReadOnlyList<string> _projects = Array.Empty<string>();
+            private string _srcDirectory = null;
+            private bool _untidy = false;
+            private bool _noformat = false;
+            private bool _fix = false;
+            private bool _verbose = false;
+            private bool _ignoreErrors = false;
+            private string _buildLog = null;
+            private string _compileCommands = null;
+            private bool _buildCompileCommands = true;
 
-            _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
+            private JObject _jObj;
+            private string _jitUtilsRoot = null;
+
+            public Config(string[] args)
             {
-                syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: x64, x86)");
-                syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Ubuntu, Fedora, etc.)");
-                syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
-                syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base coreclr directory");
-                syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
-                syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
-                syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
-                syntax.DefineOption("noformat", ref _noformat, "Do not run clang-format");
-                syntax.DefineOption("f|fix", ref _fix, "Fix formatting errors discovered by clang-format and clang-tidy.");
-                syntax.DefineOption("i|ignore-errors", ref _ignoreErrors, "Ignore clang-tidy errors");
-                syntax.DefineOptionList("projects", ref _projects, "List of build projects clang-tidy should consider (e.g. dll, standalone, protojit, etc.). Default: dll");
+                LoadFileConfig();
 
-                syntax.DefineParameterList("filenames", ref _filenames, "Optional list of files that should be formatted.");
-            });
-            
-            // Run validation code on parsed input to ensure we have a sensible scenario.
+                _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
+                {
+                    syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: x64, x86)");
+                    syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Ubuntu, Fedora, etc.)");
+                    syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
+                    syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base coreclr directory");
+                    syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
+                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
+                    syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
+                    syntax.DefineOption("noformat", ref _noformat, "Do not run clang-format");
+                    syntax.DefineOption("f|fix", ref _fix, "Fix formatting errors discovered by clang-format and clang-tidy.");
+                    syntax.DefineOption("i|ignore-errors", ref _ignoreErrors, "Ignore clang-tidy errors");
+                    syntax.DefineOptionList("projects", ref _projects, "List of build projects clang-tidy should consider (e.g. dll, standalone, protojit, etc.). Default: dll");
 
-            validate();
-        }
+                    syntax.DefineParameterList("filenames", ref _filenames, "Optional list of files that should be formatted.");
+                });
+                
+                // Run validation code on parsed input to ensure we have a sensible scenario.
 
-        private void SetPlatform()
-        {
-            // Extract system RID from dotnet cli
-            List<string> commandArgs = new List<string> { "--info" };
-            CommandResult result = TryCommand("dotnet", commandArgs, true);
-
-            if (result.ExitCode != 0)
-            {
-                Console.Error.WriteLine("dotnet --info returned non-zero");
+                validate();
             }
 
-            var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-
-            foreach (var line in lines)
+            private void SetPlatform()
             {
-                Regex pattern = new Regex(@"OS Name:([\sA-Za-z0-9\.-]*)$");
-                Match match = pattern.Match(line);
-                if (match.Success)
+                // Extract system RID from dotnet cli
+                List<string> commandArgs = new List<string> { "--info" };
+                CommandResult result = TryCommand("dotnet", commandArgs, true);
+
+                if (result.ExitCode != 0)
                 {
-                    if (match.Groups[1].Value.Trim() == "Windows")
+                    Console.Error.WriteLine("dotnet --info returned non-zero");
+                }
+
+                var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+
+                foreach (var line in lines)
+                {
+                    Regex pattern = new Regex(@"OS Name:([\sA-Za-z0-9\.-]*)$");
+                    Match match = pattern.Match(line);
+                    if (match.Success)
                     {
-                        _os = "Windows_NT";
+                        if (match.Groups[1].Value.Trim() == "Windows")
+                        {
+                            _os = "Windows_NT";
+                        }
+                        else if (match.Groups[1].Value.Trim() == "Mac OS X")
+                        {
+                            _os = "OSX";
+                        }
+                        else
+                        {
+                            _os = match.Groups[1].Value.Trim();
+
+                        }
                     }
-                    else if (match.Groups[1].Value.Trim() == "Mac OS X")
+                }
+            }
+
+            private void validate()
+            {
+                if ((_arch == null))
+                {
+                    if (_verbose)
                     {
-                        _os = "OSX";
+                        Console.WriteLine("Defaulting architecture to x64.");
+                    }
+                    _arch = "x64";
+                }
+
+                if (_build == null)
+                {
+                    if (_verbose)
+                    {
+                        Console.WriteLine("Defaulting build to Debug.");
+                    }
+
+                    _build = "Debug";
+                }
+
+                if (_os == null)
+                {
+                    if (_verbose)
+                    {
+                        Console.WriteLine("Discovering operating system.");
+                    }
+
+                    SetPlatform();
+
+                    if (_verbose)
+                    {
+                        Console.WriteLine("Operating system is {0}", _os);
+                    }
+                }
+
+                if (_os == "Windows")
+                {
+                    _os = "Windows_NT";
+                }
+
+                if (_srcDirectory == null)
+                {
+                    if (_verbose)
+                    {
+                        Console.WriteLine("Formatting jit directory.");
+                    }
+                    _srcDirectory = "jit";
+                }
+
+                if (_projects.Count == 0 && _verbose)
+                {
+                    Console.WriteLine("Formatting dll project.");
+                }
+
+                if (!_untidy && ( (_arch == null) || (_os == null) || (_build == null)))
+                {
+                    _syntaxResult.ReportError("Specify --arch, --plaform, and --build for clang-tidy run.");
+                }
+
+                if (_rootPath == null)
+                {
+                    _syntaxResult.ReportError("Specify --coreclr");
+                }
+
+                // Check that we can find the build log for Windows.
+                if (_os == "Windows_NT")
+                {
+                    string logFile = "CoreCLR_Windows_NT__" + _arch + "__" + _build + ".log";
+                    string logFullPath = Path.Combine(_rootPath, "bin", "Logs", logFile);
+                    if (_compileCommands != null)
+                    {
+                        _buildCompileCommands = false;
+                    }
+                    else if (!_untidy && !File.Exists(logFullPath))
+                    {
+                        _syntaxResult.ReportError("Can't find build log.");
                     }
                     else
                     {
-                        _os = match.Groups[1].Value.Trim();
-
+                        _buildLog = logFullPath;
+                        string[] compileCommandsPath = { _rootPath, "bin", "obj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
+                        _compileCommands = Path.Combine(compileCommandsPath);
                     }
                 }
-            }
-        }
-        
 
-        private void validate()
-        {
-            if ((_arch == null))
-            {
-                if (_verbose)
-                {
-                    Console.WriteLine("Defaulting architecture to x64.");
-                }
-                _arch = "x64";
-            }
-
-            if (_build == null)
-            {
-                if (_verbose)
-                {
-                    Console.WriteLine("Defaulting build to Debug.");
-                }
-
-                _build = "Debug";
-            }
-
-            if (_os == null)
-            {
-                if (_verbose)
-                {
-                    Console.WriteLine("Discovering operating system.");
-                }
-
-                SetPlatform();
-
-                if (_verbose)
-                {
-                    Console.WriteLine("Operating system is {0}", _os);
-                }
-            }
-
-            if (_os == "Windows")
-            {
-                _os = "Windows_NT";
-            }
-
-            if (_srcDirectory == null)
-            {
-                if (_verbose)
-                {
-                    Console.WriteLine("Formatting jit directory.");
-                }
-                _srcDirectory = "jit";
-            }
-
-            if (_projects.Count == 0 && _verbose)
-            {
-                Console.WriteLine("Formatting dll project.");
-            }
-
-            if (!_untidy && ( (_arch == null) || (_os == null) || (_build == null)))
-            {
-                _syntaxResult.ReportError("Specify --arch, --plaform, and --build for clang-tidy run.");
-            }
-
-            if (_rootPath == null)
-            {
-                _syntaxResult.ReportError("Specify --coreclr");
-            }
-
-            // Check that we can find the build log for Windows.
-            if (_os == "Windows_NT")
-            {
-                string logFile = "CoreCLR_Windows_NT__" + _arch + "__" + _build + ".log";
-                string logFullPath = Path.Combine(_rootPath, "bin", "Logs", logFile);
-                if (_compileCommands != null)
-                {
-                    _buildCompileCommands = false;
-                }
-                else if (!_untidy && !File.Exists(logFullPath))
-                {
-                    _syntaxResult.ReportError("Can't find build log.");
-                }
+                // Check that we can find the compile_commands.json file on other platforms
                 else
                 {
-                    _buildLog = logFullPath;
-                    string[] compileCommandsPath = { _rootPath, "bin", "obj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
-                    _compileCommands = Path.Combine(compileCommandsPath);
-                }
-            }
-
-            // Check that we can find the compile_commands.json file on other platforms
-            else
-            {
-                string[] compileCommandsPath = { _rootPath, "bin", "obj", _os + "." + _arch + "." + _build, "compile_commands.json" };
-                if (!_untidy && !File.Exists(Path.Combine(compileCommandsPath)))
-                {
-                    _syntaxResult.ReportError("Can't find compile_commands.json file. Please build coreclr first.");
-                }
-                else
-                {
-                    _compileCommands = Path.Combine(compileCommandsPath);
-                }
-
-            }
-        }
-
-        private void LoadFileConfig()
-        {
-            _jitUtilsRoot = Environment.GetEnvironmentVariable("JIT_UTILS_ROOT");
-
-            if (_jitUtilsRoot != null)
-            {
-                string path = Path.Combine(_jitUtilsRoot, "config.json");
-
-                if (File.Exists(path))
-                {
-                    string configJson = File.ReadAllText(path);
-
-                    _jObj = JObject.Parse(configJson);
-                    
-                    // Check if there is any default config specified.
-                    if (_jObj["format"]["default"] != null)
+                    string[] compileCommandsPath = { _rootPath, "bin", "obj", _os + "." + _arch + "." + _build, "compile_commands.json" };
+                    if (!_untidy && !File.Exists(Path.Combine(compileCommandsPath)))
                     {
-                        bool found;
+                        _syntaxResult.ReportError("Can't find compile_commands.json file. Please build coreclr first.");
+                    }
+                    else
+                    {
+                        _compileCommands = Path.Combine(compileCommandsPath);
+                    }
 
-                        // Set up arch
-                        var arch = ExtractDefault<string>("arch", out found);
-                        _arch = (found) ? arch : _arch;
+                }
+            }
 
-                        // Set up build
-                        var build = ExtractDefault<string>("build", out found);
-                        _build = (found) ? build : _build;
+            private void LoadFileConfig()
+            {
+                _jitUtilsRoot = Environment.GetEnvironmentVariable("JIT_UTILS_ROOT");
 
-                        // Set up os
-                        var os = ExtractDefault<string>("os", out found);
-                        _os = (found) ? os : _os;
+                if (_jitUtilsRoot != null)
+                {
+                    string path = Path.Combine(_jitUtilsRoot, "config.json");
 
-                        // Set up core_root.
-                        var rootPath = ExtractDefault<string>("coreclr", out found);
-                        _rootPath = (found) ? rootPath : _rootPath;
+                    if (File.Exists(path))
+                    {
+                        string configJson = File.ReadAllText(path);
 
-                        // Set up compileCommands
-                        var compileCommands = ExtractDefault<string>("compile-commands", out found);
-                        _compileCommands = (found) ? compileCommands : _compileCommands;
+                        _jObj = JObject.Parse(configJson);
+                        
+                        // Check if there is any default config specified.
+                        if (_jObj["format"]["default"] != null)
+                        {
+                            bool found;
 
-                        // Set flag from default for verbose.
-                        var verbose = ExtractDefault<bool>("verbose", out found);
-                        _verbose = (found) ? verbose : _verbose;
+                            // Set up arch
+                            var arch = ExtractDefault<string>("arch", out found);
+                            _arch = (found) ? arch : _arch;
 
-                        // Set up untidy
-                        var untidy = ExtractDefault<bool>("untidy", out found);
-                        _untidy = (found) ? untidy : _untidy;
+                            // Set up build
+                            var build = ExtractDefault<string>("build", out found);
+                            _build = (found) ? build : _build;
 
-                        // Set up noformat
-                        var noformat = ExtractDefault<bool>("noformat", out found);
-                        _noformat = (found) ? noformat : _noformat;
+                            // Set up os
+                            var os = ExtractDefault<string>("os", out found);
+                            _os = (found) ? os : _os;
 
-                        // Set up fix
-                        var fix = ExtractDefault<bool>("fix", out found);
-                        _fix = (found) ? fix : _fix;
+                            // Set up core_root.
+                            var rootPath = ExtractDefault<string>("coreclr", out found);
+                            _rootPath = (found) ? rootPath : _rootPath;
+
+                            // Set up compileCommands
+                            var compileCommands = ExtractDefault<string>("compile-commands", out found);
+                            _compileCommands = (found) ? compileCommands : _compileCommands;
+
+                            // Set flag from default for verbose.
+                            var verbose = ExtractDefault<bool>("verbose", out found);
+                            _verbose = (found) ? verbose : _verbose;
+
+                            // Set up untidy
+                            var untidy = ExtractDefault<bool>("untidy", out found);
+                            _untidy = (found) ? untidy : _untidy;
+
+                            // Set up noformat
+                            var noformat = ExtractDefault<bool>("noformat", out found);
+                            _noformat = (found) ? noformat : _noformat;
+
+                            // Set up fix
+                            var fix = ExtractDefault<bool>("fix", out found);
+                            _fix = (found) ? fix : _fix;
+                        }
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("Can't find format.json on {0}", _jitUtilsRoot);
                     }
                 }
                 else
                 {
-                    Console.Error.WriteLine("Can't find format.json on {0}", _jitUtilsRoot);
+                    Console.WriteLine("Environment variable JIT_FORMAT_ROOT not found - no configuration loaded.");
                 }
             }
-            else
+
+            public T ExtractDefault<T>(string name, out bool found)
             {
-                Console.WriteLine("Environment variable JIT_FORMAT_ROOT not found - no configuration loaded.");
+                var token = _jObj["format"]["default"][name];
+
+                if (token != null)
+                {
+                    found = true;
+
+                    try
+                    {
+                        return token.Value<T>();
+                    }
+                    catch (System.FormatException e)
+                    {
+                        Console.Error.WriteLine("Bad format for default {0}.  See config.json", name, e);
+                    }
+                }
+
+                found = false;
+                return default(T);
             }
+
+            public bool IsWindows { get { return (_os == "Windows_NT"); } }
+            public bool DoVerboseOutput { get { return _verbose; } }
+            public bool DoClangTidy { get { return !_untidy; } }
+            public bool DoClangFormat { get { return !_noformat; } }
+            public bool Fix { get { return _fix; } }
+            public bool IgnoreErrors { get { return _ignoreErrors; } }
+            public bool BuildCompileCommands { get { return _buildCompileCommands; } }
+            public string CoreCLRRoot { get { return _rootPath; } }
+            public string Arch { get { return _arch; } }
+            public string OS { get { return _os; } }
+            public string Build { get { return _build; } }
+            public string BuildLog { get { return _buildLog; } }
+            public string CompileCommands { get { return _compileCommands; } }
+            public IReadOnlyList<string> Filenames { get { return _filenames; } }
+            public IReadOnlyList<string> Projects { get { return _projects.Count == 0 ? new List<string>{"dll"} : _projects; } }
+            public string SourceDirectory { get { return _srcDirectory; } }
         }
 
-        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs, bool capture = false)
-        {
-            try 
-            {
-                Command command =  Command.Create(name, commandArgs);
-
-                if (capture)
-                {
-                    // Capture stdout/stderr for consumption within tool.
-                    command.CaptureStdOut();
-                    command.CaptureStdErr();
-                }
-                else
-                {
-                    // Wireup stdout/stderr so we can see output.
-                    command.ForwardStdOut();
-                    command.ForwardStdErr();
-                }
-
-                return command.Execute();
-            }
-            catch (CommandUnknownException e)
-            {
-                Console.Error.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
-                Environment.Exit(-1);
-                return CommandResult.Empty;
-            }
-        }
-
-        public T ExtractDefault<T>(string name, out bool found)
-        {
-            var token = _jObj["format"]["default"][name];
-
-            if (token != null)
-            {
-                found = true;
-
-                try
-                {
-                    return token.Value<T>();
-                }
-                catch (System.FormatException e)
-                {
-                    Console.Error.WriteLine("Bad format for default {0}.  See config.json", name, e);
-                }
-            }
-
-            found = false;
-            return default(T);
-        }
-
-        public bool IsWindows { get { return (_os == "Windows_NT"); } }
-        public bool DoVerboseOutput { get { return _verbose; } }
-        public bool DoClangTidy { get { return !_untidy; } }
-        public bool DoClangFormat { get { return !_noformat; } }
-        public bool Fix { get { return _fix; } }
-        public bool IgnoreErrors { get { return _ignoreErrors; } }
-        public bool BuildCompileCommands { get { return _buildCompileCommands; } }
-        public string CoreCLRRoot { get { return _rootPath; } }
-        public string Arch { get { return _arch; } }
-        public string OS { get { return _os; } }
-        public string Build { get { return _build; } }
-        public string BuildLog { get { return _buildLog; } }
-        public string CompileCommands { get { return _compileCommands; } }
-        public IReadOnlyList<string> Filenames { get { return _filenames; } }
-        public IReadOnlyList<string> Projects { get { return _projects.Count == 0 ? new List<string>{"dll"} : _projects; } }
-        public string SourceDirectory { get { return _srcDirectory; } }
-    }
-
-    public class jitformat
-    {
         private class CompileCommand
         {
             public string directory;
@@ -474,6 +444,35 @@ namespace ManagedCodeGen
             }
 
             return returncode;
+        }
+
+        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs, bool capture = false)
+        {
+            try 
+            {
+                Command command =  Command.Create(name, commandArgs);
+
+                if (capture)
+                {
+                    // Capture stdout/stderr for consumption within tool.
+                    command.CaptureStdOut();
+                    command.CaptureStdErr();
+                }
+                else
+                {
+                    // Wireup stdout/stderr so we can see output.
+                    command.ForwardStdOut();
+                    command.ForwardStdErr();
+                }
+
+                return command.Execute();
+            }
+            catch (CommandUnknownException e)
+            {
+                Console.Error.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
+                Environment.Exit(-1);
+                return CommandResult.Empty;
+            }
         }
 
         public static void ParseBuildLog(string buildLog, string compileCommands, string arch, string project, string dir, bool verbose)
@@ -640,123 +639,68 @@ namespace ManagedCodeGen
         {
             bool formatOk = true;
             string checks = "readability-braces*,modernize-use-nullptr";
-            string tidyFix = fix ? "-fix " : " ";
+
+            if (verbose)
+            {
+                Console.WriteLine("Running: ");
+            }
 
             if (fix)
             {
                 foreach (string filename in filenames)
                 {
-                    if (filename.EndsWith(".cpp"))
-                    {
-                        string fixErrors = ignoreErrors && fix ? " -fix-errors" : "";
-                        if (verbose)
-                        {
-                            Console.WriteLine("Running: ");
-                            Console.WriteLine("\tclang-tidy " + tidyFix + " -checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " + compileCommands + " " + filename);
-                        }
-
-                        Process process = new Process();
-                    
-                        // Configure the process using the StartInfo properties.
-                        process.StartInfo.FileName = "clang-tidy";
-                        process.StartInfo.Arguments = tidyFix + "-checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " +
-                            compileCommands + " " + filename;
-                        process.StartInfo.UseShellExecute = false;
-                        process.StartInfo.RedirectStandardOutput = true;
-                        process.StartInfo.RedirectStandardError = true;
-                        process.StartInfo.CreateNoWindow = true;
-                        process.Start();
-
-                        string stdoutx = process.StandardOutput.ReadToEnd();         
-                        string stderrx = process.StandardError.ReadToEnd();             
-                        process.WaitForExit();
-
-
-                        if ((stdoutx.Contains("warning:") || (!ignoreErrors && stdoutx.Contains("error:"))))
-                        {
-                            if (verbose)
-                            {
-                                Console.WriteLine("clang-tidy: there are formatting errors in {0}", filename);
-                            }
-                        }
-
-                        if (!ignoreErrors && stderrx.Contains("error:"))
-                        {
-                            Console.Error.WriteLine("Error in clang-tidy: {0}", stderrx);
-                        }
-                            
-                        if (verbose)
-                        {
-                            if (stdoutx.Contains("warning:") || !ignoreErrors)
-                            {
-                                Console.WriteLine(stdoutx);
-                            }
-                        }
-                    }
+                    formatOk = DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
                 }
             }
             else
             {
                 Parallel.ForEach(filenames, (filename) =>
-                        {
-                            if (filename.EndsWith(".cpp"))
-                            {
-                                string fixErrors = ignoreErrors && fix ? " -fix-errors" : "";
-                                if (verbose)
-                                {
-                                    Console.WriteLine("Running: ");
-                                    Console.WriteLine("\tclang-tidy " + tidyFix + " -checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " + compileCommands + " " + filename);
-                                }
+                    {
+                        formatOk = DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
+                    });
+            }
 
-                                Process process = new Process();
-                            
-                                // Configure the process using the StartInfo properties.
-                                process.StartInfo.FileName = "clang-tidy";
-                                process.StartInfo.Arguments = tidyFix + "-checks=-*," + checks + fixErrors + " -header-filter=src/jit/.* -p " +
-                                    compileCommands + " " + filename;
-                                process.StartInfo.UseShellExecute = false;
-                                process.StartInfo.RedirectStandardOutput = true;
-                                process.StartInfo.RedirectStandardError = true;
-                                process.StartInfo.CreateNoWindow = true;
-                                process.Start();
+            return formatOk;
+        }
 
-                                string stdoutx = process.StandardOutput.ReadToEnd();         
-                                string stderrx = process.StandardError.ReadToEnd();             
-                                process.WaitForExit();
+        public static bool DoClangTidyInnerLoop(bool fix, bool ignoreErrors, string checks, string compileCommands, string filename, bool verbose)
+        {
+            string tidyFix = fix ? "-fix" : "";
+            string fixErrors = ignoreErrors && fix ? "-fix-errors" : "";
 
+            bool formatOk = true;
 
-                                if ((stdoutx.Contains("warning:") || (!ignoreErrors && stdoutx.Contains("error:"))))
-                                {
-                                    if (verbose)
-                                    {
-                                        Console.WriteLine("clang-tidy: there are formatting errors in {0}", filename);
-                                    }
-                                    
-                                    if (!fix)
-                                    {
-                                        formatOk = false;
-                                    }
-                                }
+            if (filename.EndsWith(".cpp"))
+            {
+                if (verbose)
+                {
+                    Console.WriteLine("\tclang-tidy {0} -checks=-*,{1} {2} -header-filter=src/jit/.* -p={3} {4}", tidyFix, checks, fixErrors, compileCommands, filename);
+                }
 
-                                if (!ignoreErrors && stderrx.Contains("error:"))
-                                {
-                                    Console.Error.WriteLine("Error in clang-tidy: {0}", stderrx);
-                                    
-                                    if (!fix)
-                                    {
-                                        formatOk = false;
-                                    }
-                                }
-                                    
-                                if (verbose)
-                                {
-                                    if (stdoutx.Contains("warning:") || !ignoreErrors)
-                                    {
-                                        Console.WriteLine(stdoutx);
-                                    }
-                                }
-                            }
-                        });
+                List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
+                CommandResult result = TryCommand("clang-tidy", commandArgs, true);
+
+                if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && result.StdOut.Contains("error:"))))
+                {
+                    if (verbose)
+                    {
+                        Console.WriteLine("");
+                        Console.WriteLine("clang-tidy: there are formatting errors in {0}", filename);
+                    }
+
+                    formatOk = false;
+                }
+
+                if (!ignoreErrors && result.StdErr.Contains("error:"))
+                {
+                    Console.Error.WriteLine("Error in clang-tidy: {0}", result.StdErr);
+                    formatOk = false;
+                }
+
+                if (verbose && !fix && (result.StdOut.Contains("warning:") || !ignoreErrors))
+                {
+                    Console.WriteLine(result.StdOut);
+                }
             }
 
             return formatOk;
