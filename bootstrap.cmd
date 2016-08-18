@@ -34,6 +34,8 @@ echo Downloading formatting tools
 call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" -OutFile bin\clang-format.exe
 call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" -OutFile bin\clang-tidy.exe
 
+GOTO SetPath
+
 :CheckVersion
 
 clang-format --version | findstr 3.8 > NUL
