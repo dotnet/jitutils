@@ -26,6 +26,50 @@ dotnet restore
 
 ./build.sh -p -f
 
+if ! which -s clang-format || ! which -s clang-tidy;
+then
+
+    info=$(dotnet --info)
+
+    if echo $info | grep -q -i 'osx';
+    then
+        echo "Downloading clang-tidy and clang-format to bin directory"
+        # download osx version of clang-tidy/format
+        wget https://clrjit.blob.core.windows.net/clang-tools/osx/clang-format.exe -O bin/clang-format.exe
+        wget https://clrjit.blob.core.windows.net/clang-tools/osx/clang-tidy.exe -O bin/clang-tidy.exe
+    elif echo $info | grep -q -i 'ubuntu.16.04';
+    then
+        echo "Downloading clang-tidy and clang-format to bin directory"
+        # download osx version of clang-tidy/format
+        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/16.04/clang-format.exe -O bin/clang-format.exe
+        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/16.04/clang-tidy.exe -O bin/clang-tidy.exe
+    elif echo $info | grep -q -i 'ubuntu';
+    then
+        echo "Downloading clang-tidy and clang-format to bin directory"
+        # download osx version of clang-tidy/format
+        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/14.04/clang-format.exe -O bin/clang-format.exe
+        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/14.04/clang-tidy.exe -O bin/clang-tidy.exe
+    elif echo $info | grep -q -i 'centos';
+    then
+        echo "Downloading clang-tidy and clang-format to bin directory"
+        # download osx version of clang-tidy/format
+        wget https://clrjit.blob.core.windows.net/clang-tools/centos/clang-format.exe -O bin/clang-format.exe
+        wget https://clrjit.blob.core.windows.net/clang-tools/centos/clang-tidy.exe -O bin/clang-tidy.exe
+    else
+        echo "Clang-tidy and clang-format were not installed. Please install and put them on the PATH to use jit-format."
+        echo "Tools can be found at http://llvm.org/releases/download.html#3.8.0"
+    fi
+fi
+
+if ! clang-format --version | grep -q 3.8;
+then
+    echo "jit-format requires clang-format and clang-tidy version 3.8.*. Currently installed: "
+    clang-format --version
+    clang-tidy --version
+    echo "Please install version 3.8.* and put the tools on the PATH to use jit-format."
+    echo "Tools can be found at http://llvm.org/releases/download.html#3.8.0"
+fi
+
 popd
 
 # set utilites in the current path
