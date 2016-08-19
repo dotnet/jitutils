@@ -90,7 +90,7 @@ namespace ManagedCodeGen
 
                 foreach (var line in lines)
                 {
-                    Regex pattern = new Regex(@"OS Name:([\sA-Za-z0-9\.-]*)$");
+                    Regex pattern = new Regex(@"OS Platform:([\sA-Za-z0-9\.-]*)$");
                     Match match = pattern.Match(line);
                     if (match.Success)
                     {
@@ -98,14 +98,19 @@ namespace ManagedCodeGen
                         {
                             _os = "Windows_NT";
                         }
-                        else if (match.Groups[1].Value.Trim() == "Mac OS X")
+                        else if (match.Groups[1].Value.Trim() == "Darwin")
                         {
                             _os = "OSX";
                         }
+                        else if (match.Groups[1].Value.Trim() == "Linux")
+                        {
+                            // Assuming anything other than Windows or OSX is a Linux flavor
+                            _os = "Linux";
+                        }
                         else
                         {
-                            _os = match.Groups[1].Value.Trim();
-
+                            Console.WriteLine("Unknown operating system. Please specify with --os");
+                            Environment.Exit(-1);
                         }
                     }
                 }

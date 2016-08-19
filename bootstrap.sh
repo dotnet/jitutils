@@ -1,5 +1,14 @@
 #Quick and dirty bootstrap. 
 
+function validate_url(){
+  if [[ `wget -S --spider $1  2>&1 | grep 'HTTP/1.1 200 OK'` ]];
+  then
+      return 0;
+  else
+      return 1;
+  fi
+}
+
 if ! dotnet --info; then 
     echo "Can't find dotnet! Please add to PATH."
     return 1
@@ -30,44 +39,43 @@ if ! which -s clang-format || ! which -s clang-tidy;
 then
 
     info=$(dotnet --info)
+    info=${output//RID:}
+    info=${output// }
 
-    if echo $info | grep -q -i 'osx';
+    clangFormatUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-format
+
+    if `validate_url ${clangFormatUrl} > /dev/null`;
     then
-        echo "Downloading clang-tidy and clang-format to bin directory"
-        # download osx version of clang-tidy/format
-        wget https://clrjit.blob.core.windows.net/clang-tools/osx/clang-format.exe -O bin/clang-format.exe
-        wget https://clrjit.blob.core.windows.net/clang-tools/osx/clang-tidy.exe -O bin/clang-tidy.exe
-    elif echo $info | grep -q -i 'ubuntu.16.04';
+        echo "Downloading clang-format to bin directory"
+        # download appropriate version of clang-format
+        wget ${clangFormatUrl} -O bin/clang-format
+        chmod 751 bin/clang-format
+    fi
+
+    clangTidyUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-tidy
+
+    if `validate_url ${clangTidyUrl} > /dev/null`;
     then
-        echo "Downloading clang-tidy and clang-format to bin directory"
-        # download osx version of clang-tidy/format
-        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/16.04/clang-format.exe -O bin/clang-format.exe
-        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/16.04/clang-tidy.exe -O bin/clang-tidy.exe
-    elif echo $info | grep -q -i 'ubuntu';
+        echo "Downloading clang-tidy to bin directory"
+        # download appropriate version of clang-tidy
+        wget ${clangTidyUrl} -O bin/clang-tidy
+        chmod 751 bin/clang-tidy
+    fi
+
+    if [ ! -f bin/clang-format -o ! -f bin/clang-tidy ]
     then
-        echo "Downloading clang-tidy and clang-format to bin directory"
-        # download osx version of clang-tidy/format
-        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/14.04/clang-format.exe -O bin/clang-format.exe
-        wget https://clrjit.blob.core.windows.net/clang-tools/ubuntu/14.04/clang-tidy.exe -O bin/clang-tidy.exe
-    elif echo $info | grep -q -i 'centos';
-    then
-        echo "Downloading clang-tidy and clang-format to bin directory"
-        # download osx version of clang-tidy/format
-        wget https://clrjit.blob.core.windows.net/clang-tools/centos/clang-format.exe -O bin/clang-format.exe
-        wget https://clrjit.blob.core.windows.net/clang-tools/centos/clang-tidy.exe -O bin/clang-tidy.exe
-    else
-        echo "Clang-tidy and clang-format were not installed. Please install and put them on the PATH to use jit-format."
+        echo "Either Clang-tidy or clang-format was not installed. Please install and put them on the PATH to use jit-format."
         echo "Tools can be found at http://llvm.org/releases/download.html#3.8.0"
     fi
-fi
-
-if ! clang-format --version | grep -q 3.8;
-then
-    echo "jit-format requires clang-format and clang-tidy version 3.8.*. Currently installed: "
-    clang-format --version
-    clang-tidy --version
-    echo "Please install version 3.8.* and put the tools on the PATH to use jit-format."
-    echo "Tools can be found at http://llvm.org/releases/download.html#3.8.0"
+else
+    if ! clang-format --version | grep -q 3.8 || ! clang-tidy --version | grep -q 3.8;
+    then
+        echo "jit-format requires clang-format and clang-tidy version 3.8.*. Currently installed: "
+        clang-format --version
+        clang-tidy --version
+        echo "Please install version 3.8.* and put the tools on the PATH to use jit-format."
+        echo "Tools can be found at http://llvm.org/releases/download.html#3.8.0"
+    fi
 fi
 
 popd
