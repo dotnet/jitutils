@@ -382,7 +382,7 @@ namespace ManagedCodeGen
 
             public async Task<BuildInfo> GetJobBuildInfo(string repoName, string branchName, string jobName, int number)
             {
-                string buildString = String.Format("{0}/{1}/{2}", "job/{0}/job/{1}/job/{2}/{3}",
+                string buildString = String.Format("job/{0}/job/{1}/job/{2}/{3}",
                    repoName, branchName, jobName, number);
                 string buildMessage = String.Format("{0}/{1}", buildString,
                    "api/json?&tree=actions[lastBuiltRevision[SHA1]],artifacts[fileName,relativePath],result");
