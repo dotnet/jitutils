@@ -49,6 +49,8 @@ namespace ManagedCodeGen
             private bool _lastSuccessful;
             private string _jitUtilsRoot;
             private string _rid;
+            private string _platformName;
+            private string _moniker;
             private string _branchName;
 
             private JObject _jObj;
@@ -125,12 +127,42 @@ namespace ManagedCodeGen
 
                 foreach (var line in lines)
                 {
-                    Regex pattern = new Regex(@"RID:\s*([A-Za-z0-9\.-]*)$");
-                    Match match = pattern.Match(line);
-                    if (match.Success)
+                    Regex ridPattern = new Regex(@"RID:\s*([A-Za-z0-9\.-]*)$");
+                    Match ridMatch = ridPattern.Match(line);
+                    if (ridMatch.Success)
                     {
-                        _rid = match.Groups[1].Value;
+                        _rid = ridMatch.Groups[1].Value;
+                        continue;
                     }
+
+                    Regex platPattern = new Regex(@"Platform:\s*([A-Za-z0-9]*)$");
+                    Match platMatch = platPattern.Match(line);
+                    if (platMatch.Success)
+                    {
+                        _platformName = platMatch.Groups[1].Value;
+                        continue;
+                    }
+                }
+
+                switch (_platformName)
+                {
+                    case "Windows":
+                    case "Linux" :
+                    {
+                        _moniker = _platformName;
+                    }
+                    break;
+                    case "Darwin":
+                    {
+                        _moniker = "OSX";
+                    }
+                    break;
+                    default:
+                    {
+                        Console.WriteLine("No platform mapping!");
+                        _moniker = "bogus";
+                    }
+                    break;
                 }
             }
 
@@ -317,16 +349,32 @@ namespace ManagedCodeGen
                             string basePath = GetToolPath("base", out found);
                             if (found)
                             {
-                                _baseExe = Directory.EnumerateFiles(basePath, "crossgen*")
-                                                    .SingleOrDefault();
+                                if (Directory.Exists(basePath))
+                                {
+                                    _baseExe = Directory.EnumerateFiles(basePath, "crossgen*")
+                                                        .SingleOrDefault();
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Default base path {0} not found! Investigate config file entry and retry.", basePath);
+                                    Environment.Exit(-1);
+                                }
                             }
 
                             // Find diff tool if any
                             string diffPath = GetToolPath("diff", out found);
                             if (found)
                             {
-                                _diffExe = Directory.EnumerateFiles(diffPath, "crossgen*")
-                                                    .SingleOrDefault();
+                                if (Directory.Exists(diffPath))
+                                {
+                                    _diffExe = Directory.EnumerateFiles(diffPath, "crossgen*")
+                                                        .SingleOrDefault();
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Default diff path {0} not found! Investigate config file entry and retry.", diffPath);
+                                    Environment.Exit(-1);
+                                }
                             }
 
                             // Set up output
@@ -471,6 +519,7 @@ namespace ManagedCodeGen
             public string JitUtilsRoot { get { return _jitUtilsRoot; } }
             public bool HasJitUtilsRoot { get { return (_jitUtilsRoot != null); } }
             public string RID { get { return _rid; } }
+            public string Moniker { get { return _moniker; } }
             public string Number { get { return _number; } }
             public string BranchName { get { return _branchName; } }
         }
@@ -666,12 +715,10 @@ namespace ManagedCodeGen
 
             JObject newTool = new JObject();
             newTool.Add("tag", tag);
-            // Derive underlying tool directory based on current RID.
-            string[] platStrings = config.RID.Split('.');
             string platformPath = Path.Combine(toolPath, "Product");
             foreach (var dir in Directory.EnumerateDirectories(platformPath))
             {
-                if (Path.GetFileName(dir).ToUpper().Contains(platStrings[0].ToUpper()))
+                if (Path.GetFileName(dir).ToUpper().Contains(config.Moniker.ToUpper()))
                 {
                     newTool.Add("path", Path.GetFullPath(dir));
                     tools.Last.AddAfterSelf(newTool);
