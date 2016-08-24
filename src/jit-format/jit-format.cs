@@ -42,9 +42,8 @@ namespace ManagedCodeGen
             private bool _fix = false;
             private bool _verbose = false;
             private bool _ignoreErrors = false;
-            private string _buildLog = null;
             private string _compileCommands = null;
-            private bool _buildCompileCommands = true;
+            private bool _rewriteCompileCommands = false;
 
             private JObject _jObj;
             private string _jitUtilsRoot = null;
@@ -181,40 +180,61 @@ namespace ManagedCodeGen
                     _syntaxResult.ReportError("Specify --coreclr");
                 }
 
-                // Check that we can find the build log for Windows.
+                // Check that we can find compile_commands.json on windows
                 if (_os == "Windows_NT")
                 {
-                    string logFile = "CoreCLR_Windows_NT__" + _arch + "__" + _build + ".log";
-                    string logFullPath = Path.Combine(_rootPath, "bin", "Logs", logFile);
-                    if (_compileCommands != null)
+                    // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
+                    if (!_untidy && _compileCommands == null)
                     {
-                        _buildCompileCommands = false;
-                    }
-                    else if (!_untidy && !File.Exists(logFullPath))
-                    {
-                        _syntaxResult.ReportError("Can't find build log.");
-                    }
-                    else
-                    {
-                        _buildLog = logFullPath;
-                        string[] compileCommandsPath = { _rootPath, "bin", "obj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
+                        string[] compileCommandsPath = { _rootPath, "bin", "nmakeobj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
                         _compileCommands = Path.Combine(compileCommandsPath);
+                        _rewriteCompileCommands = true;
+
+                        if (!File.Exists(_compileCommands))
+                        {
+                            // We haven't done a build, so we need to do one.
+                            if (_verbose)
+                            {
+                                Console.WriteLine("Neither compile_commands.json exists, nor is there a build log. Running CMake to generate compile_commands.json.");
+                            }
+
+                            string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
+                            string buildPath = Path.Combine(_rootPath, "build.cmd");
+                            CommandResult result = TryCommand(buildPath, commandArgs, !_verbose);
+
+                            if (result.ExitCode != 0)
+                            {
+                                Console.WriteLine("There was an error running CMake to generate compile_commands.json. Please do a full build to generate a build log.");
+                                Environment.Exit(-1);
+                            }
+                        }
                     }
                 }
 
                 // Check that we can find the compile_commands.json file on other platforms
                 else
                 {
-                    string[] compileCommandsPath = { _rootPath, "bin", "obj", _os + "." + _arch + "." + _build, "compile_commands.json" };
-                    if (!_untidy && !File.Exists(Path.Combine(compileCommandsPath)))
+                    // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
+                    if (!_untidy && _compileCommands == null)
                     {
-                        _syntaxResult.ReportError("Can't find compile_commands.json file. Please build coreclr first.");
-                    }
-                    else
-                    {
+                        string[] compileCommandsPath = { _rootPath, "bin", "obj", _os + "." + _arch + "." + _build, "compile_commands.json" };
                         _compileCommands = Path.Combine(compileCommandsPath);
-                    }
+                        _rewriteCompileCommands = true;
 
+                        if (!File.Exists(Path.Combine(compileCommandsPath)))
+                        {
+                            Console.WriteLine("Can't find compile_commands.json file. Running configure.");
+                            string[] commandArgs = { _arch, _build, "configureonly" };
+                            string buildPath = Path.Combine(_rootPath, "build.sh");
+                            CommandResult result = TryCommand(buildPath, commandArgs, true);
+
+                            if (result.ExitCode != 0)
+                            {
+                                Console.WriteLine("There was an error running CMake to generate compile_commands.json. Please run build.sh configureonly");
+                                Environment.Exit(-1);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -276,12 +296,12 @@ namespace ManagedCodeGen
                     }
                     else
                     {
-                        Console.Error.WriteLine("Can't find format.json on {0}", _jitUtilsRoot);
+                        Console.Error.WriteLine("Can't find config.json on {0}", _jitUtilsRoot);
                     }
                 }
                 else
                 {
-                    Console.WriteLine("Environment variable JIT_FORMAT_ROOT not found - no configuration loaded.");
+                    Console.WriteLine("Environment variable JIT_UTILS_ROOT not found - no configuration loaded.");
                 }
             }
 
@@ -313,7 +333,7 @@ namespace ManagedCodeGen
             public bool DoClangFormat { get { return !_noformat; } }
             public bool Fix { get { return _fix; } }
             public bool IgnoreErrors { get { return _ignoreErrors; } }
-            public bool BuildCompileCommands { get { return _buildCompileCommands; } }
+            public bool RewriteCompileCommands { get { return _rewriteCompileCommands; } }
             public string CoreCLRRoot { get { return _rootPath; } }
             public string Arch { get { return _arch; } }
             public string OS { get { return _os; } }
@@ -386,12 +406,11 @@ namespace ManagedCodeGen
 
             if (config.DoClangTidy)
             {
-
                 string[] newCompileCommandsPath = { config.CoreCLRRoot, "bin", "obj", config.OS + "." + config.Arch + "." + config.Build, "compile_commands_full.json" };
                 string compileCommands = config.CompileCommands;
                 string newCompileCommands = Path.Combine(newCompileCommandsPath);
 
-                if (!config.IsWindows)
+                if (config.RewriteCompileCommands)
                 {
                     // Move original compile_commands file on non-windows
                     File.Move(config.CompileCommands, newCompileCommands);
@@ -402,16 +421,10 @@ namespace ManagedCodeGen
 
                 foreach (string project in config.Projects)
                 {
-                    if (config.IsWindows && config.BuildCompileCommands)
+                    if (config.IsWindows && config.RewriteCompileCommands)
                     {
-                        // On Windows, parse the log file and create the compile commands database
-                        if (verbose)
-                        {
-                            Console.WriteLine("Building compile_commands.json.");
-                        }
-                        ParseBuildLog(config.BuildLog, compileCommands, config.Arch, project, config.SourceDirectory, verbose);
+                        compileCommands = rewriteCompileCommands(newCompileCommands, project);
                     }
-
                     else
                     {
                         compileCommands = rewriteCompileCommands(newCompileCommands, project);
@@ -430,10 +443,16 @@ namespace ManagedCodeGen
                     }
                 }
 
-                // Move compile_commands.json back to it original file now that we are done with running clang_tidy.
-                if (!config.IsWindows)
+                // All generated compile_commands.json files should be deleted.
+                if (config.RewriteCompileCommands)
                 {
                     File.Delete(config.CompileCommands);
+                }
+
+                // In cases where a compile_commands.json already existed, and we rewrote it, move the original
+                // compile_commands.json back to it original file now that we are done with running clang_tidy.
+                if (config.RewriteCompileCommands)
+                {
                     File.Move(newCompileCommands, config.CompileCommands);
                     File.Delete(newCompileCommands);
                 }
@@ -480,134 +499,6 @@ namespace ManagedCodeGen
             }
         }
 
-        public static void ParseBuildLog(string buildLog, string compileCommands, string arch, string project, string dir, bool verbose)
-        {
-            if (!File.Exists(buildLog))
-            {
-                Console.Error.WriteLine("Build log does not exist: {0}", buildLog);
-            }
-            using (var outputStream = System.IO.File.Create(compileCommands))
-            {
-                using (StreamWriter compileCommandsWriter = new StreamWriter(outputStream))
-                {
-                    compileCommandsWriter.WriteLine("[");
-                }
-            }
-
-            bool first = true;
-
-            foreach (string line in File.ReadLines(buildLog))
-            {
-                string clExe = "";
-                List<string> iOptions = new List<string>();
-                List<string> dOptions = new List<string>();
-                List<string> uOptions = new List<string>();
-                List<string> files = new List<string>();
-
-                // For now, only create the compile_commands database for the dll build of coreclr.
-                if (line.Contains("CL.exe") && line.Contains("src\\" + dir + "\\" + project))
-                {
-                    string[] splitLine = line.Trim().Split(new string[]{ "CL.exe " }, StringSplitOptions.None);
-                    clExe = (splitLine[0] + "CL.exe").Replace("\\", "/");
-
-                    string[] options = splitLine[1].Split(' ');
-
-                    bool dOptionFound = false;
-
-                    foreach (string option in options)
-                    {
-                        if (option.StartsWith("/I") || option.StartsWith("-I"))
-                        {
-                            if (option.Contains("src\\inc"))
-                            {
-                                iOptions.Add(option.Replace("/I", "-isystem").Replace("\\", "/"));
-                            }
-                            else
-                            {
-                                iOptions.Add(option.Replace("/I", "-I").Replace("\\", "/"));
-                            }
-                        }
-                        else if (option.StartsWith("/D") || option.StartsWith("-D"))
-                        {
-                            dOptionFound = true;
-                        }
-                        else if (dOptionFound)
-                        {
-                            if (option.Contains("CMAKE_INTDIR"))
-                            {
-                                dOptions.Add("-D_" + option.Replace("\"", "").Replace("\\",""));
-                            }
-                            else
-                            {
-                                dOptions.Add("-D" + option.Replace("\\","/"));
-                            }
-
-                            dOptionFound = false;
-                        }
-                        else if (option.StartsWith("/U") || option.StartsWith("-U"))
-                        {
-                            uOptions.Add(option.Replace("/U", "-U"));
-                        }
-                        else if (option.Contains("src\\" + dir) && option.EndsWith(".cpp"))
-                        {
-                            files.Add(option);
-                        }
-                    }
-
-                    using (StreamWriter compileCommandsWriter = File.AppendText(compileCommands))
-                    {
-                        foreach (string filename in files)
-                        {
-                            string file = filename.Replace("\\", "/");
-                            if (!first)
-                            {
-                                compileCommandsWriter.WriteLine(",");
-                            }
-
-                            compileCommandsWriter.WriteLine("    {");
-
-                            compileCommandsWriter.WriteLine("        \"directory\": \"" + iOptions[0].Replace("-I","") + "\",");
-                            compileCommandsWriter.Write("        \"command\": \"\\\"" + clExe + "\\\" ");
-
-                            string m32 = "";
-                            if (arch == "x86")
-                            {
-                                m32 = " -m32";
-                            }
-
-                            compileCommandsWriter.Write("-target x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions -DSOURCE_FORMATTING=1");
-
-                            foreach (string iOption in iOptions)
-                            {
-                                compileCommandsWriter.Write(iOption + " ");
-                            }
-                            
-                            foreach (string dOption in dOptions)
-                            {
-                                compileCommandsWriter.Write(dOption + " ");
-                            }
-                            foreach (string uOption in uOptions)
-                            {
-                                compileCommandsWriter.Write(uOption + " ");
-                            }
-
-                            compileCommandsWriter.WriteLine(file + "\",");
-                            compileCommandsWriter.WriteLine("        \"file\": \"" + file + "\"");
-                            compileCommandsWriter.Write("    }");
-                            first = false;
-                        }
-                    }
-                }
-            }
-
-            using (StreamWriter compileCommandsWriter = File.AppendText(compileCommands))
-            {
-                compileCommandsWriter.WriteLine();
-                compileCommandsWriter.WriteLine("]");
-                compileCommandsWriter.WriteLine();
-            }
-        }
-
         // This method reads in a compile_command.json file, and writes a new json file with only the entries
         // commands for files found in the project specified. For example, if project is dll, it will write a
         // new compile_commands file (called compile_commands_dll.json) with only the entries whose directory
@@ -625,7 +516,32 @@ namespace ManagedCodeGen
                 {
                     // Add the command to our list of new commands
                     string directory = command["directory"].Value<string>();
-                    string compileCommand = command["command"].Value<string>().Replace("-I", "-isystem");
+                    string compileCommand = command["command"].Value<string>().Replace("-I", "-isystem").Replace("\\","/");
+                    if (compileCommand.Contains("cl.exe"))
+                    {
+                        string[] compileCommandsSplit = compileCommand.Split(new[] {" ", Environment.NewLine}, StringSplitOptions.None);
+                        compileCommand = "";
+
+                        foreach (string option in compileCommandsSplit)
+                        {
+                            if (option.ToLower().Contains("cl.exe"))
+                            {
+                                compileCommand = compileCommand + option + " -target x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions -DSOURCE_FORMATTING=1 ";
+                            }
+                            else if (option.Contains("-isystem"))
+                            {
+                                compileCommand = compileCommand + option + " ";
+                            }
+                            else if (option.Contains("-D"))
+                            {
+                                compileCommand = compileCommand + option + " ";
+                            }
+                            else if (option.Contains("src/jit"))
+                            {
+                                compileCommand = compileCommand + option;
+                            }
+                        }
+                    }
                     string file = command["file"].Value<string>();
                     newCommands.Add(new CompileCommand(directory, compileCommand, file));
                 }
@@ -654,14 +570,14 @@ namespace ManagedCodeGen
             {
                 foreach (string filename in filenames)
                 {
-                    formatOk = DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
+                    formatOk &= DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
                 }
             }
             else
             {
                 Parallel.ForEach(filenames, (filename) =>
                     {
-                        formatOk = DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
+                        formatOk &= DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
                     });
             }
 
@@ -717,6 +633,8 @@ namespace ManagedCodeGen
             string outputReplacementXml = fix ? "" : "-output-replacements-xml";
             bool formatOk = true;
 
+            List<string> clangFormatErrors = new List<string>();
+
             Parallel.ForEach(filenames, (filename) =>
                 {
                     Process process = new Process();
@@ -745,8 +663,7 @@ namespace ManagedCodeGen
 
                             XmlNodeList replacements = doc.DocumentElement.ChildNodes;
 
-                            Console.WriteLine("");
-                            Console.WriteLine("clang-format: there are formatting errors in {0}", filename);
+                            string output = "clang-format: there are formatting errors in " + filename + "\n";
 
                             foreach (XmlNode replacement in replacements)
                             {
@@ -777,14 +694,14 @@ namespace ManagedCodeGen
                                     var startLineNumber = fileContents.Take(offset).Count(c => c == '\n');
                                     var endLineNumber = fileContents.Take(offset + length).Count(c => c == '\n');
 
-                                    Console.WriteLine("At Line {0} Before: ", startLineNumber);
+                                    output = output + "At Line " + (startLineNumber + 1) + " Before:\n";
 
                                     foreach (string line in fileContentsList.Skip(startLineNumber).Take(endLineNumber - startLineNumber + 1))
                                     {
-                                        Console.WriteLine("{0}", line);
+                                        output = output + line + "\n";
                                     }
 
-                                    Console.WriteLine("After: ");
+                                    output = output + "After:\n";
 
                                     // To do the replacement, we remove the old text between offset and offset + length
                                     // and insert the new text
@@ -796,18 +713,27 @@ namespace ManagedCodeGen
 
                                     foreach (string line in fileContentsList.Skip(startLineNumber).Take(endLineNumber - startLineNumber + 1))
                                     {
-                                        Console.WriteLine("{0}", line);
+                                        output = output + line + "\n";
                                     }
 
-                                    Console.WriteLine("");
                                 }
                             }
+
+                            clangFormatErrors.Add(output);
                         }
 
                         formatOk = false;
                     }
                 });
 
+            if (verbose)
+            {
+                foreach (string failure in clangFormatErrors)
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("{0}", failure);
+                }
+            }
             return formatOk;
         }
     }
