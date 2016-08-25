@@ -338,7 +338,6 @@ namespace ManagedCodeGen
             public string Arch { get { return _arch; } }
             public string OS { get { return _os; } }
             public string Build { get { return _build; } }
-            public string BuildLog { get { return _buildLog; } }
             public string CompileCommands { get { return _compileCommands; } }
             public IReadOnlyList<string> Filenames { get { return _filenames; } }
             public IReadOnlyList<string> Projects { get { return _projects.Count == 0 ? new List<string>{"dll"} : _projects; } }
