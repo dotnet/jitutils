@@ -515,7 +515,17 @@ usage: jit-format [-a <arg>] [-o <arg>] [-b <arg>] [-c <arg>]
 ```
 
 A common task for developers would be to format their changes before submitting a
-PR:
+PR. A developer can run the tool using the tests/scripts/format.py script in the coreclr
+repo:
+
+```
+python tests\scripts\format.py --coreclr C:\michelm\coreclr --arch x64 --os Windows_NT
+```
+
+This will run all build flavors and all projects for the user. This should be done on both
+Windows and Linux. OS options are Windows_NT, Linux, or OSX.
+
+A developer can also run the tool manually:
 
 ```
 jit-format -a x64 -b Debug -o Windows_NT -c C:\michelm\coreclr
