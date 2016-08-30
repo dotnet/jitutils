@@ -1,6 +1,6 @@
 #Quick and dirty bootstrap. 
 
-function validate_url(){
+function validate_url {
   if [[ `wget -S --spider $1  2>&1 | grep 'HTTP/1.1 200 OK'` ]];
   then
       return 0;
@@ -35,7 +35,7 @@ dotnet restore
 
 ./build.sh -p -f
 
-if ! which -s clang-format || ! which -s clang-tidy;
+if ! which -s clang-format || ! which -s clang-tidy || ! clang-format --version | grep -q 3.8 || ! clang-tidy --version | grep -q 3.8;
 then
 
     info=$(dotnet --info)
