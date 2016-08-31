@@ -405,12 +405,15 @@ namespace ManagedCodeGen
 
             if (config.DoClangTidy)
             {
-                string[] newCompileCommandsPath = { config.CoreCLRRoot, "bin", "obj", config.OS + "." + config.Arch + "." + config.Build, "compile_commands_full.json" };
+                string[] newCompileCommandsDirPath = { config.CoreCLRRoot, "bin", "obj", config.OS + "." + config.Arch + "." + config.Build };
                 string compileCommands = config.CompileCommands;
-                string newCompileCommands = Path.Combine(newCompileCommandsPath);
+                string newCompileCommandsDir = Path.Combine(newCompileCommandsDirPath);
+                string newCompileCommands = Path.Combine(newCompileCommandsDir, "compile_commands_full.json");
 
                 if (config.RewriteCompileCommands)
                 {
+                    // Create the compile_commands directory. If it already exists, CreateDirectory will do nothing.
+                    Directory.CreateDirectory(newCompileCommandsDir);
                     // Move original compile_commands file on non-windows
                     File.Move(config.CompileCommands, newCompileCommands);
                 }
