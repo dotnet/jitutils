@@ -1,7 +1,7 @@
 #Quick and dirty bootstrap. 
 
 function validate_url {
-  if [[ `wget -S --spider $1  2>&1 | grep 'HTTP/1.1 200 OK'` ]];
+  if `wget -S --spider $1  2>&1 | grep 'HTTP/1.1 200 OK'`;
   then
       return 0;
   else
