@@ -1,3 +1,5 @@
+#!/bin/sh
+
 #Quick and dirty bootstrap. 
 
 function validate_url {
