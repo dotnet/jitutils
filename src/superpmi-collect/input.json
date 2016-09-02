@@ -1,0 +1,8 @@
+{
+   "os": "OSX",
+   "arch": "x64",
+   "build_type": "Checked",
+   "test_root_dir": "Users/jarret/remote_resources/OSX.x64.Checked",
+   "corefx_bin_dir": "~/projects/corefx/bin/OSX.AnyCPU.Debug",
+   "corefx_native_bin_dir": "~/projects/corefx/bin/OSX.x64.Debug"
+}

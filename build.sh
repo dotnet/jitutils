@@ -49,7 +49,7 @@ while getopts "hpfb:" opt; do
 done
 
 # declare the array of projects   
-declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs)
+declare -a projects=(jit-dasm jit-diff jit-analyze cijobs superpmicrossgen collect-all superpmi-collect)
 
 # for each project either build or publish
 for proj in "${projects[@]}"
