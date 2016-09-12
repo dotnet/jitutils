@@ -40,7 +40,7 @@ public class Utilities
    {  
       // Find out what Operating system we are on. This is mostly just to
       // make sure the OS is supported for SPMI Collection
-      string os = this.GetOs();;
+      string os = this.GetOs();
       
       this.m_tempPath = tempPath;
       this.m_crossGen = crossGen;
@@ -56,6 +56,7 @@ public class Utilities
       }
      
       coreclrRepoLocation = this.m_coreclrRepoLocation;
+      string[] supportedArches = new string[] { "x64" }
 
       // Set Default Values.
       //
@@ -71,14 +72,22 @@ public class Utilities
       if (string.IsNullOrEmpty(arch)) 
       {
          arch = RuntimeInformation.OSArchitecture.ToString();
-         
-         if (arch.ToLower() == "x64")
+ 
+         // Check for a supported architecture        
+         bool supported = false;
+         foreach (string item in supprtedArches)
          {
-            arch = "x64";
+            if (arch.ToLower() == item) 
+            {
+               arch = item.ToLower();
+               supported = True;
+            }
+
          }
-         else
+
+         if (!supported)
          {
-            throw new GeneralException("Unsupported arch.");
+            throw new GeneralException($"Unsupported arch. {arch}");
          }
       }
       
@@ -86,6 +95,7 @@ public class Utilities
       {
         throw new GeneralException("Error coreclrRepoLocation is empty.");
       }
+
       else
       {
          this.m_os = os;
@@ -105,8 +115,10 @@ public class Utilities
       {
          if (this.m_os == "Windows_NT")
          {
-           Console.WriteLine("Error, Tests were not built. Please build CoreCLR");
+            Console.WriteLine("Error, Tests were not built. Please build CoreCLR");
+            throw new GeneralException("Please build tests and run again.");
          }
+
          this.DownloadTests();
       }
       
@@ -186,6 +198,8 @@ public class Utilities
          proc.BeginErrorReadLine();
          proc.WaitForExit();
          
+         // Check for wget failure. Make sure several tests are there.
+
          string buildGzLocation = Path.Combine(corefxDirectory, "build.tar.gz");
          if (!File.Exists(buildGzLocation))
          {
@@ -211,6 +225,7 @@ public class Utilities
          proc.OutputDataReceived += (sender, arg) => { var output = arg.Data; };
          proc.ErrorDataReceived += (sender, arg) => { var err = arg.Data; };
          
+         // Check tar's output
          proc.Start();
          proc.BeginOutputReadLine();
          proc.BeginErrorReadLine();
@@ -284,12 +299,7 @@ public class Utilities
          throw new DirectoryNotFoundException(err_msg);
       }
       
-      // If the directory does not exist, create it.
-      if (!Directory.Exists(dest))
-      {
-         Directory.CreateDirectory(dest);
-      }
-      
+      Directory.CreateDirectory(dest);
       FileInfo[] files = dir.GetFiles();
       
       foreach (var file in files)
@@ -337,7 +347,8 @@ public class Utilities
       {
          Console.WriteLine($"wget {args}");
       }
-         
+ 
+      // Check wget's response value        
       proc.Start();
                   
       proc.BeginOutputReadLine();
@@ -406,6 +417,7 @@ public class Utilities
    
    public bool ParseSettingFile(string location = null)
    {
+      // Make sure that the spmi_settings.json file exists
       string path = Path.Combine(System.IO.Directory.GetCurrentDirectory(), "spmi_settings.json");
       var stream = new FileStream(path, FileMode.Open);
       
