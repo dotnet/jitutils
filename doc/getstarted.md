@@ -118,9 +118,11 @@ Steps:
   same repo after saving off the baseline Product directory.
 * Ensure jit-diff, jit-analyze, and jit-dasm are on the path.
 * Create an empty output directory.
+* Copy mscorlib.dll, mscorlib.ni.dll, System.Private.CoreLib.dll, and System.Private.CoreLib.ni.dll
+  from the baseline CoreCLR build to <jitutils_repo>/fx (overwriting existing versions).
 * Invoke command
 ```
-$ jit-diff diff --analyze --frameworksonly --base <base_coreclr_repo>/bin/Product/<platform>/crossgen --diff <diff_coreclr_repo>/bin/Product/<platform>/crossgen --output <output_directory> --core_root <jitutils_repo>/fx
+$ jit-diff diff --analyze --frameworksonly --crossgen <coreclr_repo>/bin/Product/<platform>/crossgen --base <coreclr_repo>/bin/Product/<platform> --diff <diff_coreclr_repo>/bin/Product/<platform> --output <output_directory> --core_root <jitutils_repo>/fx
 ```
 * View summary output produced by jit-diff via jit-analyze.  Report returned on stdout.
 * Check output directory
@@ -144,9 +146,11 @@ Steps:
   same repo after saving off the baseline Product directory.
 * Ensure jit-diff, analyze, and jit-dasm are on the path.
 * Create an empty output directory.
+* Copy mscorlib.dll, mscorlib.ni.dll, System.Private.CoreLib.dll, and System.Private.CoreLib.ni.dll
+  from the baseline CoreCLR build to <jitutils_repo>/fx (overwriting existing versions).
 * Invoke command
 ```
-$ jit-diff diff --analyze --base <coreclr_repo>/bin/Product/<platform>/crossgen --diff <diff_coreclr_repo>/bin/Product/<platform>/crossgen --output <output_directory> --core_root <test_root>/core_root --test_root <test_root>
+$ jit-diff diff --analyze --crossgen <coreclr_repo>/bin/Product/<platform>/crossgen --base <coreclr_repo>/bin/Product/<platform> --diff <diff_coreclr_repo>/bin/Product/<platform> --output <output_directory> --core_root <test_root>/core_root --test_root <test_root>
 ```
 * View summary output produced by jit-diff via jit-analyze.  Report returned on stdout.
 * Check output directory
@@ -376,15 +380,14 @@ contains installed tools.
 A sample [config.json](TODO) is included in the jitutils repo as an example that can be modified
 for a developers own context.  We will go through the different elements here for added detail.
 This file supplies the configuration options for both jit-diff and jit-format. The most interesting
-section of each section of the file is the `"default"` section.  Each sub element of default
-maps directly to jit-diff or jit-format option name.  Setting a default value here for any one 
-of them will cause the tools to set them to the listed value on start up and then only override 
-that value if new options are passed on the command line.  In the jit-diff section, the `"base"` 
-and `"diff"` entries are worth going into in more detail.  The `"base"` is set to
-`"checked_osx-1526"`.  Looking down in the `"tools"` section shows that the tool is installed 
-in the `tools` sub-directory of JIT_UTILS_ROOT.  Any of the so entered tools can be used in the
-default section as a value, but they can also be passed on the command line as the value for 
-`--base` or `--diff`.
+section of the file is the `"default"` section.  Each sub element of default maps directly to jit-diff
+or jit-format option name.  Setting a default value here for any one of them will cause the tools to
+set them to the listed value on start up and then only override that value if new options are passed
+on the command line.  In the jit-diff section, the `"base"` and `"diff"` entries are worth going into
+in more detail.  The `"base"` is set to `"checked_osx-1526"`.  Looking down in the `"tools"` section
+shows that the tool is installed in the `tools` sub-directory of JIT_UTILS_ROOT.  Any of the so entered
+tools can be used in the default section as a value, but they can also be passed on the command line
+as the value for `--base` or `--diff`.
 
 ```
 {
