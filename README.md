@@ -82,9 +82,17 @@ Sample help commandlines:
                     [-a] [-t <arg>] [-c] [-f] [--benchmarksonly] [-v]
                     [--core_root <arg>] [--test_root <arg>]
     
-        -b, --base <arg>        The base compiler path or tag.
-        -d, --diff <arg>        The diff compiler path or tag.
-        --crossgen <arg>        The crossgen compiler exe.
+        -b, --base <arg>        The base compiler directory or tag. Will use
+                                crossgen or clrjit from this directory,
+                                depending on whether --crossgen is
+                                specified.
+        -d, --diff <arg>        The diff compiler directory or tag. Will use
+                                crossgen or clrjit from this directory,
+                                depending on whether --crossgen is
+                                specified.
+        --crossgen <arg>        The crossgen compiler exe. When this is
+                                specified, will use clrjit from the --base
+                                and --diff directories with this crossgen
         -o, --output <arg>      The output path.
         -a, --analyze           Analyze resulting base, diff dasm
                                 directories.

@@ -68,9 +68,15 @@ namespace ManagedCodeGen
                 {
                     // Diff command section.
                     syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff of base/diff.");
-                    syntax.DefineOption("b|base", ref _basePath, "The base compiler path or tag.");
-                    syntax.DefineOption("d|diff", ref _diffPath, "The diff compiler path or tag.");
-                    syntax.DefineOption("crossgen", ref _crossgenExe, "The crossgen compiler exe.");
+                    syntax.DefineOption("b|base", ref _basePath, "The base compiler directory or tag." +
+                                        " Will use crossgen or clrjit from this directory, depending on" +
+                                        " whether --crossgen is specified.");
+                    syntax.DefineOption("d|diff", ref _diffPath, "The diff compiler directory or tag." +
+                                        " Will use crossgen or clrjit from this directory, depending on" +
+                                        " whether --crossgen is specified.");
+                    syntax.DefineOption("crossgen", ref _crossgenExe, "The crossgen compiler exe." +
+                                        " When this is specified, will use clrjit from the --base and" +
+                                        " --diff directories with this crossgen");
                     syntax.DefineOption("o|output", ref _outputPath, "The output path.");
                     syntax.DefineOption("a|analyze", ref _analyze, 
                         "Analyze resulting base, diff dasm directories.");

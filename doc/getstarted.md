@@ -150,7 +150,7 @@ Steps:
   from the baseline CoreCLR build to <jitutils_repo>/fx (overwriting existing versions).
 * Invoke command
 ```
-$ jit-diff diff --analyze --crossgen <coreclr_repo>/bin/Product/<platform>/crossgen --base <coreclr_repo>/bin/Product/<platform>/crossgen --diff <diff_coreclr_repo>/bin/Product/<platform>/crossgen --output <output_directory> --core_root <test_root>/core_root --test_root <test_root>
+$ jit-diff diff --analyze --crossgen <coreclr_repo>/bin/Product/<platform>/crossgen --base <coreclr_repo>/bin/Product/<platform> --diff <diff_coreclr_repo>/bin/Product/<platform> --output <output_directory> --core_root <test_root>/core_root --test_root <test_root>
 ```
 * View summary output produced by jit-diff via jit-analyze.  Report returned on stdout.
 * Check output directory
