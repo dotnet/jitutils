@@ -1,2 +1,2 @@
 @echo off
-dotnet.exe %~pn0.dll %*
+dotnet.exe %~d0%~pn0.dll %*
