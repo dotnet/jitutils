@@ -41,11 +41,11 @@ building both a base and diff locally.
 Sample help commandline:
 ```
     $ jit-dasm --help
-    usage: jit-dasm [-b <arg>] [-d <arg>] [-o <arg>] [-t <arg>] [-f <arg>]
+    usage: jit-dasm [-c <arg>] [-j <arg>] [-o <arg>] [-t <arg>] [-f <arg>]
                     [--gcinfo] [-v] [-r] [-p <arg>...] [--] <assembly>...
-
-        -b, --base <arg>           The base compiler exe.
-        -d, --diff <arg>           The diff compiler exe.
+    
+        -c, --crossgen <arg>       The crossgen compiler exe.
+        -j, --jit <arg>            The full path to the jit library.
         -o, --output <arg>         The output path.
         -t, --tag <arg>            Name of root in output directory.  Allows
                                    for many sets of output.
@@ -78,18 +78,21 @@ Sample help commandlines:
 ```
 ```
     $ jit-diff diff --help
-    usage: jit-diff diff [-b <arg>] [-d <arg>] [-o <arg>] [-a] [-t <arg>]
-                    [-m] [-f] [-v] [--core_root <arg>] [--test_root <arg>]
-
-        -b, --base <arg>        The base compiler exe or tag.
-        -d, --diff <arg>        The diff compiler exe or tag.
+    usage: jit-diff diff [-b <arg>] [-d <arg>] [--crossgen <arg>] [-o <arg>]
+                    [-a] [-t <arg>] [-c] [-f] [--benchmarksonly] [-v]
+                    [--core_root <arg>] [--test_root <arg>]
+    
+        -b, --base <arg>        The base compiler path or tag.
+        -d, --diff <arg>        The diff compiler path or tag.
+        --crossgen <arg>        The crossgen compiler exe.
         -o, --output <arg>      The output path.
         -a, --analyze           Analyze resulting base, diff dasm
                                 directories.
         -t, --tag <arg>         Name of root in output directory.  Allows
                                 for many sets of output.
-        -c, --corlibonly        Disasm *corlib only
+        -c, --corlibonly        Disasm *CorLib only
         -f, --frameworksonly    Disasm frameworks only
+        --benchmarksonly        Disasm core benchmarks only
         -v, --verbose           Enable verbose output
         --core_root <arg>       Path to test CORE_ROOT.
         --test_root <arg>       Path to test tree.

@@ -33,8 +33,9 @@ namespace ManagedCodeGen
         {
             private ArgumentSyntax _syntaxResult;
             private Commands _command = Commands.Diff;
-            private string _baseExe = null;
-            private string _diffExe = null;
+            private string _basePath = null;
+            private string _diffPath = null;
+            private string _crossgenExe = null;
             private string _outputPath = null;
             private bool _analyze = false;
             private string _tag = null;
@@ -67,8 +68,9 @@ namespace ManagedCodeGen
                 {
                     // Diff command section.
                     syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff of base/diff.");
-                    syntax.DefineOption("b|base", ref _baseExe, "The base compiler exe or tag.");
-                    syntax.DefineOption("d|diff", ref _diffExe, "The diff compiler exe or tag.");
+                    syntax.DefineOption("b|base", ref _basePath, "The base compiler path or tag.");
+                    syntax.DefineOption("d|diff", ref _diffPath, "The diff compiler path or tag.");
+                    syntax.DefineOption("crossgen", ref _crossgenExe, "The crossgen compiler exe.");
                     syntax.DefineOption("o|output", ref _outputPath, "The output path.");
                     syntax.DefineOption("a|analyze", ref _analyze, 
                         "Analyze resulting base, diff dasm directories.");
@@ -206,18 +208,16 @@ namespace ManagedCodeGen
                     var tag = (string)tool["tag"];
                     var path = (string)tool["path"];
 
-                    if (_baseExe == tag)
+                    if (_basePath == tag)
                     {
                         // passed base tag matches installed tool, reset path.
-                        _baseExe = Directory.EnumerateFiles(path, "crossgen*")
-                                            .SingleOrDefault();
-                    }
+                        _basePath = path;
+                    } 
 
-                    if (_diffExe == tag)
+                    if (_diffPath == tag)
                     {
                         // passed diff tag matches installed tool, reset path.
-                        _diffExe = Directory.EnumerateFiles(path, "crossgen*")
-                                            .SingleOrDefault();
+                        _diffPath = path;
                     }
                 }
             }
@@ -259,7 +259,7 @@ namespace ManagedCodeGen
                     _syntaxResult.ReportError("Specify --output <path>");
                 }
 
-                if ((_baseExe == null) && (_diffExe == null))
+                if ((_basePath == null) && (_diffPath == null))
                 {
                     _syntaxResult.ReportError("--base <path> or --diff <path> or both must be specified.");
                 }
@@ -347,34 +347,26 @@ namespace ManagedCodeGen
 
                             // Find baseline tool if any.
                             string basePath = GetToolPath("base", out found);
-                            if (found)
+                            if (found && !Directory.Exists(basePath))
                             {
-                                if (Directory.Exists(basePath))
-                                {
-                                    _baseExe = Directory.EnumerateFiles(basePath, "crossgen*")
-                                                        .SingleOrDefault();
-                                }
-                                else
-                                {
-                                    Console.WriteLine("Default base path {0} not found! Investigate config file entry and retry.", basePath);
-                                    Environment.Exit(-1);
-                                }
+                                Console.WriteLine("Default base path {0} not found! Investigate config file entry and retry.", basePath);
+                                Environment.Exit(-1);
                             }
 
                             // Find diff tool if any
                             string diffPath = GetToolPath("diff", out found);
-                            if (found)
+                            if (found && !Directory.Exists(diffPath))
                             {
-                                if (Directory.Exists(diffPath))
-                                {
-                                    _diffExe = Directory.EnumerateFiles(diffPath, "crossgen*")
-                                                        .SingleOrDefault();
-                                }
-                                else
-                                {
                                     Console.WriteLine("Default diff path {0} not found! Investigate config file entry and retry.", diffPath);
                                     Environment.Exit(-1);
-                                }
+                            }
+
+                            // Find crossgen tool if any
+                            string crossgenPath = GetToolPath("crossgen", out found);
+                            if (found && !Directory.Exists(crossgenPath))
+                            {
+                                Console.WriteLine("Default crossgen path {0} not found! Investigate config file entry and retry.", crossgenPath);
+                                Environment.Exit(-1);
                             }
 
                             // Set up output
@@ -497,11 +489,12 @@ namespace ManagedCodeGen
 
             public string CoreRoot { get { return _platformPath; } }
             public string TestRoot { get { return _testPath; } }
-            public string PlatformPath { get { return _platformPath; } }
-            public string BaseExecutable { get { return _baseExe; } }
-            public bool HasBaseExeutable { get { return (_baseExe != null); } }
-            public string DiffExecutable { get { return _diffExe; } }
-            public bool HasDiffExecutable { get { return (_diffExe != null); } }
+            public string BasePath { get { return _basePath; } }
+            public bool HasBasePath { get { return (_basePath != null); } }
+            public string DiffPath { get { return _diffPath; } }
+            public bool HasDiffPath { get { return (_diffPath != null); } }
+            public string CrossgenExe { get { return _crossgenExe; } }
+            public bool HasCrossgenExe { get { return (_crossgenExe != null); } }
             public string OutputPath { get { return _outputPath; } }
             public string Tag { get { return _tag; } }
             public bool HasTag { get { return (_tag != null); } }
@@ -737,7 +730,7 @@ namespace ManagedCodeGen
             }
             return ret;
         }
-        
+
         public static int DiffCommand(Config config)
         {
             string diffString;
@@ -780,18 +773,6 @@ namespace ManagedCodeGen
 
             commandArgs.Add("--output");
             commandArgs.Add(config.OutputPath);
-
-            if (config.HasBaseExeutable)
-            {
-                commandArgs.Add("--base");
-                commandArgs.Add(config.BaseExecutable);
-            }
-
-            if (config.HasDiffExecutable)
-            {
-                commandArgs.Add("--diff");
-                commandArgs.Add(config.DiffExecutable);
-            }
 
             if (config.DoTestTree)
             {
@@ -852,14 +833,62 @@ namespace ManagedCodeGen
                 }
             }
 
-            Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", commandArgs));
-
-            CommandResult result = TryCommand(s_asmTool, commandArgs);
-
-            if (result.ExitCode != 0)
+            if (config.HasBasePath)
             {
-                Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
-                return result.ExitCode;
+                List<string> baseArgs = commandArgs;
+                baseArgs.Add("--tag");
+                baseArgs.Add("base");
+                baseArgs.Add("--crossgen");
+                if (config.HasCrossgenExe)
+                {
+                    baseArgs.Add(config.CrossgenExe);
+                    baseArgs.Add("--jit");
+                    baseArgs.Add(Directory.EnumerateFiles(config.BasePath, "*clrjit*")
+                                          .SingleOrDefault());
+                }
+                else
+                {
+                    baseArgs.Add(Directory.EnumerateFiles(config.BasePath, "crossgen*")
+                                          .SingleOrDefault());
+                }
+
+                Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", baseArgs));
+                CommandResult result = TryCommand(s_asmTool, baseArgs);
+
+                if (result.ExitCode != 0)
+                {
+                    Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
+                    return result.ExitCode;
+                }
+            }
+
+            if (config.HasDiffPath)
+            {
+                List<string> diffArgs = commandArgs;
+                diffArgs.Add("--tag");
+                diffArgs.Add("diff");
+                diffArgs.Add("--crossgen");
+                if (config.HasCrossgenExe)
+                {
+                    diffArgs.Add(config.CrossgenExe);
+                    diffArgs.Add("--jit");
+                    diffArgs.Add(Directory.EnumerateFiles(config.DiffPath, "*clrjit*")
+                                          .SingleOrDefault());
+                }
+                else
+                {
+                    diffArgs.Add(Directory.EnumerateFiles(config.DiffPath, "crossgen*")
+                                          .SingleOrDefault());
+                }
+
+                Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", diffArgs));
+                CommandResult result = TryCommand(s_asmTool, diffArgs);
+
+                if (result.ExitCode != 0)
+                {
+                    Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
+                    return result.ExitCode;
+                }
             }
 
             // Analyze completed run.
@@ -880,7 +909,7 @@ namespace ManagedCodeGen
                 CommandResult analyzeResult = TryCommand(s_analysisTool, analysisArgs);
             }
 
-            return result.ExitCode;
+            return 0;
         }
     }
 }

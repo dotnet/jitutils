@@ -36,9 +36,8 @@ namespace ManagedCodeGen
     public class Config
     {
         private ArgumentSyntax _syntaxResult;
-        private string _baseExe = null;
-        private string _diffExe = null;
         private string _crossgenExe = null;
+        private string _jitPath = null;
         private string _rootPath = null;
         private string _tag = null;
         private string _fileName = null;
@@ -54,9 +53,8 @@ namespace ManagedCodeGen
         {
             _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
             {
-                syntax.DefineOption("b|base", ref _baseExe, "The base compiler exe.  Implies 'base' output tag.");
-                syntax.DefineOption("d|diff", ref _diffExe, "The diff compiler exe. Implies 'diff' output tag.");
                 syntax.DefineOption("c|crossgen", ref _crossgenExe, "The crossgen compiler exe.");
+                syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
                 syntax.DefineOption("o|output", ref _rootPath, "The output path.");
                 syntax.DefineOption("t|tag", ref _tag, "Name of root in output directory.  Allows for many sets of output.");
                 syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
@@ -81,31 +79,17 @@ namespace ManagedCodeGen
             validate();
         }
 
-        // Validate supported scenarios
-        // 
-        //    Scenario 1:  --base and --diff
-        //       Pass two tools in and generate a set of disassembly with each.  Result directories
-        //       will be tagged with "base" and "diff" in the output dir.
+        // Validate arguments
         //
-        //    Scenario 2:  --base or --diff with --tag
-        //       Pass single tool as either --base or --diff and tag the result directory with a user
-        //       supplied tag.
+        // Pass a single tool as --crossgen. Optionally tag the result
+        // directory with a user supplied tag, and optionally specify
+        // a jit for crossgen to use.
         //
         private void validate()
         {
-            if ((_baseExe == null) && (_diffExe == null) && (_crossgenExe == null))
+            if (_crossgenExe == null)
             {
-                _syntaxResult.ReportError("Specify --base and/or --diff, or --crossgen.");
-            }
-
-            if ((_crossgenExe != null) && ((_baseExe != null) || (_diffExe != null)))
-            {
-                _syntaxResult.ReportError("--crossgen specified with --diff or --base.  --crossgen must be the only tool specified.");
-            }
-
-            if ((_tag != null) && (_diffExe != null) && (_baseExe != null))
-            {
-                _syntaxResult.ReportError("Multiple compilers with the same tag: Specify --diff OR --base seperatly with --tag (one compiler for one tag).");
+                _syntaxResult.ReportError("Specify --crossgen.");
             }
 
             if ((_fileName == null) && (_assemblyList.Count == 0))
@@ -113,36 +97,7 @@ namespace ManagedCodeGen
                 _syntaxResult.ReportError("No input: Specify --file <arg> or list input assemblies.");
             }
 
-            // Check that we can find the baseExe.
-            if (_baseExe != null)
-            {
-                if (!File.Exists(_baseExe))
-                {
-                    _syntaxResult.ReportError("Can't find --base tool.");
-                }
-                else
-                {
-                    // Set to full path for the command resolution logic.
-                    string fullBasePath = Path.GetFullPath(_baseExe);
-                    _baseExe = fullBasePath;
-                }
-            }
-
-            // Check that we can find the diffExe.
-            if (_diffExe != null)
-            {
-                if (!File.Exists(_diffExe))
-                {
-                    _syntaxResult.ReportError("Can't find --diff tool.");
-                }
-                else
-                {
-                    // Set to full path for command resolution logic.
-                    string fullDiffPath = Path.GetFullPath(_diffExe);
-                    _diffExe = fullDiffPath;
-                }
-            }
-
+            // Check that we can find the crossgenExe
             if (_crossgenExe != null)
             {
                 if (!File.Exists(_crossgenExe))
@@ -154,6 +109,21 @@ namespace ManagedCodeGen
                     // Set to full path for command resolution logic.
                     string fullCrossgenPath = Path.GetFullPath(_crossgenExe);
                     _crossgenExe = fullCrossgenPath;
+                }
+            }
+
+            // Check that we can find the jit library.
+            if (_jitPath != null)
+            {
+                if (!File.Exists(_jitPath))
+                {
+                    _syntaxResult.ReportError("Can't find --jit library.");
+                }
+                else
+                {
+                    // Set to full path for command resolution logic.
+                    string fullJitPath = Path.GetFullPath(_jitPath);
+                    _jitPath = fullJitPath;
                 }
             }
 
@@ -170,17 +140,14 @@ namespace ManagedCodeGen
         public bool HasUserAssemblies { get { return AssemblyList.Count > 0; } }
         public bool DoFileOutput { get { return (this.RootPath != null); } }
         public bool WaitForDebugger { get { return _wait; } }
-        public bool GenerateBaseline { get { return (_baseExe != null); } }
-        public bool GenerateDiff { get { return (_diffExe != null); } }
-        public bool GenerateCrossgen { get { return (_crossgenExe != null); } }
+        public bool UseJitPath { get { return (_jitPath != null); } }
         public bool HasTag { get { return (_tag != null); } }
         public bool Recursive { get { return _recursive; } }
         public bool UseFileName { get { return (_fileName != null); } }
         public bool DumpGCInfo { get { return _dumpGCInfo; } }
         public bool DoVerboseOutput { get { return _verbose; } }
-        public string BaseExecutable { get { return _baseExe; } }
-        public string DiffExecutable { get { return _diffExe; } }
         public string CrossgenExecutable { get { return _crossgenExe; } }
+        public string JitPath { get { return _jitPath; } }
         public string RootPath { get { return _rootPath; } }
         public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
         public string Tag { get { return _tag; } }
@@ -218,96 +185,31 @@ namespace ManagedCodeGen
             // Builds assemblyInfoList on jitdasm
 
             List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
-
+            
             // The disasm engine encapsulates a particular set of diffs.  An engine is
             // produced with a given code generator and assembly list, which then produces
             // a set of disasm outputs
 
-            if (config.GenerateBaseline)
+            string taggedPath = null;
+            if (config.DoFileOutput)
             {
-                string taggedPath = null;
-                if (config.DoFileOutput)
+                if (config.HasTag)
                 {
-                    string tag = "base";
-                    if (config.HasTag)
-                    {
-                        tag = config.Tag;
-                    }
-
-                    if (tag != null)
-                    {
-                        taggedPath = Path.Combine(config.RootPath, tag);
-                    }
-                    else
-                    {
-                        taggedPath = config.RootPath;
-                    }
+                    taggedPath = Path.Combine(config.RootPath, config.Tag);
                 }
-
-                DisasmEngine baseDisasm = new DisasmEngine(config.BaseExecutable, config, taggedPath, assemblyWorkList);
-                baseDisasm.GenerateAsm();
-
-                if (baseDisasm.ErrorCount > 0)
+                else
                 {
-                    Console.Error.WriteLine("{0} errors compiling base set.", baseDisasm.ErrorCount);
-                    errorCount += baseDisasm.ErrorCount;
+                    taggedPath = config.RootPath;
                 }
             }
-
-            if (config.GenerateDiff)
+            
+            DisasmEngine crossgenDisasm = new DisasmEngine(config.CrossgenExecutable, config, taggedPath, assemblyWorkList);
+            crossgenDisasm.GenerateAsm();
+            
+            if (crossgenDisasm.ErrorCount > 0)
             {
-                string taggedPath = null;
-                if (config.DoFileOutput)
-                {
-                    string tag = "diff";
-                    if (config.HasTag)
-                    {
-                        tag = config.Tag;
-                    }
-
-                    if (tag != null)
-                    {
-                        taggedPath = Path.Combine(config.RootPath, tag);
-                    }
-                    else
-                    {
-                        taggedPath = config.RootPath;
-                    }
-                }
-
-                DisasmEngine diffDisasm = new DisasmEngine(config.DiffExecutable, config, taggedPath, assemblyWorkList);
-                diffDisasm.GenerateAsm();
-
-                if (diffDisasm.ErrorCount > 0)
-                {
-                    Console.Error.WriteLine("{0} errors compiling diff set.", diffDisasm.ErrorCount);
-                    errorCount += diffDisasm.ErrorCount;
-                }
-            }
-
-            if (config.GenerateCrossgen)
-            {
-                string taggedPath = null;
-                if (config.DoFileOutput)
-                {
-                    if (config.HasTag)
-                    {
-                        taggedPath = Path.Combine(config.RootPath, config.Tag);
-                    }
-                    else
-                    {
-                        taggedPath = config.RootPath;
-                    }
-                }
-
-                DisasmEngine crossgenDisasm = new DisasmEngine(config.CrossgenExecutable, config, taggedPath, assemblyWorkList);
-                crossgenDisasm.GenerateAsm();
-
-                if (crossgenDisasm.ErrorCount > 0)
-                {
-                    Console.Error.WriteLine("{0} errors compiling set.", crossgenDisasm.ErrorCount);
-                    errorCount += crossgenDisasm.ErrorCount;
-                }
+                Console.Error.WriteLine("{0} errors compiling set.", crossgenDisasm.ErrorCount);
+                errorCount += crossgenDisasm.ErrorCount;
             }
 
             return errorCount;
@@ -486,6 +388,7 @@ namespace ManagedCodeGen
             private Config _config;
             private string _rootPath = null;
             private IReadOnlyList<string> _platformPaths;
+            private string _jitPath = null;
             private List<AssemblyInfo> _assemblyInfoList;
             public bool doGCDump = false;
             public bool verbose = false;
@@ -500,6 +403,7 @@ namespace ManagedCodeGen
                 _executablePath = executable;
                 _rootPath = outputPath;
                 _platformPaths = config.PlatformPaths;
+                _jitPath = config.JitPath;
                 _assemblyInfoList = assemblyInfoList;
 
                 this.doGCDump = config.DumpGCInfo;
@@ -511,6 +415,7 @@ namespace ManagedCodeGen
                 // Build a command per assembly to generate the asm output.
                 foreach (var assembly in _assemblyInfoList)
                 {
+                    Console.WriteLine("assembly name: " + assembly.Name);
                     string fullPathAssembly = Path.Combine(assembly.Path, assembly.Name);
 
                     if (!File.Exists(fullPathAssembly))
@@ -522,6 +427,13 @@ namespace ManagedCodeGen
 
                     List<string> commandArgs = new List<string>() { fullPathAssembly };
 
+                    // Set jit path if it's defined.
+                    if (_jitPath != null)
+                    {
+                        commandArgs.Insert(0, "/JitPath");
+                        commandArgs.Insert(1, _jitPath);
+                    }
+                    
                     // Set platform assermbly path if it's defined.
                     if (_platformPaths.Count > 0)
                     {
@@ -578,7 +490,7 @@ namespace ManagedCodeGen
                         // Generate path to the output file
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         var path = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
-
+                        
                         PathUtility.EnsureParentDirectory(path);
 
                         // Redirect stdout/stderr to disasm file and run command.
