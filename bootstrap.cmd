@@ -102,6 +102,14 @@ dotnet restore
 
 call .\build.cmd -p -f
 
+:: Check to see if clang-format and clang-tidy are available. Since we're going
+:: to add the 'bin' directory to the path, and they most likely already live there
+:: if you're running bootstrap.cmd not for the first time, add 'bin' to the path
+:: here (within the setlocal scope for now) before checking for them. Add 'bin'
+:: at the end of the path, to prefer other user downloaded versions, if any.
+
+set PATH=%PATH%;.\bin
+
 where /Q clang-format
 IF %errorlevel% NEQ 0 GOTO DownloadTools
 
