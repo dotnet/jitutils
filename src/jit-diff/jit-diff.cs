@@ -621,7 +621,7 @@ namespace ManagedCodeGen
             return ret;
         }
 
-        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs, bool capture = false)
+        public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture = false)
         {
             try 
             {
