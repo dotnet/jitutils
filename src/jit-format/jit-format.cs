@@ -298,10 +298,8 @@ namespace ManagedCodeGen
                     {
                         Console.Error.WriteLine("Can't find config.json on {0}", _jitUtilsRoot);
                     }
-                }
-                else
-                {
-                    Console.WriteLine("Environment variable JIT_UTILS_ROOT not found - no configuration loaded.");
+
+                    Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
                 }
             }
 
