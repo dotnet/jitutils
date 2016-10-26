@@ -462,8 +462,24 @@ namespace ManagedCodeGen
             {
                 if (!RunClangFormat(filenames, config.Fix, verbose))
                 {
-                    Console.WriteLine("Clang-Format needs to be rerun in fix mode");
-                    returncode = -1;
+                    Console.WriteLine("Clang-format found formatting errors.");
+                    returncode -= 2;
+                }
+            }
+
+            if (returncode != 0)
+            {
+                Console.WriteLine("jit-format found formatting errors. Run:");
+                if (returncode == -2)
+                {
+                    // If returncode == 2, the only thing that found errors was clang-format
+                    Console.WriteLine("\tjit-format -fix -untidy");
+                }
+                else
+                {
+                    // If returncode == -1, clang-tidy found errors and both tidy and format need to be rerun
+                    // If returncode == -3, both clang-tidy and clang-format found errors
+                    Console.WriteLine("\tjit-format -fix");
                 }
             }
 
@@ -632,6 +648,7 @@ namespace ManagedCodeGen
             string formatFix = fix ? "-i" : "";
             string outputReplacementXml = fix ? "" : "-output-replacements-xml";
             bool formatOk = true;
+            int quietErrorLimit = 10;
 
             List<string> clangFormatErrors = new List<string>();
 
@@ -726,14 +743,17 @@ namespace ManagedCodeGen
                     }
                 });
 
-            if (verbose)
+            int quietErrorCount = 0;
+            foreach (string failure in clangFormatErrors)
             {
-                foreach (string failure in clangFormatErrors)
+                if (verbose || quietErrorCount < quietErrorLimit)
                 {
                     Console.WriteLine("");
                     Console.WriteLine("{0}", failure);
+                    quietErrorCount++;
                 }
             }
+
             return formatOk;
         }
     }
