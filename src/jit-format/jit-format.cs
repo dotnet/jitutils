@@ -473,13 +473,13 @@ namespace ManagedCodeGen
                 if (returncode == -2)
                 {
                     // If returncode == 2, the only thing that found errors was clang-format
-                    Console.WriteLine("\tjit-format -fix -untidy");
+                    Console.WriteLine("\tjit-format --fix --untidy");
                 }
                 else
                 {
                     // If returncode == -1, clang-tidy found errors and both tidy and format need to be rerun
                     // If returncode == -3, both clang-tidy and clang-format found errors
-                    Console.WriteLine("\tjit-format -fix");
+                    Console.WriteLine("\tjit-format --fix");
                 }
             }
 
