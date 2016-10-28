@@ -179,6 +179,16 @@ namespace ManagedCodeGen
                 {
                     _syntaxResult.ReportError("Specify --coreclr");
                 }
+                else if (!Directory.Exists(_rootPath))
+                {
+                    // If _rootPath doesn't exist, it is an invalid path
+                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
+                }
+                else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")))
+                {
+                    // If _rootPath\build.cmd or _rootPath\build.sh do not exist, it is an invalid path to a coreclr repo
+                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
+                }
 
                 // Check that we can find compile_commands.json on windows
                 if (_os == "Windows_NT")
@@ -412,7 +422,19 @@ namespace ManagedCodeGen
                 {
                     // Create the compile_commands directory. If it already exists, CreateDirectory will do nothing.
                     Directory.CreateDirectory(newCompileCommandsDir);
+
                     // Move original compile_commands file on non-windows
+                    try
+                    {
+                        // Delete newCompileCommands if it exists. If it does not exist, no exception is thrown
+                        File.Delete(newCompileCommands);
+                    }
+                    catch (DirectoryNotFoundException dirNotFound)
+                    {
+                        Console.WriteLine("Error deleting {0}", newCompileCommands);
+                        Console.WriteLine(dirNotFound.Message);
+                    }
+
                     File.Move(config.CompileCommands, newCompileCommands);
                 }
 
