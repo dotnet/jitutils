@@ -56,8 +56,7 @@ namespace ManagedCodeGen
         {
             Invalid,
             Jobs,
-            Builds,
-            Number
+            Builds
         }
 
         // Define options to be parsed 
@@ -68,13 +67,12 @@ namespace ManagedCodeGen
             private ListOption _listOption = ListOption.Invalid;
             private string _jobName;
             private string _contentPath;
-            private string _forkUrl;
             private string _repoName = "dotnet_coreclr";
             private int _number = 0;
             private string _matchPattern = String.Empty;
             private string _branchName = "master";
-            private string _privateBranchName;
             private bool _lastSuccessful = false;
+            private string _commit;
             private bool _unzip = false;
             private string _outputPath;
             private bool _artifacts = false;
@@ -98,6 +96,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("n|number", ref _number, "Job number.");
                     syntax.DefineOption("l|last_successful", ref _lastSuccessful, 
                         "List last successful build.");
+                    syntax.DefineOption("c|commit", ref _commit, "List build at this commit.");
                     syntax.DefineOption("a|artifacts", ref _artifacts, "List job artifacts on server.");
 
                     syntax.DefineCommand("copy", ref _command, Command.Copy, 
@@ -109,6 +108,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("n|number", ref _number, "Job number.");
                     syntax.DefineOption("l|last_successful", ref _lastSuccessful, 
                         "Copy last successful build.");
+                    syntax.DefineOption("c|commit", ref _commit, "Copy this commit.");
                     syntax.DefineOption("b|branch", ref _branchName, 
                         "Name of the branch (default is master).");
                     syntax.DefineOption("r|repo", ref _repoName, 
@@ -146,9 +146,14 @@ namespace ManagedCodeGen
                     _syntaxResult.ReportError("Must have --job <name> for copy.");
                 }
                 
-                if (_number == 0 && !_lastSuccessful)
+                if (_number == 0 && !_lastSuccessful && _commit == null)
                 {
-                    _syntaxResult.ReportError("Must have --number <num> or --last_successful for copy.");
+                    _syntaxResult.ReportError("Must have --number <num>, --last_successful, or --commit <commit> for copy.");
+                }
+
+                if (Convert.ToInt32(_number != 0) + Convert.ToInt32(_lastSuccessful) + Convert.ToInt32(_commit != null) > 1)
+                {
+                    _syntaxResult.ReportError("Must have only one of --number <num>, --last_successful, and --commit <commit> for copy.");
                 }
                 
                 if (_outputPath == null)
@@ -167,6 +172,11 @@ namespace ManagedCodeGen
                 {
                     _listOption = ListOption.Builds;
 
+                    if (Convert.ToInt32(_number != 0) + Convert.ToInt32(_lastSuccessful) + Convert.ToInt32(_commit != null) > 1)
+                    {
+                        _syntaxResult.ReportError("Must have at most one of --number <num>, --last_successful, and --commit <commit> for list.");
+                    }
+
                     if (_matchPattern != String.Empty)
                     {
                         _syntaxResult.ReportError("Match pattern not valid with --job");
@@ -175,6 +185,26 @@ namespace ManagedCodeGen
                 else
                 {
                     _listOption = ListOption.Jobs;
+
+                    if (_number != 0)
+                    {
+                        _syntaxResult.ReportError("Must select --job <name> to specify --number <num>.");
+                    }
+
+                    if (_lastSuccessful)
+                    {
+                        _syntaxResult.ReportError("Must select --job <name> to specify --last_successful.");
+                    }
+
+                    if (_commit != null)
+                    {
+                        _syntaxResult.ReportError("Must select --job <name> to specify --commit <commit>.");
+                    }
+
+                    if (_artifacts)
+                    {
+                        _syntaxResult.ReportError("Must select --job <name> to specify --artifacts.");
+                    }
                 }
             }
 
@@ -187,6 +217,7 @@ namespace ManagedCodeGen
             public string BranchName { get { return _branchName; } }
             public string RepoName { get { return _repoName; } }
             public bool LastSuccessful { get { return _lastSuccessful; } }
+            public string Commit { get { return _commit; } }
             public bool DoUnzip { get { return _unzip; } }
             public string OutputPath { get { return _outputPath; } }
             public bool Artifacts { get { return _artifacts; } }
@@ -195,6 +226,9 @@ namespace ManagedCodeGen
         // The following block of simple structs maps to the data extracted from the CI system as json.
         // This allows to map it directly into C# and access it.
 
+        // fields are assigned to by json deserializer
+        #pragma warning disable 0649
+        
         private struct Artifact
         {
             public string fileName;
@@ -205,10 +239,12 @@ namespace ManagedCodeGen
         {
             public string SHA1;
         }
+
         private class Action
         {
             public Revision lastBuiltRevision;
         }
+
         private class BuildInfo
         {
             public List<Action> actions;
@@ -239,6 +275,8 @@ namespace ManagedCodeGen
             public List<Build> builds;
             public Build lastSuccessfulBuild;
         }
+
+        #pragma warning restore 0649
 
         // Main entry point.  Simply set up a httpClient to access the CI
         // and switch on the command to invoke underlying logic.
@@ -337,7 +375,7 @@ namespace ManagedCodeGen
             }
 
             public async Task<IEnumerable<Build>> GetJobBuilds(string productName, string branchName, 
-                string jobName, bool lastSuccessfulBuild = false)
+                string jobName, bool lastSuccessfulBuild, int number, string commit)
             {
                 var jobString
                     = String.Format(@"job/{0}/job/{1}/job/{2}", productName, branchName, jobName);
@@ -350,13 +388,49 @@ namespace ManagedCodeGen
                 {
                     var json = await response.Content.ReadAsStringAsync();
                     var jobBuilds = JsonConvert.DeserializeObject<JobBuilds>(json);
-                    
+
                     if (lastSuccessfulBuild)
                     {
                         var lastSuccessfulNumber = jobBuilds.lastSuccessfulBuild.number;
                         jobBuilds.lastSuccessfulBuild.info 
-                            = GetJobBuildInfo(productName, branchName, jobName, lastSuccessfulNumber).Result;
+                            = await GetJobBuildInfo(productName, branchName, jobName, lastSuccessfulNumber);
                         return Enumerable.Repeat(jobBuilds.lastSuccessfulBuild, 1);
+                    }
+                    else if (number != 0)
+                    {
+                        var builds = jobBuilds.builds;
+
+                        var count = builds.Count();
+                        for (int i = 0; i < count; i++)
+                        {
+                            var build = builds[i];
+                            if (build.number == number)
+                            {
+                                build.info = await GetJobBuildInfo(productName, branchName, jobName, build.number);
+                                return Enumerable.Repeat(build, 1);
+                            }
+                        }
+                        return Enumerable.Empty<Build>();
+                    }
+                    else if (commit != null)
+                    {
+                        var builds = jobBuilds.builds;
+
+                        var count = builds.Count();
+                        for (int i = 0; i < count; i++)
+                        {
+                            var build = builds[i];
+                            build.info = await GetJobBuildInfo(productName, branchName, jobName, build.number);
+                            var actions = build.info.actions.Where(x => x.lastBuiltRevision.SHA1 != null);
+                            foreach (var action in actions)
+                            {
+                                if (action.lastBuiltRevision.SHA1.Equals(commit, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return Enumerable.Repeat(build, 1);
+                                }
+                            }
+                        }
+                        return Enumerable.Empty<Build>();
                     }
                     else
                     {
@@ -367,7 +441,7 @@ namespace ManagedCodeGen
                         {
                             var build = builds[i];
                             // fill in build info
-                            build.info = GetJobBuildInfo(productName, branchName, jobName, build.number).Result;
+                            build.info = await GetJobBuildInfo(productName, branchName, jobName, build.number);
                             builds[i] = build;
                         }
 
@@ -408,9 +482,8 @@ namespace ManagedCodeGen
             // List functionality:
             //    if --job is not specified, ListOption.Jobs, list jobs under branch.
             //        (default is "master" set in Config).
-            //    if --job is specified, ListOption.Builds, list job builds by id with details.
-            //    if --job and --id is specified, ListOption.Number, list particular job instance, 
-            //        status, and artifacts.
+            //    if --job is specified, ListOption.Builds, list job builds with details.
+            //        --number, --last_successful, or -commit can be used to specify specific job
             // 
             public static async Task List(CIClient cic, Config config)
             {
@@ -418,7 +491,7 @@ namespace ManagedCodeGen
                 {
                     case ListOption.Jobs:
                         {
-                            var jobs = cic.GetProductJobs(config.RepoName, config.BranchName).Result;
+                            var jobs = await cic.GetProductJobs(config.RepoName, config.BranchName);
 
                             if (config.MatchPattern != null)
                             {
@@ -433,21 +506,16 @@ namespace ManagedCodeGen
                         break;
                     case ListOption.Builds:
                         {
-                            var builds = cic.GetJobBuilds(config.RepoName, config.BranchName, config.JobName, config.LastSuccessful);
+                            var builds = await cic.GetJobBuilds(config.RepoName, config.BranchName,
+                                                                config.JobName, config.LastSuccessful,
+                                                                config.Number, config.Commit);
 
-                            if (config.LastSuccessful && builds.Result.Any())
+                            if (config.LastSuccessful && builds.Any())
                             {
                                 Console.WriteLine("Last successful build:");    
                             }
                             
-                            PrettyBuilds(builds.Result, config.Artifacts);
-                        }
-                        break;
-                    case ListOption.Number:
-                        {
-                            var info = cic.GetJobBuildInfo(config.RepoName, config.BranchName, config.JobName, config.Number);
-                            // Pretty build info
-                            PrettyBuildInfo(info.Result, config.Artifacts);
+                            PrettyBuilds(builds, config.Artifacts);
                         }
                         break;
                     default:
@@ -514,17 +582,30 @@ namespace ManagedCodeGen
             {
                 if (config.LastSuccessful)
                 {
-                    // Querry last successful build and extract the number.
-                    var builds = cic.GetJobBuilds(config.RepoName, config.BranchName, config.JobName, true);
+                    // Query last successful build and extract the number.
+                    var builds = await cic.GetJobBuilds(config.RepoName, config.BranchName, config.JobName, true, 0, null);
                     
-                    if (!builds.Result.Any())
+                    if (!builds.Any())
                     {
                         Console.WriteLine("Last successful not found on server.");
                         return;
                     }
                     
-                    Build lastSuccess = builds.Result.First();
+                    Build lastSuccess = builds.First();
                     config.Number = lastSuccess.number;
+                }
+                else if (config.Commit != null)
+                {
+                    var builds = await cic.GetJobBuilds(config.RepoName, config.BranchName, config.JobName, false, 0, config.Commit);
+
+                    if (!builds.Any())
+                    {
+                        Console.WriteLine("Commit not found on server.");
+                        return;
+                    }
+
+                    Build commitBuild = builds.First();
+                    config.Number = commitBuild.number;
                 }
                 
                 string tag = String.Format("{0}-{1}", config.JobName, config.Number);
@@ -534,14 +615,14 @@ namespace ManagedCodeGen
                 Directory.CreateDirectory(outputPath);
 
                 // Pull down the zip file.
-                DownloadZip(cic, config, outputPath, config.ContentPath).Wait();
+                await DownloadZip(cic, config, outputPath, config.ContentPath);
             }
 
             // Download zip file.  It's arguable that this should be in the 
             private static async Task DownloadZip(CIClient cic, Config config, string outputPath, string contentPath)
             {
                 // Copy product tools to output location. 
-                bool success = cic.DownloadProduct(config, outputPath, contentPath).Result;
+                bool success = await cic.DownloadProduct(config, outputPath, contentPath);
 
                 if (config.DoUnzip)
                 {
