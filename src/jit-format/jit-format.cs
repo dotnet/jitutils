@@ -179,6 +179,16 @@ namespace ManagedCodeGen
                 {
                     _syntaxResult.ReportError("Specify --coreclr");
                 }
+                else if (!Directory.Exists(_rootPath))
+                {
+                    // If _rootPath doesn't exist, it is an invalid path
+                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
+                }
+                else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")))
+                {
+                    // If _rootPath\build.cmd or _rootPath\build.sh do not exist, it is an invalid path to a coreclr repo
+                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
+                }
 
                 // Check that we can find compile_commands.json on windows
                 if (_os == "Windows_NT")
@@ -298,10 +308,8 @@ namespace ManagedCodeGen
                     {
                         Console.Error.WriteLine("Can't find config.json on {0}", _jitUtilsRoot);
                     }
-                }
-                else
-                {
-                    Console.WriteLine("Environment variable JIT_UTILS_ROOT not found - no configuration loaded.");
+
+                    Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
                 }
             }
 
@@ -414,7 +422,19 @@ namespace ManagedCodeGen
                 {
                     // Create the compile_commands directory. If it already exists, CreateDirectory will do nothing.
                     Directory.CreateDirectory(newCompileCommandsDir);
+
                     // Move original compile_commands file on non-windows
+                    try
+                    {
+                        // Delete newCompileCommands if it exists. If it does not exist, no exception is thrown
+                        File.Delete(newCompileCommands);
+                    }
+                    catch (DirectoryNotFoundException dirNotFound)
+                    {
+                        Console.WriteLine("Error deleting {0}", newCompileCommands);
+                        Console.WriteLine(dirNotFound.Message);
+                    }
+
                     File.Move(config.CompileCommands, newCompileCommands);
                 }
 
@@ -464,8 +484,24 @@ namespace ManagedCodeGen
             {
                 if (!RunClangFormat(filenames, config.Fix, verbose))
                 {
-                    Console.WriteLine("Clang-Format needs to be rerun in fix mode");
-                    returncode = -1;
+                    Console.WriteLine("Clang-format found formatting errors.");
+                    returncode -= 2;
+                }
+            }
+
+            if (returncode != 0)
+            {
+                Console.WriteLine("jit-format found formatting errors. Run:");
+                if (returncode == -2)
+                {
+                    // If returncode == 2, the only thing that found errors was clang-format
+                    Console.WriteLine("\tjit-format --fix --untidy");
+                }
+                else
+                {
+                    // If returncode == -1, clang-tidy found errors and both tidy and format need to be rerun
+                    // If returncode == -3, both clang-tidy and clang-format found errors
+                    Console.WriteLine("\tjit-format --fix");
                 }
             }
 
@@ -634,6 +670,7 @@ namespace ManagedCodeGen
             string formatFix = fix ? "-i" : "";
             string outputReplacementXml = fix ? "" : "-output-replacements-xml";
             bool formatOk = true;
+            int quietErrorLimit = 10;
 
             List<string> clangFormatErrors = new List<string>();
 
@@ -728,14 +765,17 @@ namespace ManagedCodeGen
                     }
                 });
 
-            if (verbose)
+            int quietErrorCount = 0;
+            foreach (string failure in clangFormatErrors)
             {
-                foreach (string failure in clangFormatErrors)
+                if (verbose || quietErrorCount < quietErrorLimit)
                 {
                     Console.WriteLine("");
                     Console.WriteLine("{0}", failure);
+                    quietErrorCount++;
                 }
             }
+
             return formatOk;
         }
     }
