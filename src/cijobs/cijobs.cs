@@ -320,7 +320,7 @@ namespace ManagedCodeGen
             public CIClient(Config config)
             {
                 _client = new HttpClient();
-                _client.BaseAddress = new Uri("http://dotnet-ci.cloudapp.net/");
+                _client.BaseAddress = new Uri("http://ci.dot.net/");
                 _client.DefaultRequestHeaders.Accept.Clear();
                 _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             }
@@ -628,6 +628,7 @@ namespace ManagedCodeGen
                 {
                     // unzip archive in place.
                     var zipPath = Path.Combine(outputPath, Path.GetFileName(contentPath));
+                    Console.WriteLine("Unzipping: {0}", zipPath);
                     ZipFile.ExtractToDirectory(zipPath, outputPath);
                 }
             }

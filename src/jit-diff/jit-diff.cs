@@ -265,10 +265,26 @@ namespace ManagedCodeGen
                     _syntaxResult.ReportError("Specify --output <path>");
                 }
 
+                if (!Directory.Exists(_outputPath))
+                {
+                    _syntaxResult.ReportError("Can't find --output path.");
+                }
+
                 if ((_basePath == null) && (_diffPath == null))
                 {
                     _syntaxResult.ReportError("--base <path> or --diff <path> or both must be specified.");
                 }
+
+                if (_basePath != null && !Directory.Exists(_basePath))
+                {
+                    _syntaxResult.ReportError("Can't find --base directory.");
+                }
+
+                if (_diffPath != null && !Directory.Exists(_diffPath))
+                {
+                    _syntaxResult.ReportError("Can't find --diff directory.");
+                }
+
             }
             private void ValidateInstall()
             {
@@ -546,51 +562,84 @@ namespace ManagedCodeGen
         private static string[] s_frameworkAssemblies =
         {
             "System.Private.CoreLib.dll",
-            "mscorlib.dll",
-            "System.Runtime.dll",
-            "System.Runtime.Extensions.dll",
-            "System.Runtime.Handles.dll",
-            "System.Runtime.InteropServices.dll",
-            "System.Runtime.InteropServices.PInvoke.dll",
-            "System.Runtime.InteropServices.RuntimeInformation.dll",
-            "System.Runtime.Numerics.dll",
-            "Microsoft.CodeAnalysis.dll",
             "Microsoft.CodeAnalysis.CSharp.dll",
-            "System.Collections.dll",
+            "Microsoft.CodeAnalysis.dll",
+            "Microsoft.CodeAnalysis.VisualBasic.dll",
+            "Microsoft.CSharp.dll",
+            "Microsoft.VisualBasic.dll",
+            "Microsoft.Win32.Primitives.dll",
+            "Microsoft.Win32.Registry.dll",
+            "System.Buffers.dll",
             "System.Collections.Concurrent.dll",
             "System.Collections.Immutable.dll",
-            "System.Collections.NonGeneric.dll",
-            "System.Collections.Specialized.dll",
+            "System.Collections.dll",
+            "System.ComponentModel.Annotations.dll",
             "System.ComponentModel.dll",
             "System.Console.dll",
+            "System.Diagnostics.Debug.dll",
+            "System.Diagnostics.DiagnosticSource.dll",
+            "System.Diagnostics.FileVersionInfo.dll",
+            "System.Diagnostics.Process.dll",
+            "System.Diagnostics.StackTrace.dll",
+            "System.Diagnostics.Tools.dll",
+            "System.Diagnostics.Tracing.dll",
             "System.Dynamic.Runtime.dll",
-            "System.IO.dll",
+            "System.Globalization.Extensions.dll",
             "System.IO.Compression.dll",
-            "System.Linq.dll",
+            "System.IO.Compression.ZipFile.dll",
+            "System.IO.FileSystem.dll",
+            "System.IO.FileSystem.Watcher.dll",
+            "System.IO.MemoryMappedFiles.dll",
+            "System.IO.dll",
+            "System.IO.UnmanagedMemoryStream.dll",
             "System.Linq.Expressions.dll",
+            "System.Linq.dll",
             "System.Linq.Parallel.dll",
+            "System.Linq.Queryable.dll",
             "System.Net.Http.dll",
             "System.Net.NameResolution.dll",
             "System.Net.Primitives.dll",
             "System.Net.Requests.dll",
             "System.Net.Security.dll",
             "System.Net.Sockets.dll",
+            "System.Net.WebHeaderCollection.dll",
             "System.Numerics.Vectors.dll",
-            "System.Reflection.dll",
+            "System.ObjectModel.dll",
+            "System.Private.Uri.dll",
             "System.Reflection.DispatchProxy.dll",
-            "System.Reflection.Emit.ILGeneration.dll",
-            "System.Reflection.Emit.Lightweight.dll",
-            "System.Reflection.Emit.dll",
             "System.Reflection.Extensions.dll",
             "System.Reflection.Metadata.dll",
-            "System.Reflection.Primitives.dll",
             "System.Reflection.TypeExtensions.dll",
-            "System.Text.Encoding.dll",
+            "System.Resources.Reader.dll",
+            "System.Runtime.Extensions.dll",
+            "System.Runtime.Handles.dll",
+            "System.Runtime.InteropServices.dll",
+            "System.Runtime.InteropServices.RuntimeInformation.dll",
+            "System.Runtime.dll",
+            "System.Runtime.Numerics.dll",
+            "System.Security.Claims.dll",
+            "System.Security.Cryptography.Algorithms.dll",
+            "System.Security.Cryptography.Cng.dll",
+            "System.Security.Cryptography.Csp.dll",
+            "System.Security.Cryptography.Encoding.dll",
+            "System.Security.Cryptography.OpenSsl.dll",
+            "System.Security.Cryptography.Primitives.dll",
+            "System.Security.Cryptography.X509Certificates.dll",
+            "System.Security.Principal.Windows.dll",
+            "System.Text.Encoding.CodePages.dll",
             "System.Text.Encoding.Extensions.dll",
             "System.Text.RegularExpressions.dll",
+            "System.Threading.dll",
+            "System.Threading.Overlapped.dll",
+            "System.Threading.Tasks.Dataflow.dll",
+            "System.Threading.Tasks.Extensions.dll",
+            "System.Threading.Tasks.dll",
+            "System.Threading.Tasks.Parallel.dll",
             "System.Xml.ReaderWriter.dll",
             "System.Xml.XDocument.dll",
-            "System.Xml.XmlDocument.dll"
+            "System.Xml.XmlDocument.dll",
+            "System.Xml.XPath.dll",
+            "System.Xml.XPath.XDocument.dll"
         };
 
         public static int Main(string[] args)
@@ -737,6 +786,25 @@ namespace ManagedCodeGen
             return ret;
         }
 
+        private static int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths)
+        {
+            int dasmFailures = 0;
+            List<string> allArgs = commandArgs;
+            foreach (var assemblyPath in assemblyPaths)
+            {
+                commandArgs.Add(assemblyPath);
+                Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", allArgs));
+                CommandResult result = TryCommand(s_asmTool, allArgs);
+                commandArgs.Remove(commandArgs.Last());
+                if (result.ExitCode != 0)
+                {
+                    Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
+                    dasmFailures += result.ExitCode;
+                }
+            }
+            return dasmFailures;
+        }
+
         public static int DiffCommand(Config config)
         {
             string diffString;
@@ -780,6 +848,8 @@ namespace ManagedCodeGen
             commandArgs.Add("--output");
             commandArgs.Add(config.OutputPath);
 
+            List<string> assemblyArgs = new List<string>();
+
             if (config.DoTestTree)
             {
                 commandArgs.Add("--recursive");
@@ -794,7 +864,7 @@ namespace ManagedCodeGen
             {
                 string coreRoot = config.CoreRoot;
                 string fullPathAssembly = Path.Combine(coreRoot, "System.Private.CoreLib.dll");
-                commandArgs.Add(fullPathAssembly);
+                assemblyArgs.Add(fullPathAssembly);
             }
             else
             {
@@ -812,7 +882,7 @@ namespace ManagedCodeGen
                             continue;
                         }
 
-                        commandArgs.Add(fullPathAssembly);
+                        assemblyArgs.Add(fullPathAssembly);
                     }
                 }
 
@@ -834,7 +904,7 @@ namespace ManagedCodeGen
                             continue;
                         }
 
-                        commandArgs.Add(fullPathDir);
+                        assemblyArgs.Add(fullPathDir);
                     }
                 }
             }
@@ -858,13 +928,11 @@ namespace ManagedCodeGen
                                           .SingleOrDefault());
                 }
 
-                Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", baseArgs));
-                CommandResult result = TryCommand(s_asmTool, baseArgs);
-
-                if (result.ExitCode != 0)
+                int dasmFailures = RunDasmTool(baseArgs, assemblyArgs);
+                if (dasmFailures != 0)
                 {
-                    Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
-                    return result.ExitCode;
+                    Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
+                    return dasmFailures;
                 }
             }
 
@@ -887,13 +955,11 @@ namespace ManagedCodeGen
                                           .SingleOrDefault());
                 }
 
-                Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", diffArgs));
-                CommandResult result = TryCommand(s_asmTool, diffArgs);
-
-                if (result.ExitCode != 0)
+                int dasmFailures = RunDasmTool(diffArgs, assemblyArgs);
+                if (dasmFailures != 0)
                 {
-                    Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
-                    return result.ExitCode;
+                    Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
+                    return dasmFailures;
                 }
             }
 
