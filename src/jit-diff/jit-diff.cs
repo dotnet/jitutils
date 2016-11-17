@@ -285,6 +285,11 @@ namespace ManagedCodeGen
                     _syntaxResult.ReportError("Can't find --diff directory.");
                 }
 
+                if (_crossgenExe != null && !File.Exists(_crossgenExe))
+                {
+                    _syntaxResult.ReportError("Can't find --crossgen executable.");
+                }
+
             }
             private void ValidateInstall()
             {
@@ -699,6 +704,40 @@ namespace ManagedCodeGen
             }
         }
 
+        private static string FindJitLibrary(string path)
+        {
+            string clrjitPath = Path.Combine(path, "clrjit.dll");
+            if (File.Exists(clrjitPath))
+            {
+                return clrjitPath;
+            }
+
+            clrjitPath = Path.Combine(path, "libclrjit.so");
+            if (File.Exists(clrjitPath))
+            {
+                return clrjitPath;
+            }
+
+            return null;
+        }
+
+        private static string FindCrossgenExecutable(string path)
+        {
+            string crossgenPath = Path.Combine(path, "crossgen.exe");
+            if (File.Exists(crossgenPath))
+            {
+                return crossgenPath;
+            }
+
+            crossgenPath = Path.Combine(path, "crossgen");
+            if (File.Exists(crossgenPath))
+            {
+                return crossgenPath;
+            }
+
+            return null;
+        }
+
         public static int InstallCommand(Config config)
         {   
             var asmDiffPath = Path.Combine(config.JitUtilsRoot, "config.json");
@@ -919,13 +958,26 @@ namespace ManagedCodeGen
                 {
                     baseArgs.Add(config.CrossgenExe);
                     baseArgs.Add("--jit");
-                    baseArgs.Add(Directory.EnumerateFiles(config.BasePath, "*clrjit*")
-                                          .SingleOrDefault());
+
+                    var clrjitPath = FindJitLibrary(config.BasePath);
+                    if (clrjitPath == null)
+                    {
+                        Console.Error.WriteLine("clrjit not found in " + config.BasePath);
+                        return -1;
+                    }
+
+                    baseArgs.Add(clrjitPath);
                 }
                 else
                 {
-                    baseArgs.Add(Directory.EnumerateFiles(config.BasePath, "crossgen*")
-                                          .SingleOrDefault());
+                    var crossgenPath = FindCrossgenExecutable(config.BasePath);
+                    if (crossgenPath == null)
+                    {
+                        Console.Error.WriteLine("crossgen not found in " + config.BasePath);
+                        return -1;
+                    }
+
+                    baseArgs.Add(crossgenPath);
                 }
 
                 int dasmFailures = RunDasmTool(baseArgs, assemblyArgs);
@@ -946,13 +998,26 @@ namespace ManagedCodeGen
                 {
                     diffArgs.Add(config.CrossgenExe);
                     diffArgs.Add("--jit");
-                    diffArgs.Add(Directory.EnumerateFiles(config.DiffPath, "*clrjit*")
-                                          .SingleOrDefault());
+
+                    var clrjitPath = FindJitLibrary(config.DiffPath);
+                    if (clrjitPath == null)
+                    {
+                        Console.Error.WriteLine("clrjit not found in " + config.DiffPath);
+                        return -1;
+                    }
+
+                    diffArgs.Add(clrjitPath);
                 }
                 else
                 {
-                    diffArgs.Add(Directory.EnumerateFiles(config.DiffPath, "crossgen*")
-                                          .SingleOrDefault());
+                    var crossgenPath = FindCrossgenExecutable(config.DiffPath);
+                    if (crossgenPath == null)
+                    {
+                        Console.Error.WriteLine("crossgen not found in " + config.DiffPath);
+                        return -1;
+                    }
+
+                    diffArgs.Add(crossgenPath);
                 }
 
                 int dasmFailures = RunDasmTool(diffArgs, assemblyArgs);
