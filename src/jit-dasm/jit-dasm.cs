@@ -504,27 +504,41 @@ namespace ManagedCodeGen
                                 result = generateCmd.Execute();
                             }
                         }
-                        
+
                         if (result.ExitCode != 0)
                         {
-                            Console.Error.WriteLine("Error running {0} on {1}", _executablePath, fullPathAssembly);
                             _errorCount++;
-
-                            // If the tool still produced a output file rename it to indicate
-                            // the error in the file system.
-                            if (File.Exists(path))
+                            
+                            if (result.ExitCode == -2146234344)
                             {
-                                // Change file to *.err.
-                                string errorPath = Path.ChangeExtension(path, ".err");
+                                Console.Error.WriteLine("{0} is not a managed assembly", fullPathAssembly);
 
-                                // If this is a rerun to the same output, overwrite with current
-                                // error output.
-                                if (File.Exists(errorPath))
+                                // Discard output if the assembly is not managed
+                                if (File.Exists(path))
                                 {
-                                    File.Delete(errorPath);
+                                    File.Delete(path);
                                 }
+                            }
+                            else
+                            {
+                                Console.Error.WriteLine("Error running {0} on {1}", _executablePath, fullPathAssembly);
 
-                                File.Move(path, errorPath);
+                                // If the tool still produced a output file rename it to indicate
+                                // the error in the file system.
+                                if (File.Exists(path))
+                                {
+                                    // Change file to *.err.
+                                    string errorPath = Path.ChangeExtension(path, ".err");
+                                    
+                                    // If this is a rerun to the same output, overwrite with current
+                                    // error output.
+                                    if (File.Exists(errorPath))
+                                    {
+                                        File.Delete(errorPath);
+                                    }
+                                    
+                                    File.Move(path, errorPath);
+                                }
                             }
                         }
                     }

@@ -1,13 +1,13 @@
 ﻿{
-    "version": "1.0.0-*",
+    "version": "0.0.1.4",
     "buildOptions": {
         "debugType": "portable",
         "emitEntryPoint": true
     },
 
     "dependencies": {
-        "Microsoft.DotNet.Cli.Utils": "1.0.0-dev-*",
-        "System.CommandLine": "0.1.0-*"
+        "Microsoft.DotNet.Cli.Utils": "1.0.0-preview2-003121",
+        "System.CommandLine": "0.1.0-e161108-1"
     },
 
     "frameworks": {
