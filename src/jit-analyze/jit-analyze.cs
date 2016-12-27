@@ -352,18 +352,20 @@ namespace ManagedCodeGen
             }
 
             int requestedCount = config.Count;
-            var sortedFileDelta = fileDeltaList
-                                      .Where(x => x.deltaBytes != 0)
-                                      .OrderByDescending(d => d.deltaBytes).ToList();
-            int sortedFileCount = sortedFileDelta.Count();
-            int fileCount = (sortedFileCount < requestedCount)
-                ? sortedFileCount : requestedCount;
+            var sortedFileImprovements = fileDeltaList
+                                            .Where(x => x.deltaBytes < 0)
+                                            .OrderBy(d => d.deltaBytes).ToList();
+            var sortedFileRegressions = fileDeltaList
+                                            .Where(x => x.deltaBytes > 0)
+                                            .OrderByDescending(d => d.deltaBytes).ToList();
+            int fileImprovementCount = sortedFileImprovements.Count();
+            int fileRegressionCount = sortedFileRegressions.Count();
+            int sortedFileCount = fileImprovementCount + fileRegressionCount;
 
-            if ((sortedFileCount > 0) && (sortedFileDelta[0].deltaBytes > 0))
+            if (fileRegressionCount > 0)
             {
                 Console.WriteLine("\nTop file regressions by size (bytes):");
-                foreach (var fileDelta in sortedFileDelta.GetRange(0, fileCount)
-                                                         .Where(x => x.deltaBytes > 0))
+                foreach (var fileDelta in sortedFileRegressions.GetRange(0, Math.Min(fileRegressionCount, requestedCount)))
                 {
                     Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.path,
                         fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
@@ -371,40 +373,43 @@ namespace ManagedCodeGen
             }
 
 
-            if ((sortedFileCount > 0) && (sortedFileDelta.Last().deltaBytes < 0))
+            if (fileImprovementCount > 0)
             {
-                // index of the element count from the end.
-                int fileDeltaIndex = (sortedFileDelta.Count() - fileCount);
                 Console.WriteLine("\nTop file improvements by size (bytes):");
 
-                foreach (var fileDelta in sortedFileDelta.GetRange(fileDeltaIndex, fileCount)
-                                                        .Where(x => x.deltaBytes < 0)
-                                                        .OrderBy(x => x.deltaBytes))
+                foreach (var fileDelta in sortedFileImprovements.GetRange(0, Math.Min(fileImprovementCount, requestedCount)))
                 {
                     Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.path,
                         fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
                 }
             }
 
-            Console.WriteLine("\n{0} total files with size differences.", sortedFileCount);
+            Console.WriteLine("\n{0} total files with size differences ({1} improved, {2} regressed).",
+                sortedFileCount, fileImprovementCount, fileRegressionCount);
 
-            var sortedMethodDelta = fileDeltaList
+            var methodDeltaList = fileDeltaList
                                         .SelectMany(fd => fd.methodDeltaList, (fd, md) => new
                                         {
                                             path = fd.path,
                                             name = md.name,
                                             deltaBytes = md.deltaBytes,
                                             count = md.baseOffsets != null ? md.baseOffsets.Count() : 1
-                                        }).OrderByDescending(x => x.deltaBytes).ToList();
-            int sortedMethodCount = sortedMethodDelta.Count();
-            int methodCount = (sortedMethodCount < requestedCount)
-                ? sortedMethodCount : requestedCount;
-            if ((sortedMethodCount > 0) && (sortedMethodDelta[0].deltaBytes > 0))
+                                        }).ToList();
+            var sortedMethodImprovements = methodDeltaList
+                                            .Where(x => x.deltaBytes < 0)
+                                            .OrderBy(d => d.deltaBytes).ToList();
+            var sortedMethodRegressions = methodDeltaList
+                                            .Where(x => x.deltaBytes > 0)
+                                            .OrderByDescending(d => d.deltaBytes).ToList();
+            int methodImprovementCount = sortedMethodImprovements.Count();
+            int methodRegressionCount = sortedMethodRegressions.Count();
+            int sortedMethodCount = methodImprovementCount + methodRegressionCount;
+
+            if (methodRegressionCount > 0)
             {
                 Console.WriteLine("\nTop method regessions by size (bytes):");
 
-                foreach (var method in sortedMethodDelta.GetRange(0, methodCount)
-                                                        .Where(x => x.deltaBytes > 0))
+                foreach (var method in sortedMethodRegressions.GetRange(0, Math.Min(methodRegressionCount, requestedCount)))
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
                     if (method.count > 1)
@@ -415,15 +420,11 @@ namespace ManagedCodeGen
                 }
             }
 
-            if ((sortedMethodCount > 0) && (sortedMethodDelta.Last().deltaBytes < 0))
+            if (methodImprovementCount > 0)
             {
-                // index of the element count from the end.
-                int methodDeltaIndex = (sortedMethodCount - methodCount);
                 Console.WriteLine("\nTop method improvements by size (bytes):");
 
-                foreach (var method in sortedMethodDelta.GetRange(methodDeltaIndex, methodCount)
-                                                        .Where(x => x.deltaBytes < 0)
-                                                        .OrderBy(x => x.deltaBytes))
+                foreach (var method in sortedMethodImprovements.GetRange(0, Math.Min(methodImprovementCount, requestedCount)))
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
                     if (method.count > 1)
@@ -434,7 +435,8 @@ namespace ManagedCodeGen
                 }
             }
 
-            Console.WriteLine("\n{0} total methods with size differences.", sortedMethodCount);
+            Console.WriteLine("\n{0} total methods with size differences ({1} improved, {2} regressed).",
+                sortedMethodCount, methodImprovementCount, methodRegressionCount);
 
             return Math.Abs(totalDiffBytes);
         }
