@@ -6,11 +6,12 @@
     },
 
     "dependencies": {
-        "Microsoft.DotNet.Cli.Utils": "1.0.0-dev-*",
+        "Microsoft.DotNet.Cli.Utils": "1.0.0-preview2-003121",
         "System.CommandLine": "0.1.0-*",
         "System.Runtime": "4.1.0",
         "System.Runtime.Extensions": "4.1.0-*",
-        "System.Xml.XmlDocument": "4.0.*"
+        "System.Xml.XmlDocument": "4.0.*",
+        "Newtonsoft.Json": "8.0.3"
     },
 
     "frameworks": {
