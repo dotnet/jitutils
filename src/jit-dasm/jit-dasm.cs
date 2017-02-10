@@ -491,7 +491,7 @@ namespace ManagedCodeGen
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         var path = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
                         
-                        PathUtility.EnsureParentDirectory(path);
+                        PathUtility.EnsureParentDirectoryExists(path);
 
                         // Redirect stdout/stderr to disasm file and run command.
                         using (var outputStream = System.IO.File.Create(path))
