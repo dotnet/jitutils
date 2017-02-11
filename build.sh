@@ -23,7 +23,10 @@ function usage
 # defaults
 buildType="Release"
 publish=false
-scriptDir="`dirname \"$0\"`"
+workingDir="$PWD"
+cd "`dirname \"$0\"`"
+scriptDir="$PWD"
+cd $workingDir
 platform="`dotnet --info | awk '/RID/ {print $2}'`"
 # default install in 'bin' dir at script location
 appInstallDir="$scriptDir/bin"
@@ -68,5 +71,5 @@ if [ "$fx" == true ]; then
     dotnet publish -c $buildType -o $fxInstallDir ./src/packages
 
     # remove package version of mscorlib* - refer to core root version for diff testing.
-    rm $fxInstallDir/mscorlib*
+    rm -f $fxInstallDir/mscorlib*
 fi

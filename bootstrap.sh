@@ -10,10 +10,8 @@ function validate_url {
 }
 
 function download_tools {
-    info=$(dotnet --info)
-    output=${info#*RID:}
-    info=${output//RID:}
-    info=${output// }
+    info=$(dotnet --info |grep RID:)
+    info=${info##*RID:* }
 
     clangFormatUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-format
 
