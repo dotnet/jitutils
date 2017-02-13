@@ -675,11 +675,16 @@ namespace ManagedCodeGen
             return ret;
         }
 
+        class ScriptResolverPolicyWrapper : ICommandResolverPolicy
+        {
+            public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
+        }
+
         public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture = false)
         {
             try 
             {
-                Command command =  Command.Create(name, commandArgs);
+                Command command =  Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
 
                 if (capture)
                 {

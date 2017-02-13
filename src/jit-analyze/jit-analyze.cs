@@ -553,6 +553,11 @@ namespace ManagedCodeGen
             }
         }
 
+        class ScriptResolverPolicyWrapper : ICommandResolverPolicy
+        {
+            public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
+        }
+
         public static bool DiffInText(string diffPath, string basePath)
         {
             // run get diff command to see if we have textual diffs.
@@ -568,7 +573,7 @@ namespace ManagedCodeGen
 
             try 
             {
-                diffCmd = Command.Create(@"git", commandArgs);
+                diffCmd = Command.Create(new ScriptResolverPolicyWrapper(), @"git", commandArgs);
             }
             catch (CommandUnknownException e)
             {
