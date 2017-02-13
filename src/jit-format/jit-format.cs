@@ -508,11 +508,16 @@ namespace ManagedCodeGen
             return returncode;
         }
 
-        public static CommandResult TryCommand (string name, IEnumerable<string> commandArgs, bool capture, ICommandResolverPolicy policy = null)
+        class ScriptResolverPolicyWrapper : ICommandResolverPolicy
+        {
+            public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
+        }
+
+        public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture)
         {
             try 
             {
-                Command command =  Command.Create(policy ?? new DefaultCommandResolverPolicy(), name, commandArgs);
+                Command command =  Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
 
                 if (capture)
                 {
@@ -637,7 +642,7 @@ namespace ManagedCodeGen
                 }
 
                 List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
-                CommandResult result = TryCommand("clang-tidy", commandArgs, true, new PathCommandResolverPolicy());
+                CommandResult result = TryCommand("clang-tidy", commandArgs, true);
 
                 if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && result.StdOut.Contains("error:"))))
                 {
@@ -685,7 +690,7 @@ namespace ManagedCodeGen
 
                     // Run clang-format
                     List<string> commandArgs = new List<string> { formatFix, "-style=file", outputReplacementXml, filename };
-                    CommandResult result = TryCommand("clang-format", commandArgs, true, new PathCommandResolverPolicy());
+                    CommandResult result = TryCommand("clang-format", commandArgs, true);
 
                     if (result.StdOut.Contains("<replacement ") && !fix)
                     {

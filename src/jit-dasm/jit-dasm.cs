@@ -410,6 +410,11 @@ namespace ManagedCodeGen
                 this.verbose = config.DoVerboseOutput;
             }
 
+            class ScriptResolverPolicyWrapper : ICommandResolverPolicy
+            {
+                public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
+            }
+
             public void GenerateAsm()
             {
                 // Build a command per assembly to generate the asm output.
@@ -445,7 +450,7 @@ namespace ManagedCodeGen
 
                     try 
                     {
-                        generateCmd = Command.Create(_executablePath, commandArgs);
+                        generateCmd = Command.Create(new ScriptResolverPolicyWrapper(), _executablePath, commandArgs);
                     }
                     catch (CommandUnknownException e)
                     {
