@@ -13,8 +13,9 @@ GitHub repo for directions on building.
   on the official product page at http://dotnet.github.io/ or in the [dotnet cli GitHub repo](https://github.com/dotnet/cli)
   (where you can install more recent, "daily" builds). If installing from the GitHub repo packages,
   be sure to install the ".NET Core SDK" package, which includes the command-line tool.
-  Note: jitutils require a dotnet cli version after the pre-V1 RC1 build (version?)
-  since that build does not include all the required features.
+  Note: jitutils won't work with older versions of dotnet cli that don't understand csproj files.
+  You can find details in the [dotnet cli documentation](https://github.com/dotnet/cli/blob/rel/1.0.0/Documentation/ProjectJsonToCSProj.md)
+  or just install a recent release following the links above.
 * git - The jit-analyze tool uses `git diff` to check for textual differences since this is
   consistent across platforms, and fast.
 * clang-format - The jit-format tool calls clang-format to run whitespace based formatting changes.
