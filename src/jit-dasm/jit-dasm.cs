@@ -559,6 +559,17 @@ namespace ManagedCodeGen
                             _errorCount++;
                         }
                     }
+
+                    // Remove the generated .ni.exe/dll file; typical use case is generating dasm for
+                    // assemblies in the test tree, and leaving the .ni.dll around would mean that
+                    // subsequent test passes would re-use that code instead of jitting with the
+                    // compiler that's supposed to be tested.
+                    string extension = Path.GetExtension(fullPathAssembly);
+                    string nativeOutput = Path.ChangeExtension(fullPathAssembly, "ni" + extension);
+                    if (File.Exists(nativeOutput))
+                    {
+                        File.Delete(nativeOutput);
+                    }
                 }
             }
         }
