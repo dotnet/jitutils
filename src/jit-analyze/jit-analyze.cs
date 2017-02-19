@@ -247,8 +247,8 @@ namespace ManagedCodeGen
             Regex dataPattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
             return File.ReadLines(filePath)
                              .Select((x, i) => new { line = x, index = i })
-                             .Where(l => l.line.StartsWith(@"; Total bytes of code")
-                                        || l.line.StartsWith(@"; Assembly listing for method"))
+                             .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
+                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal))
                              .Select((x) =>
                              {
                                  var nameMatch = namePattern.Match(x.line);
