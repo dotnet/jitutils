@@ -849,6 +849,48 @@ namespace ManagedCodeGen
             return dasmFailures;
         }
 
+        private static int RunDasmTool(Config config, List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
+        {
+            List<string> dasmArgs = commandArgs.ToList();
+            dasmArgs.Add("--tag");
+            dasmArgs.Add(tag);
+            dasmArgs.Add("--crossgen");
+            if (config.HasCrossgenExe)
+            {
+                dasmArgs.Add(config.CrossgenExe);
+                dasmArgs.Add("--jit");
+
+                var clrjitPath = FindJitLibrary(clrPath);
+                if (clrjitPath == null)
+                {
+                    Console.Error.WriteLine("clrjit not found in " + clrPath);
+                    return -1;
+                }
+
+                dasmArgs.Add(clrjitPath);
+            }
+            else
+            {
+                var crossgenPath = FindCrossgenExecutable(clrPath);
+                if (crossgenPath == null)
+                {
+                    Console.Error.WriteLine("crossgen not found in " + clrPath);
+                    return -1;
+                }
+
+                dasmArgs.Add(crossgenPath);
+            }
+
+            int dasmFailures = RunDasmTool(dasmArgs, assemblyPaths);
+            if (dasmFailures != 0)
+            {
+                Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
+                return dasmFailures;
+            }
+
+            return 0;
+        }
+
         public static int DiffCommand(Config config)
         {
             string diffString;
@@ -955,81 +997,21 @@ namespace ManagedCodeGen
 
             if (config.HasBasePath)
             {
-                List<string> baseArgs = commandArgs;
-                baseArgs.Add("--tag");
-                baseArgs.Add("base");
-                baseArgs.Add("--crossgen");
-                if (config.HasCrossgenExe)
+                int status = RunDasmTool(config, commandArgs, assemblyArgs, "base", config.BasePath);
+
+                if (status != 0)
                 {
-                    baseArgs.Add(config.CrossgenExe);
-                    baseArgs.Add("--jit");
-
-                    var clrjitPath = FindJitLibrary(config.BasePath);
-                    if (clrjitPath == null)
-                    {
-                        Console.Error.WriteLine("clrjit not found in " + config.BasePath);
-                        return -1;
-                    }
-
-                    baseArgs.Add(clrjitPath);
-                }
-                else
-                {
-                    var crossgenPath = FindCrossgenExecutable(config.BasePath);
-                    if (crossgenPath == null)
-                    {
-                        Console.Error.WriteLine("crossgen not found in " + config.BasePath);
-                        return -1;
-                    }
-
-                    baseArgs.Add(crossgenPath);
-                }
-
-                int dasmFailures = RunDasmTool(baseArgs, assemblyArgs);
-                if (dasmFailures != 0)
-                {
-                    Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
-                    return dasmFailures;
+                    return status;
                 }
             }
 
             if (config.HasDiffPath)
             {
-                List<string> diffArgs = commandArgs;
-                diffArgs.Add("--tag");
-                diffArgs.Add("diff");
-                diffArgs.Add("--crossgen");
-                if (config.HasCrossgenExe)
+                int status = RunDasmTool(config, commandArgs, assemblyArgs, "diff", config.DiffPath);
+
+                if (status != 0)
                 {
-                    diffArgs.Add(config.CrossgenExe);
-                    diffArgs.Add("--jit");
-
-                    var clrjitPath = FindJitLibrary(config.DiffPath);
-                    if (clrjitPath == null)
-                    {
-                        Console.Error.WriteLine("clrjit not found in " + config.DiffPath);
-                        return -1;
-                    }
-
-                    diffArgs.Add(clrjitPath);
-                }
-                else
-                {
-                    var crossgenPath = FindCrossgenExecutable(config.DiffPath);
-                    if (crossgenPath == null)
-                    {
-                        Console.Error.WriteLine("crossgen not found in " + config.DiffPath);
-                        return -1;
-                    }
-
-                    diffArgs.Add(crossgenPath);
-                }
-
-                int dasmFailures = RunDasmTool(diffArgs, assemblyArgs);
-                if (dasmFailures != 0)
-                {
-                    Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
-                    return dasmFailures;
+                    return status;
                 }
             }
 
