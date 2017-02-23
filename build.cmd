@@ -16,7 +16,6 @@ set buildType=Release
 set publish=false
 set fx=false
 
-REM REVIEW: 'platform' is never used
 for /f "usebackq tokens=1,2" %%a in (`dotnet --info`) do (
     if "%%a"=="RID:" set platform=%%b
 )
@@ -63,7 +62,11 @@ for %%p in (%projects%) do (
 )
 
 if %fx%==true (
-    dotnet publish -c %buildType% -o %fxInstallDir% .\src\packages
+    @REM Need to expicitly restore 'packages' project for host runtime in order
+    @REM for subsequent publish to be able to accept --runtime parameter to
+    @REM publish it as standalone.
+    dotnet restore --runtime %platform% .\src\packages
+    dotnet publish -c %buildType% -o %fxInstallDir% --runtime %platform% .\src\packages
     
     @REM remove package version of mscorlib* - refer to core root version for diff testing
     if exist %fxInstallDir%\mscorlib* del /q %fxInstallDir%\mscorlib*
