@@ -210,7 +210,7 @@ namespace ManagedCodeGen
 
                             string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
                             string buildPath = Path.Combine(_rootPath, "build.cmd");
-                            CommandResult result = TryCommand(buildPath, commandArgs, !_verbose);
+                            CommandResult result = TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -236,7 +236,7 @@ namespace ManagedCodeGen
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
                             string[] commandArgs = { _arch, _build, "configureonly" };
                             string buildPath = Path.Combine(_rootPath, "build.sh");
-                            CommandResult result = TryCommand(buildPath, commandArgs, true);
+                            CommandResult result = TryCommand(buildPath, commandArgs, true, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -513,11 +513,16 @@ namespace ManagedCodeGen
             public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
         }
 
-        public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture)
+        public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture, string workingDirectory = null)
         {
             try 
             {
                 Command command =  Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
+
+                if (!string.IsNullOrEmpty(workingDirectory))
+                {
+                    command.WorkingDirectory(workingDirectory);
+                }
 
                 if (capture)
                 {
