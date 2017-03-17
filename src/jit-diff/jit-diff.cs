@@ -995,29 +995,29 @@ namespace ManagedCodeGen
                 }
             }
 
+            int status = 0;
+
             if (config.HasBasePath)
             {
-                int status = RunDasmTool(config, commandArgs, assemblyArgs, "base", config.BasePath);
-
-                if (status != 0)
+                int baseStatus = RunDasmTool(config, commandArgs, assemblyArgs, "base", config.BasePath);
+                if (baseStatus != 0)
                 {
-                    return status;
+                    status = baseStatus;
                 }
             }
 
             if (config.HasDiffPath)
             {
-                int status = RunDasmTool(config, commandArgs, assemblyArgs, "diff", config.DiffPath);
-
-                if (status != 0)
+                int diffStatus = RunDasmTool(config, commandArgs, assemblyArgs, "diff", config.DiffPath);
+                if (diffStatus != 0)
                 {
-                    return status;
+                    status = diffStatus;
                 }
             }
 
             // Analyze completed run.
 
-            if (config.DoAnalyze == true)
+            if (config.DoAnalyze)
             {
                 List<string> analysisArgs = new List<string>();
 
@@ -1033,7 +1033,7 @@ namespace ManagedCodeGen
                 CommandResult analyzeResult = TryCommand(s_analysisTool, analysisArgs);
             }
 
-            return 0;
+            return status;
         }
     }
 }
