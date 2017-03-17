@@ -830,6 +830,7 @@ namespace ManagedCodeGen
             return ret;
         }
 
+        // Returns a count of the number of failures.
         private static int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths)
         {
             int dasmFailures = 0;
@@ -849,6 +850,10 @@ namespace ManagedCodeGen
             return dasmFailures;
         }
 
+        // Returns:
+        // 0 on success,
+        // -1 on configuration failure (e.g., JIT not found),
+        // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
         private static int RunDasmTool(Config config, List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
         {
             List<string> dasmArgs = commandArgs.ToList();
@@ -885,12 +890,12 @@ namespace ManagedCodeGen
             if (dasmFailures != 0)
             {
                 Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
-                return dasmFailures;
             }
 
-            return 0;
+            return dasmFailures;
         }
 
+        // Returns 0 on success, 1 on failure.
         public static int DiffCommand(Config config)
         {
             string diffString;
@@ -995,29 +1000,22 @@ namespace ManagedCodeGen
                 }
             }
 
+            int baseStatus = 0;
+            int diffStatus = 0;
+
             if (config.HasBasePath)
             {
-                int status = RunDasmTool(config, commandArgs, assemblyArgs, "base", config.BasePath);
-
-                if (status != 0)
-                {
-                    return status;
-                }
+                baseStatus = RunDasmTool(config, commandArgs, assemblyArgs, "base", config.BasePath);
             }
 
             if (config.HasDiffPath)
             {
-                int status = RunDasmTool(config, commandArgs, assemblyArgs, "diff", config.DiffPath);
-
-                if (status != 0)
-                {
-                    return status;
-                }
+                diffStatus = RunDasmTool(config, commandArgs, assemblyArgs, "diff", config.DiffPath);
             }
 
             // Analyze completed run.
 
-            if (config.DoAnalyze == true)
+            if (config.DoAnalyze)
             {
                 List<string> analysisArgs = new List<string>();
 
@@ -1033,7 +1031,38 @@ namespace ManagedCodeGen
                 CommandResult analyzeResult = TryCommand(s_analysisTool, analysisArgs);
             }
 
-            return 0;
+            // Report any failures to generate asm at the very end (again). This is so
+            // this information doesn't get buried in previous output.
+
+            if ((baseStatus != 0) || (diffStatus != 0))
+            {
+                Console.Error.WriteLine("");
+                Console.Error.WriteLine("Warning: failures detected generating asm");
+
+                if (baseStatus == -1)
+                {
+                    Console.Error.WriteLine("    Baseline failed to generate asm");
+                }
+                else if (baseStatus > 0)
+                {
+                    Console.Error.WriteLine("    Baseline failures: {0}", baseStatus);
+                }
+
+                if (diffStatus == -1)
+                {
+                    Console.Error.WriteLine("    Diff failed to generate asm");
+                }
+                else if (diffStatus > 0)
+                {
+                    Console.Error.WriteLine("    Diff failures: {0}", diffStatus);
+                }
+
+                return 1; // failure result
+            }
+            else
+            {
+                return 0; // success result
+            }
         }
     }
 }
