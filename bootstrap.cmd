@@ -94,7 +94,7 @@ REM ===================================================================
 
 if not exist .\build.cmd echo Can't find build.cmd.&goto :eof
 
-:: Pull in needed packages.  This works globally. (due to global.json)
+:: Pull in needed packages.  This works globally (due to jitutils.sln).
 
 dotnet restore
 

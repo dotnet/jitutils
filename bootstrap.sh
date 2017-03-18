@@ -142,7 +142,7 @@ else
     pushd . >/dev/null
 fi
 
-# Pull in needed packages.  This works globally (due to global.json).
+# Pull in needed packages.  This works globally (due to jitutils.sln).
 
 dotnet restore
 
