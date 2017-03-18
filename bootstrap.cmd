@@ -71,7 +71,7 @@ REM ===================================================================
 
 pushd %__root%
 
-:: Clone the mcgutils repo
+:: Clone the jitutils repo
 
 git clone https://github.com/dotnet/jitutils.git
 
