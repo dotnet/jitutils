@@ -1,11 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp1.0</TargetFramework>
-    <AssemblyName>packages</AssemblyName>
     <OutputType>Exe</OutputType>
-    <PackageId>packages</PackageId>
-    <PackageTargetFallback>$(PackageTargetFallback);dnxcore50</PackageTargetFallback>
+    <TargetFramework>netcoreapp1.0</TargetFramework>
   </PropertyGroup>
 
 </Project>
