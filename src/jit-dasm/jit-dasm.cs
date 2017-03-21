@@ -432,6 +432,11 @@ namespace ManagedCodeGen
 
                     List<string> commandArgs = new List<string>() { fullPathAssembly };
 
+                    // Tell crossgen not to output a success/failure message at the end; that message
+                    // includes a full path to the generated .ni.dll file, which makes all base/diff
+                    // asm files appear to have diffs.
+                    commandArgs.Insert(0, "/silent");
+
                     // Set jit path if it's defined.
                     if (_jitPath != null)
                     {
