@@ -944,9 +944,8 @@ namespace ManagedCodeGen
 
             // Returns:
             // 0 on success,
-            // -1 on configuration failure (e.g., JIT not found),
             // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
-            private int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
+            private int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths)
             {
                 List<string> baseArgs = null, diffArgs = null;
 
@@ -1094,20 +1093,8 @@ namespace ManagedCodeGen
                     }
                 }
 
-                int baseStatus = 0;
-                int diffStatus = 0;
-
                 DiffTool diffTool = new DiffTool(config);
-
-                if (config.HasBasePath)
-                {
-                    baseStatus = diffTool.RunDasmTool(commandArgs, assemblyArgs, "base", config.BasePath);
-                }
-
-                if (config.HasDiffPath)
-                {
-                    diffStatus = diffTool.RunDasmTool(commandArgs, assemblyArgs, "diff", config.DiffPath);
-                }
+                int dasmFailures = diffTool.RunDasmTool(commandArgs, assemblyArgs);
 
                 // Analyze completed run.
 
@@ -1130,28 +1117,10 @@ namespace ManagedCodeGen
                 // Report any failures to generate asm at the very end (again). This is so
                 // this information doesn't get buried in previous output.
 
-                if ((baseStatus != 0) || (diffStatus != 0))
+                if (dasmFailures != 0)
                 {
                     Console.Error.WriteLine("");
-                    Console.Error.WriteLine("Warning: failures detected generating asm");
-
-                    if (baseStatus == -1)
-                    {
-                        Console.Error.WriteLine("    Baseline failed to generate asm");
-                    }
-                    else if (baseStatus > 0)
-                    {
-                        Console.Error.WriteLine("    Baseline failures: {0}", baseStatus);
-                    }
-
-                    if (diffStatus == -1)
-                    {
-                        Console.Error.WriteLine("    Diff failed to generate asm");
-                    }
-                    else if (diffStatus > 0)
-                    {
-                        Console.Error.WriteLine("    Diff failures: {0}", diffStatus);
-                    }
+                    Console.Error.WriteLine("Warning: {0} failures detected generating asm", dasmFailures);
 
                     return 1; // failure result
                 }
