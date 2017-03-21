@@ -355,7 +355,7 @@ namespace ManagedCodeGen
             {
                 if (config.DoVerboseOutput)
                 {
-                    Console.WriteLine("Scaning: {0}", filePath);
+                    Console.WriteLine("Scanning: {0}", filePath);
                 }
 
                 // skip if not an assembly
@@ -446,6 +446,20 @@ namespace ManagedCodeGen
                         commandArgs.Insert(1, String.Join(" ", _platformPaths));
                     }
 
+                    string extension = Path.GetExtension(fullPathAssembly);
+                    string nativeOutput = Path.ChangeExtension(fullPathAssembly, "ni" + extension);
+
+                    if (_rootPath != null)
+                    {
+                        string assemblyNativeFileName = Path.ChangeExtension(assembly.Name, "ni" + extension);
+                        nativeOutput = Path.Combine(_rootPath, assembly.OutputPath, assemblyNativeFileName);
+
+                        PathUtility.EnsureParentDirectoryExists(nativeOutput);
+
+                        commandArgs.Insert(0, "/out");
+                        commandArgs.Insert(1, nativeOutput);
+                    }
+
                     Command generateCmd = null;
 
                     try 
@@ -495,7 +509,7 @@ namespace ManagedCodeGen
                         // Generate path to the output file
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         var path = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
-                        
+
                         PathUtility.EnsureParentDirectoryExists(path);
 
                         // Redirect stdout/stderr to disasm file and run command.
@@ -564,8 +578,6 @@ namespace ManagedCodeGen
                     // assemblies in the test tree, and leaving the .ni.dll around would mean that
                     // subsequent test passes would re-use that code instead of jitting with the
                     // compiler that's supposed to be tested.
-                    string extension = Path.GetExtension(fullPathAssembly);
-                    string nativeOutput = Path.ChangeExtension(fullPathAssembly, "ni" + extension);
                     if (File.Exists(nativeOutput))
                     {
                         File.Delete(nativeOutput);

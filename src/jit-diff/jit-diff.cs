@@ -848,7 +848,7 @@ namespace ManagedCodeGen
             }
 
             private Config m_config;
-            private ConcurrentQueue<DasmWorkItem> DasmWorkQueue = new ConcurrentQueue<DasmWorkItem>();
+            private List<Task<int>> DasmWorkTasks = new List<Task<int>>();
 
             public DiffTool(Config config)
             {
@@ -856,58 +856,53 @@ namespace ManagedCodeGen
             }
 
             // Returns a count of the number of failures.
-            private void RunDasmTool()
+            private int RunDasmTool(DasmWorkItem item)
             {
                 int dasmFailures = 0;
 
-                while (true)
+                string command = s_asmTool + " " + String.Join(" ", item.DasmArgs);
+                Console.WriteLine("Dasm command: {0}", command);
+                CommandResult result = TryCommand(s_asmTool, item.DasmArgs);
+                if (result.ExitCode != 0)
                 {
-                    DasmWorkItem item;
-                    if (DasmWorkQueue.TryDequeue(out item))
-                    {
-                        string command = s_asmTool + " " + String.Join(" ", item.DasmArgs);
-                        Console.WriteLine("Dasm command: {0}", command);
-                        CommandResult result = TryCommand(s_asmTool, item.DasmArgs);
-                        if (result.ExitCode != 0)
-                        {
-                            Console.Error.WriteLine("Dasm command \"{0}\" returned with {1} failures", command, result.ExitCode);
-                            dasmFailures += result.ExitCode;
-                        }
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    Console.Error.WriteLine("Dasm command \"{0}\" returned with {1} failures", command, result.ExitCode);
+                    dasmFailures += result.ExitCode;
                 }
 
-                // REVIEW: how to return values? return dasmFailures;
+                return dasmFailures;
             }
 
-            private void EnqueueDasmWorkSingle(List<string> args, string assemblyPath)
+            private void StartDasmWorkSingle(List<string> args, string assemblyPath)
             {
                 List<string> allArgs = new List<string>(args);
                 allArgs.Add(assemblyPath);
-                DasmWorkQueue.Enqueue(new DasmWorkItem(allArgs));
+                Task<int> task = Task<int>.Factory.StartNew(() => RunDasmTool(new DasmWorkItem(allArgs)));
+                DasmWorkTasks.Add(task);
 
                 if (m_config.Verbose)
                 {
                     string command = String.Join(" ", allArgs);
-                    Console.WriteLine("Enqueued dasm command \"{0}\"", command);
+                    Console.WriteLine("Started dasm command \"{0}\"", command);
+                }
+
+                if (m_config.Sequential)
+                {
+                    Task.WaitAll(task);
                 }
             }
 
             // Returns a count of the number of failures.
-            private void EnqueueDasmWork(List<string> baseArgs, List<string> diffArgs, List<string> assemblyPaths)
+            private void StartDasmWork(List<string> baseArgs, List<string> diffArgs, List<string> assemblyPaths)
             {
                 foreach (var assemblyPath in assemblyPaths)
                 {
                     if (baseArgs != null)
                     {
-                        EnqueueDasmWorkSingle(baseArgs, assemblyPath);
+                        StartDasmWorkSingle(baseArgs, assemblyPath);
                     }
                     if (diffArgs != null)
                     {
-                        EnqueueDasmWorkSingle(diffArgs, assemblyPath);
+                        StartDasmWorkSingle(diffArgs, assemblyPath);
                     }
                 }
             }
@@ -965,17 +960,24 @@ namespace ManagedCodeGen
                     diffArgs = ConstructArgs(commandArgs, assemblyPaths, "diff", m_config.DiffPath);
                 }
 
-                EnqueueDasmWork(baseArgs, diffArgs, assemblyPaths);
+                StartDasmWork(baseArgs, diffArgs, assemblyPaths);
 
                 int dasmFailures = 0;
 
-                if (m_config.Sequential)
+                try
                 {
-                    RunDasmTool();
+                    Task<int>[] taskArray = DasmWorkTasks.ToArray();
+                    Task.WaitAll(taskArray);
+
+                    foreach (Task<int> t in taskArray)
+                    {
+                        dasmFailures += t.Result;
+                    }
                 }
-                else
+                catch (AggregateException ex)
                 {
-                    Parallel.Invoke(RunDasmTool, RunDasmTool, RunDasmTool, RunDasmTool);
+                    Console.Error.WriteLine("Dasm task failed with {0}", ex.Message);
+                    dasmFailures += ex.InnerExceptions.Count;
                 }
 
                 if (dasmFailures != 0)
