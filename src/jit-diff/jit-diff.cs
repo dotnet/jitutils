@@ -384,8 +384,8 @@ namespace ManagedCodeGen
                             string diffPath = GetToolPath("diff", out found);
                             if (found && !Directory.Exists(diffPath))
                             {
-                                    Console.WriteLine("Default diff path {0} not found! Investigate config file entry and retry.", diffPath);
-                                    Environment.Exit(-1);
+                                Console.WriteLine("Default diff path {0} not found! Investigate config file entry and retry.", diffPath);
+                                Environment.Exit(-1);
                             }
 
                             // Find crossgen tool if any
@@ -656,7 +656,7 @@ namespace ManagedCodeGen
             {
                 case Commands.Diff:
                     {
-                        ret = DiffCommand(config);
+                        ret = DiffTool.DiffCommand(config);
                     }
                     break;
                 case Commands.List:
@@ -830,239 +830,291 @@ namespace ManagedCodeGen
             return ret;
         }
 
-        // Returns a count of the number of failures.
-        private static int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths)
+        public class DiffTool
         {
-            int dasmFailures = 0;
-            List<string> allArgs = commandArgs;
-            foreach (var assemblyPath in assemblyPaths)
+            private class DasmWorkItem
             {
-                commandArgs.Add(assemblyPath);
-                Console.WriteLine("Diff command: {0} {1}", s_asmTool, String.Join(" ", allArgs));
-                CommandResult result = TryCommand(s_asmTool, allArgs);
-                commandArgs.Remove(commandArgs.Last());
-                if (result.ExitCode != 0)
+                public List<string> DasmArgs { get; set; }
+
+                public DasmWorkItem(List<string> dasmArgs)
                 {
-                    Console.Error.WriteLine("Dasm command returned with {0} failures", result.ExitCode);
-                    dasmFailures += result.ExitCode;
+                    DasmArgs = dasmArgs;
                 }
             }
-            return dasmFailures;
-        }
 
-        // Returns:
-        // 0 on success,
-        // -1 on configuration failure (e.g., JIT not found),
-        // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
-        private static int RunDasmTool(Config config, List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
-        {
-            List<string> dasmArgs = commandArgs.ToList();
-            dasmArgs.Add("--tag");
-            dasmArgs.Add(tag);
-            dasmArgs.Add("--crossgen");
-            if (config.HasCrossgenExe)
+            private Config m_config;
+            private Queue<DasmWorkItem> DasmWorkQueue = new Queue<DasmWorkItem>();
+
+            public DiffTool(Config config)
             {
-                dasmArgs.Add(config.CrossgenExe);
-                dasmArgs.Add("--jit");
+                m_config = config;
+            }
 
-                var clrjitPath = FindJitLibrary(clrPath);
-                if (clrjitPath == null)
+            // Returns a count of the number of failures.
+            private int RunDasmTool()
+            {
+                int dasmFailures = 0;
+
+                while (true)
                 {
-                    Console.Error.WriteLine("clrjit not found in " + clrPath);
-                    return -1;
+                    try
+                    {
+                        DasmWorkItem item = DasmWorkQueue.Dequeue();
+                        string command = s_asmTool + " " + String.Join(" ", item.DasmArgs);
+                        Console.WriteLine("Dasm command: {0}", command);
+                        CommandResult result = TryCommand(s_asmTool, item.DasmArgs);
+                        if (result.ExitCode != 0)
+                        {
+                            Console.Error.WriteLine("Dasm command \"{0}\" returned with {1} failures", command, result.ExitCode);
+                            dasmFailures += result.ExitCode;
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // No more work left in the queue.
+                        break;
+                    }
                 }
 
-                dasmArgs.Add(clrjitPath);
+                return dasmFailures;
             }
-            else
+
+            // Returns a count of the number of failures.
+            private void EnqueueDasmWork(List<string> commandArgs, List<string> assemblyPaths)
             {
-                var crossgenPath = FindCrossgenExecutable(clrPath);
-                if (crossgenPath == null)
+                foreach (var assemblyPath in assemblyPaths)
                 {
-                    Console.Error.WriteLine("crossgen not found in " + clrPath);
-                    return -1;
+                    List<string> allArgs = new List<string>(commandArgs);
+                    allArgs.Add(assemblyPath);
+                    DasmWorkQueue.Enqueue(new DasmWorkItem(allArgs));
+
+                    if (m_config.Verbose)
+                    {
+                        string command = String.Join(" ", allArgs);
+                        Console.WriteLine("Enqueued dasm command \"{0}\"", command);
+                    }
+                }
+            }
+
+            // Returns:
+            // 0 on success,
+            // -1 on configuration failure (e.g., JIT not found),
+            // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
+            private int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
+            {
+                List<string> dasmArgs = commandArgs.ToList();
+                dasmArgs.Add("--tag");
+                dasmArgs.Add(tag);
+                dasmArgs.Add("--crossgen");
+                if (m_config.HasCrossgenExe)
+                {
+                    dasmArgs.Add(m_config.CrossgenExe);
+                    dasmArgs.Add("--jit");
+
+                    var clrjitPath = FindJitLibrary(clrPath);
+                    if (clrjitPath == null)
+                    {
+                        Console.Error.WriteLine("clrjit not found in " + clrPath);
+                        return -1;
+                    }
+
+                    dasmArgs.Add(clrjitPath);
+                }
+                else
+                {
+                    var crossgenPath = FindCrossgenExecutable(clrPath);
+                    if (crossgenPath == null)
+                    {
+                        Console.Error.WriteLine("crossgen not found in " + clrPath);
+                        return -1;
+                    }
+
+                    dasmArgs.Add(crossgenPath);
                 }
 
-                dasmArgs.Add(crossgenPath);
-            }
-
-            int dasmFailures = RunDasmTool(dasmArgs, assemblyPaths);
-            if (dasmFailures != 0)
-            {
-                Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
-            }
-
-            return dasmFailures;
-        }
-
-        // Returns 0 on success, 1 on failure.
-        public static int DiffCommand(Config config)
-        {
-            string diffString;
-
-            if (config.BenchmarksOnly)
-            {
-                diffString = "benchstones, benchmarks game";
-            }
-            else
-            {
-                diffString = "System.Private.CoreLib.dll";
-
-                if (config.DoFrameworks)
+                EnqueueDasmWork(dasmArgs, assemblyPaths);
+                int dasmFailures = RunDasmTool();
+                if (dasmFailures != 0)
                 {
-                    diffString += ", framework assemblies";
+                    Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
                 }
+
+                return dasmFailures;
+            }
+
+            // Returns 0 on success, 1 on failure.
+            public static int DiffCommand(Config config)
+            {
+                string diffString;
+
+                if (config.BenchmarksOnly)
+                {
+                    diffString = "benchstones, benchmarks game";
+                }
+                else
+                {
+                    diffString = "System.Private.CoreLib.dll";
+
+                    if (config.DoFrameworks)
+                    {
+                        diffString += ", framework assemblies";
+                    }
+
+                    if (config.DoTestTree)
+                    {
+                        diffString += ", " + config.TestRoot;
+                    }
+                }
+
+                Console.WriteLine("Beginning diff of {0}!", diffString);
+
+                // Add each framework assembly to commandArgs
+
+                // Create subjob that runs jit-dasm, which should be in path, with the 
+                // relevent coreclr assemblies/paths.
+
+                string frameworkArgs = String.Join(" ", s_frameworkAssemblies);
+                string testArgs = String.Join(" ", s_testDirectories);
+
+                List<string> commandArgs = new List<string>();
+
+                // Set up CoreRoot
+                commandArgs.Add("--platform");
+                commandArgs.Add(config.CoreRoot);
+
+                commandArgs.Add("--output");
+                commandArgs.Add(config.OutputPath);
+
+                List<string> assemblyArgs = new List<string>();
 
                 if (config.DoTestTree)
                 {
-                    diffString += ", " + config.TestRoot;
+                    commandArgs.Add("--recursive");
                 }
-            }
 
-            Console.WriteLine("Beginning diff of {0}!", diffString);
-
-            // Add each framework assembly to commandArgs
-
-            // Create subjob that runs mcgdiff, which should be in path, with the 
-            // relevent coreclr assemblies/paths.
-
-            string frameworkArgs = String.Join(" ", s_frameworkAssemblies);
-            string testArgs = String.Join(" ", s_testDirectories);
-
-
-            List<string> commandArgs = new List<string>();
-
-            // Set up CoreRoot
-            commandArgs.Add("--platform");
-            commandArgs.Add(config.CoreRoot);
-
-            commandArgs.Add("--output");
-            commandArgs.Add(config.OutputPath);
-
-            List<string> assemblyArgs = new List<string>();
-
-            if (config.DoTestTree)
-            {
-                commandArgs.Add("--recursive");
-            }
-
-            if (config.Verbose)
-            {
-                commandArgs.Add("--verbose");
-            }
-
-            if (config.CoreLibOnly)
-            {
-                string coreRoot = config.CoreRoot;
-                string fullPathAssembly = Path.Combine(coreRoot, "System.Private.CoreLib.dll");
-                assemblyArgs.Add(fullPathAssembly);
-            }
-            else
-            {
-                if (config.DoFrameworks)
+                if (config.Verbose)
                 {
-                    // Set up full framework paths
-                    foreach (var assembly in s_frameworkAssemblies)
+                    commandArgs.Add("--verbose");
+                }
+
+                if (config.CoreLibOnly)
+                {
+                    string coreRoot = config.CoreRoot;
+                    string fullPathAssembly = Path.Combine(coreRoot, "System.Private.CoreLib.dll");
+                    assemblyArgs.Add(fullPathAssembly);
+                }
+                else
+                {
+                    if (config.DoFrameworks)
                     {
-                        string coreRoot = config.CoreRoot;
-                        string fullPathAssembly = Path.Combine(coreRoot, assembly);
-
-                        if (!File.Exists(fullPathAssembly))
+                        // Set up full framework paths
+                        foreach (var assembly in s_frameworkAssemblies)
                         {
-                            Console.Error.WriteLine("can't find framework assembly {0}", fullPathAssembly);
-                            continue;
-                        }
+                            string coreRoot = config.CoreRoot;
+                            string fullPathAssembly = Path.Combine(coreRoot, assembly);
 
-                        assemblyArgs.Add(fullPathAssembly);
-                    }
-                }
+                            if (!File.Exists(fullPathAssembly))
+                            {
+                                Console.Error.WriteLine("can't find framework assembly {0}", fullPathAssembly);
+                                continue;
+                            }
 
-                if (config.TestRoot != null)
-                {
-                    string basepath = config.TestRoot;
-                    if (config.BenchmarksOnly) {
-                        foreach (var dir in s_benchmarksPath) {
-                            basepath = Path.Combine(basepath, dir);
+                            assemblyArgs.Add(fullPathAssembly);
                         }
                     }
-                    foreach (var dir in config.BenchmarksOnly ? s_benchmarkDirectories : s_testDirectories)
+
+                    if (config.TestRoot != null)
                     {
-                        string fullPathDir = Path.Combine(basepath, dir);
-
-                        if (!Directory.Exists(fullPathDir))
+                        string basepath = config.TestRoot;
+                        if (config.BenchmarksOnly)
                         {
-                            Console.Error.WriteLine("can't find test directory {0}", fullPathDir);
-                            continue;
+                            foreach (var dir in s_benchmarksPath)
+                            {
+                                basepath = Path.Combine(basepath, dir);
+                            }
                         }
+                        foreach (var dir in config.BenchmarksOnly ? s_benchmarkDirectories : s_testDirectories)
+                        {
+                            string fullPathDir = Path.Combine(basepath, dir);
 
-                        assemblyArgs.Add(fullPathDir);
+                            if (!Directory.Exists(fullPathDir))
+                            {
+                                Console.Error.WriteLine("can't find test directory {0}", fullPathDir);
+                                continue;
+                            }
+
+                            assemblyArgs.Add(fullPathDir);
+                        }
                     }
                 }
-            }
 
-            int baseStatus = 0;
-            int diffStatus = 0;
+                int baseStatus = 0;
+                int diffStatus = 0;
 
-            if (config.HasBasePath)
-            {
-                baseStatus = RunDasmTool(config, commandArgs, assemblyArgs, "base", config.BasePath);
-            }
+                DiffTool diffTool = new DiffTool(config);
 
-            if (config.HasDiffPath)
-            {
-                diffStatus = RunDasmTool(config, commandArgs, assemblyArgs, "diff", config.DiffPath);
-            }
-
-            // Analyze completed run.
-
-            if (config.DoAnalyze)
-            {
-                List<string> analysisArgs = new List<string>();
-
-                analysisArgs.Add("--base");
-                analysisArgs.Add(Path.Combine(config.OutputPath, "base"));
-                analysisArgs.Add("--diff");
-                analysisArgs.Add(Path.Combine(config.OutputPath, "diff"));
-                analysisArgs.Add("--recursive");
-
-                Console.WriteLine("Analyze command: {0} {1}",
-                    s_analysisTool, String.Join(" ", analysisArgs));
-
-                CommandResult analyzeResult = TryCommand(s_analysisTool, analysisArgs);
-            }
-
-            // Report any failures to generate asm at the very end (again). This is so
-            // this information doesn't get buried in previous output.
-
-            if ((baseStatus != 0) || (diffStatus != 0))
-            {
-                Console.Error.WriteLine("");
-                Console.Error.WriteLine("Warning: failures detected generating asm");
-
-                if (baseStatus == -1)
+                if (config.HasBasePath)
                 {
-                    Console.Error.WriteLine("    Baseline failed to generate asm");
-                }
-                else if (baseStatus > 0)
-                {
-                    Console.Error.WriteLine("    Baseline failures: {0}", baseStatus);
+                    baseStatus = diffTool.RunDasmTool(commandArgs, assemblyArgs, "base", config.BasePath);
                 }
 
-                if (diffStatus == -1)
+                if (config.HasDiffPath)
                 {
-                    Console.Error.WriteLine("    Diff failed to generate asm");
-                }
-                else if (diffStatus > 0)
-                {
-                    Console.Error.WriteLine("    Diff failures: {0}", diffStatus);
+                    diffStatus = diffTool.RunDasmTool(commandArgs, assemblyArgs, "diff", config.DiffPath);
                 }
 
-                return 1; // failure result
-            }
-            else
-            {
-                return 0; // success result
+                // Analyze completed run.
+
+                if (config.DoAnalyze)
+                {
+                    List<string> analysisArgs = new List<string>();
+
+                    analysisArgs.Add("--base");
+                    analysisArgs.Add(Path.Combine(config.OutputPath, "base"));
+                    analysisArgs.Add("--diff");
+                    analysisArgs.Add(Path.Combine(config.OutputPath, "diff"));
+                    analysisArgs.Add("--recursive");
+
+                    Console.WriteLine("Analyze command: {0} {1}",
+                        s_analysisTool, String.Join(" ", analysisArgs));
+
+                    CommandResult analyzeResult = TryCommand(s_analysisTool, analysisArgs);
+                }
+
+                // Report any failures to generate asm at the very end (again). This is so
+                // this information doesn't get buried in previous output.
+
+                if ((baseStatus != 0) || (diffStatus != 0))
+                {
+                    Console.Error.WriteLine("");
+                    Console.Error.WriteLine("Warning: failures detected generating asm");
+
+                    if (baseStatus == -1)
+                    {
+                        Console.Error.WriteLine("    Baseline failed to generate asm");
+                    }
+                    else if (baseStatus > 0)
+                    {
+                        Console.Error.WriteLine("    Baseline failures: {0}", baseStatus);
+                    }
+
+                    if (diffStatus == -1)
+                    {
+                        Console.Error.WriteLine("    Diff failed to generate asm");
+                    }
+                    else if (diffStatus > 0)
+                    {
+                        Console.Error.WriteLine("    Diff failures: {0}", diffStatus);
+                    }
+
+                    return 1; // failure result
+                }
+                else
+                {
+                    return 0; // success result
+                }
             }
         }
     }
 }
+
