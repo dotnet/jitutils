@@ -879,28 +879,36 @@ namespace ManagedCodeGen
                 return dasmFailures;
             }
 
+            private void EnqueueDasmWorkSingle(List<string> args, string assemblyPath)
+            {
+                List<string> allArgs = new List<string>(args);
+                allArgs.Add(assemblyPath);
+                DasmWorkQueue.Enqueue(new DasmWorkItem(allArgs));
+
+                if (m_config.Verbose)
+                {
+                    string command = String.Join(" ", allArgs);
+                    Console.WriteLine("Enqueued dasm command \"{0}\"", command);
+                }
+            }
+
             // Returns a count of the number of failures.
-            private void EnqueueDasmWork(List<string> commandArgs, List<string> assemblyPaths)
+            private void EnqueueDasmWork(List<string> baseArgs, List<string> diffArgs, List<string> assemblyPaths)
             {
                 foreach (var assemblyPath in assemblyPaths)
                 {
-                    List<string> allArgs = new List<string>(commandArgs);
-                    allArgs.Add(assemblyPath);
-                    DasmWorkQueue.Enqueue(new DasmWorkItem(allArgs));
-
-                    if (m_config.Verbose)
+                    if (baseArgs != null)
                     {
-                        string command = String.Join(" ", allArgs);
-                        Console.WriteLine("Enqueued dasm command \"{0}\"", command);
+                        EnqueueDasmWorkSingle(baseArgs, assemblyPath);
+                    }
+                    if (diffArgs != null)
+                    {
+                        EnqueueDasmWorkSingle(diffArgs, assemblyPath);
                     }
                 }
             }
 
-            // Returns:
-            // 0 on success,
-            // -1 on configuration failure (e.g., JIT not found),
-            // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
-            private int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
+            private List<string> ConstructArgs(List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
             {
                 List<string> dasmArgs = commandArgs.ToList();
                 dasmArgs.Add("--tag");
@@ -909,16 +917,16 @@ namespace ManagedCodeGen
                 if (m_config.HasCrossgenExe)
                 {
                     dasmArgs.Add(m_config.CrossgenExe);
-                    dasmArgs.Add("--jit");
 
-                    var clrjitPath = FindJitLibrary(clrPath);
-                    if (clrjitPath == null)
+                    var jitPath = FindJitLibrary(clrPath);
+                    if (jitPath == null)
                     {
                         Console.Error.WriteLine("clrjit not found in " + clrPath);
-                        return -1;
+                        return null;
                     }
 
-                    dasmArgs.Add(clrjitPath);
+                    dasmArgs.Add("--jit");
+                    dasmArgs.Add(jitPath);
                 }
                 else
                 {
@@ -926,13 +934,35 @@ namespace ManagedCodeGen
                     if (crossgenPath == null)
                     {
                         Console.Error.WriteLine("crossgen not found in " + clrPath);
-                        return -1;
+                        return  null;
                     }
 
                     dasmArgs.Add(crossgenPath);
                 }
 
-                EnqueueDasmWork(dasmArgs, assemblyPaths);
+                return dasmArgs;
+            }
+
+            // Returns:
+            // 0 on success,
+            // -1 on configuration failure (e.g., JIT not found),
+            // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
+            private int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
+            {
+                List<string> baseArgs = null, diffArgs = null;
+
+                if (m_config.HasBasePath)
+                {
+                    baseArgs = ConstructArgs(commandArgs, assemblyPaths, "base", m_config.BasePath);
+                }
+
+                if (m_config.HasDiffPath)
+                {
+                    diffArgs = ConstructArgs(commandArgs, assemblyPaths, "diff", m_config.DiffPath);
+                }
+
+                EnqueueDasmWork(baseArgs, diffArgs, assemblyPaths);
+
                 int dasmFailures = RunDasmTool();
                 if (dasmFailures != 0)
                 {
