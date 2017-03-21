@@ -13,6 +13,8 @@ using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
@@ -39,6 +41,7 @@ namespace ManagedCodeGen
             private string _outputPath = null;
             private bool _analyze = false;
             private string _tag = null;
+            private bool _sequential = false;
             private string _platformPath = null;
             private string _testPath = null;
             private bool _corlibOnly = false;
@@ -80,6 +83,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("o|output", ref _outputPath, "The output path.");
                     syntax.DefineOption("a|analyze", ref _analyze, 
                         "Analyze resulting base, diff dasm directories.");
+                    syntax.DefineOption("s|sequential", ref _sequential, "Run sequentially; don't do parallel compiles.");
                     syntax.DefineOption("t|tag", ref _tag, 
                         "Name of root in output directory.  Allows for many sets of output.");
                     syntax.DefineOption("c|corlibonly", ref _corlibOnly, "Disasm *CorLib only");
@@ -523,6 +527,7 @@ namespace ManagedCodeGen
             public string CrossgenExe { get { return _crossgenExe; } }
             public bool HasCrossgenExe { get { return (_crossgenExe != null); } }
             public string OutputPath { get { return _outputPath; } }
+            public bool Sequential { get { return _sequential; } }
             public string Tag { get { return _tag; } }
             public bool HasTag { get { return (_tag != null); } }
             public bool CoreLibOnly { get { return _corlibOnly; } }
@@ -843,7 +848,7 @@ namespace ManagedCodeGen
             }
 
             private Config m_config;
-            private Queue<DasmWorkItem> DasmWorkQueue = new Queue<DasmWorkItem>();
+            private ConcurrentQueue<DasmWorkItem> DasmWorkQueue = new ConcurrentQueue<DasmWorkItem>();
 
             public DiffTool(Config config)
             {
@@ -851,15 +856,15 @@ namespace ManagedCodeGen
             }
 
             // Returns a count of the number of failures.
-            private int RunDasmTool()
+            private void RunDasmTool()
             {
                 int dasmFailures = 0;
 
                 while (true)
                 {
-                    try
+                    DasmWorkItem item;
+                    if (DasmWorkQueue.TryDequeue(out item))
                     {
-                        DasmWorkItem item = DasmWorkQueue.Dequeue();
                         string command = s_asmTool + " " + String.Join(" ", item.DasmArgs);
                         Console.WriteLine("Dasm command: {0}", command);
                         CommandResult result = TryCommand(s_asmTool, item.DasmArgs);
@@ -869,14 +874,13 @@ namespace ManagedCodeGen
                             dasmFailures += result.ExitCode;
                         }
                     }
-                    catch (InvalidOperationException)
+                    else
                     {
-                        // No more work left in the queue.
                         break;
                     }
                 }
 
-                return dasmFailures;
+                // REVIEW: how to return values? return dasmFailures;
             }
 
             private void EnqueueDasmWorkSingle(List<string> args, string assemblyPath)
@@ -963,7 +967,17 @@ namespace ManagedCodeGen
 
                 EnqueueDasmWork(baseArgs, diffArgs, assemblyPaths);
 
-                int dasmFailures = RunDasmTool();
+                int dasmFailures = 0;
+
+                if (m_config.Sequential)
+                {
+                    RunDasmTool();
+                }
+                else
+                {
+                    Parallel.Invoke(RunDasmTool, RunDasmTool, RunDasmTool, RunDasmTool);
+                }
+
                 if (dasmFailures != 0)
                 {
                     Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
