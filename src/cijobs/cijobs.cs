@@ -626,7 +626,7 @@ namespace ManagedCodeGen
                 // Copy product tools to output location. 
                 bool success = await cic.DownloadProduct(config, outputPath, contentPath);
 
-                if (config.DoUnzip)
+                if (success && config.DoUnzip)
                 {
                     // unzip archive in place.
                     var zipPath = Path.Combine(outputPath, Path.GetFileName(contentPath));

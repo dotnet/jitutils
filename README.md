@@ -22,7 +22,7 @@ Current tools include:
     git clone https://github.com/jitutils
 ```
 
-2. Install the .NET Core SDK (including the dotnet command-line interface, or CLI) from [here](https://dot.net).
+2. Install the .NET Core SDK (including the `dotnet` command-line interface, or CLI) from [here](https://dot.net).
 
 3. Build the tools:
 ```
@@ -35,5 +35,3 @@ Current tools include:
 ```
     set PATH=%PATH%;<root>\jitutils\bin
 ```
-
-For more complete instructions, read the [getting started guide](doc/getstarted.md).

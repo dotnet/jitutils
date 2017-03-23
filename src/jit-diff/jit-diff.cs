@@ -18,6 +18,16 @@ using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
+    public class AssemblyInfo
+    {
+        // Contains full path to assembly.
+        public string Path { get; set; }
+
+        // Contains relative path within output directory for given assembly.
+        // This allows for different output directories per tool.
+        public string OutputPath { get; set; }
+    }
+
     public class jitdiff
     {
         // Supported commands.  List to view information from the CI system, and Copy to download artifacts.
@@ -30,6 +40,9 @@ namespace ManagedCodeGen
         
         private static string s_asmTool = "jit-dasm";
         private static string s_analysisTool = "jit-analyze";
+        private static string s_configFileName = "config.json";
+        private static string s_configFileRootKey = "asmdiff";
+        private static string s_defaultDiffDirectoryName = "diffs";
 
         public class Config
         {
@@ -39,18 +52,23 @@ namespace ManagedCodeGen
             private string _diffPath = null;
             private string _crossgenExe = null;
             private string _outputPath = null;
-            private bool _analyze = false;
+            private bool _noanalyze = false;
             private string _tag = null;
             private bool _sequential = false;
             private string _platformPath = null;
             private string _testPath = null;
-            private bool _corlibOnly = false;
-            private bool _frameworksOnly = false;
-            private bool _benchmarksOnly = false;
+            private string _baseRoot = null;
+            private string _diffRoot = null;
+            private string _arch = null;
+            private string _build = null;
+            private bool _corelib = false;
+            private bool _frameworks = false;
+            private bool _benchmarks = false;
+            private bool _tests = false;
+            private bool _gcinfo = false;
             private bool _verbose = false;
             private string _jobName;
             private string _number;
-            private bool _lastSuccessful;
             private string _jitUtilsRoot;
             private string _rid;
             private string _platformName;
@@ -60,68 +78,74 @@ namespace ManagedCodeGen
             private JObject _jObj;
             private bool _asmdiffLoaded = false;
             private bool _noJitUtilsRoot = false;
+            private bool _validationError = false;
 
             public Config(string[] args)
             {
                 // Get configuration values from JIT_UTILS_ROOT/config.json
-
                 LoadFileConfig();
 
                 _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
                 {
                     // Diff command section.
-                    syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff of base/diff.");
-                    syntax.DefineOption("b|base", ref _basePath, "The base compiler directory or tag." +
-                                        " Will use crossgen or clrjit from this directory, depending on" +
-                                        " whether --crossgen is specified.");
-                    syntax.DefineOption("d|diff", ref _diffPath, "The diff compiler directory or tag." +
-                                        " Will use crossgen or clrjit from this directory, depending on" +
-                                        " whether --crossgen is specified.");
-                    syntax.DefineOption("crossgen", ref _crossgenExe, "The crossgen compiler exe." +
-                                        " When this is specified, will use clrjit from the --base and" +
-                                        " --diff directories with this crossgen");
+                    syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff.");
+                    syntax.DefineOption("b|base", ref _basePath,
+                        "The base compiler directory or tag. Will use crossgen or clrjit from this directory, " +
+                        "depending on whether --crossgen is specified.");
+                    syntax.DefineOption("d|diff", ref _diffPath,
+                        "The diff compiler directory or tag. Will use crossgen or clrjit from this directory, " +
+                        "depending on whether --crossgen is specified.");
+                    syntax.DefineOption("crossgen", ref _crossgenExe,
+                        "The crossgen compiler exe. When this is specified, will use clrjit from the --base and " +
+                        "--diff directories with this crossgen.");
                     syntax.DefineOption("o|output", ref _outputPath, "The output path.");
-                    syntax.DefineOption("a|analyze", ref _analyze, 
-                        "Analyze resulting base, diff dasm directories.");
+                    syntax.DefineOption("noanalyze", ref _noanalyze, "Do not analyze resulting base, diff dasm directories. (By default, the directories are analyzed for diffs.)");
                     syntax.DefineOption("s|sequential", ref _sequential, "Run sequentially; don't do parallel compiles.");
-                    syntax.DefineOption("t|tag", ref _tag, 
-                        "Name of root in output directory.  Allows for many sets of output.");
-                    syntax.DefineOption("c|corlibonly", ref _corlibOnly, "Disasm *CorLib only");
-                    syntax.DefineOption("f|frameworksonly", ref _frameworksOnly, "Disasm frameworks only");
-                    syntax.DefineOption("benchmarksonly", ref _benchmarksOnly, "Disasm core benchmarks only");
-                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output");
+                    syntax.DefineOption("t|tag", ref _tag, "Name of root in output directory. Allows for many sets of output.");
+                    syntax.DefineOption("c|corelib", ref _corelib, "Diff System.Private.CoreLib.dll.");
+                    syntax.DefineOption("f|frameworks", ref _frameworks, "Diff frameworks.");
+                    syntax.DefineOption("benchmarks", ref _benchmarks, "Diff core benchmarks. Must pass --test_root.");
+                    syntax.DefineOption("tests", ref _tests, "Diff all tests. Must pass --test_root.");
+                    syntax.DefineOption("gcinfo", ref _gcinfo, "Add GC info to the disasm output.");
+                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("core_root", ref _platformPath, "Path to test CORE_ROOT.");
-                    syntax.DefineOption("test_root", ref _testPath, "Path to test tree.");
+                    syntax.DefineOption("test_root", ref _testPath, "Path to test tree. Use with --benchmarks or --tests.");
+                    syntax.DefineOption("base_root", ref _baseRoot, "Path to root of base dotnet/coreclr repo.");
+                    syntax.DefineOption("diff_root", ref _diffRoot, "Path to root of diff dotnet/coreclr repo.");
+                    syntax.DefineOption("arch", ref _arch, "Architecture to diff (x86, x64).");
+                    syntax.DefineOption("build", ref _build, "Build flavor to diff (checked, debug).");
 
                     // List command section.
-                    syntax.DefineCommand("list", ref _command, Commands.List, 
-                        "List defaults and available tools config.json.");
-                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output");
+                    syntax.DefineCommand("list", ref _command, Commands.List,
+                        "List defaults and available tools in " + s_configFileName + ".");
+                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
 
                     // Install command section.
-                    syntax.DefineCommand("install", ref _command, Commands.Install, "Install tool in config.");
+                    syntax.DefineCommand("install", ref _command, Commands.Install, "Install tool in " + s_configFileName + ".");
                     syntax.DefineOption("j|job", ref _jobName, "Name of the job.");
                     syntax.DefineOption("n|number", ref _number, "Job number.");
-                    syntax.DefineOption("l|last_successful", ref _lastSuccessful, "Last successful build.");
                     syntax.DefineOption("b|branch", ref _branchName, "Name of branch.");
-                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output");
-
+                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                 });
 
-
-                // Run validation code on parsed input to ensure we have a sensible scenario.
-
                 SetRID();
+
+                SetDefaults();
 
                 Validate();
 
                 ExpandToolTags();
 
-                DeriveOutputTag();
+                if (_command == Commands.Diff)
+                {
+                    // Do additional initialization relevant for just the "diff" command.
 
-                // Now that output path and tag are guaranteed to be set, update
-                // the output path to included the tag.
-                _outputPath = Path.Combine(_outputPath, _tag);
+                    DeriveOutputTag();
+
+                    // Now that output path and tag are guaranteed to be set, update
+                    // the output path to included the tag.
+                    _outputPath = Path.Combine(_outputPath, _tag);
+                }
             }
 
             private void SetRID()
@@ -133,6 +157,7 @@ namespace ManagedCodeGen
                 if (result.ExitCode != 0)
                 {
                     Console.Error.WriteLine("dotnet --info returned non-zero");
+                    Environment.Exit(-1);
                 }
 
                 var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
@@ -159,23 +184,238 @@ namespace ManagedCodeGen
                 switch (_platformName)
                 {
                     case "Windows":
-                    case "Linux" :
-                    {
-                        _moniker = _platformName;
-                    }
-                    break;
+                    case "Linux":
+                        {
+                            _moniker = _platformName;
+                        }
+                        break;
                     case "Darwin":
-                    {
-                        _moniker = "OSX";
-                    }
-                    break;
+                        {
+                            _moniker = "OSX";
+                        }
+                        break;
                     default:
-                    {
-                        Console.WriteLine("No platform mapping!");
-                        _moniker = "bogus";
-                    }
-                    break;
+                        {
+                            Console.WriteLine("No platform mapping!");
+                            _moniker = "bogus";
+                        }
+                        break;
                 }
+            }
+
+            private string GetBuildOS()
+            {
+                switch (_platformName)
+                {
+                    case "Windows":
+                        return "Windows_NT";
+                    case "Linux":
+                        return "Linux";
+                    case "Darwin":
+                        return "OSX";
+                    default:
+                        Console.Error.WriteLine("No platform mapping!");
+                        return null;
+                }
+            }
+
+            private void SetDefaults()
+            {
+                // If --diff_root wasn't specified, see if we can figure it out from the current directory
+                // using git. NOTE: we shouldn't do this unless it will be used, that is, if there are some
+                // arguments that are currently unspecified and need this to compute their default.
+                if (_diffRoot == null)
+                {
+                    _diffRoot = GetRepoRoot();
+                }
+
+                if ((_outputPath == null) && (_diffRoot != null))
+                {
+                    _outputPath = Path.Combine(_diffRoot, s_defaultDiffDirectoryName);
+                    PathUtility.EnsureDirectoryExists(_outputPath);
+
+                    Console.WriteLine("Using --output={0}", _outputPath);
+                }
+
+                bool needTestTree = Benchmarks || DoTestTree;
+
+                if ((_platformPath == null) || (_basePath == null) || (_diffPath == null) || ((_testPath == null) && needTestTree))
+                {
+                    // Try all combinations of build and architecture to find one that has both a Core_Root
+                    // and, if necessary, base and diff builds and tests.
+                    //
+                    // If the user already specified one of --core_root, --base, or --diff, we leave
+                    // that alone, and only try to fill in the remaining ones with an appropriate
+                    // default.
+                    //
+                    // E.g.:
+                    //    test_root: c:\gh\coreclr\bin\tests\Windows_NT.x64.checked
+                    //    Core_Root: c:\gh\coreclr\bin\tests\Windows_NT.x64.checked\Tests\Core_Root
+                    //    base/diff: c:\gh\coreclr\bin\Product\Windows_NT.x64.checked
+
+                    List<string> archList;
+                    if (_arch == null)
+                    {
+                        archList = new List<string> { "x64", "x86" };
+                    }
+                    else
+                    {
+                        archList = new List<string> { _arch };
+                    }
+
+                    List<string> buildList;
+                    if (_build == null)
+                    {
+                        buildList = new List<string> { "checked", "debug" };
+                    }
+                    else
+                    {
+                        buildList = new List<string> { _build };
+                    }
+
+                    bool found = false;
+                    foreach (var build in buildList)
+                    {
+                        foreach (var arch in archList)
+                        {
+                            var buildDirName = GetBuildOS() + "." + arch + "." + build;
+                            string tryPlatformPath = null, tryBasePath = null, tryDiffPath = null, tryTestPath = null;
+
+                            if ((_platformPath == null) && (_diffRoot != null))
+                            {
+                                tryPlatformPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName, "Tests", "Core_Root");
+                                if (!Directory.Exists(tryPlatformPath))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            if ((_basePath == null) && (_baseRoot != null))
+                            {
+                                tryBasePath = Path.Combine(_baseRoot, "bin", "Product", buildDirName);
+                                if (!Directory.Exists(tryBasePath))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            if ((_diffPath == null) && (_diffRoot != null))
+                            {
+                                tryDiffPath = Path.Combine(_diffRoot, "bin", "Product", buildDirName);
+                                if (!Directory.Exists(tryDiffPath))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            if ((_testPath == null) && needTestTree && (_diffRoot != null))
+                            {
+                                tryTestPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName);
+                                if (!Directory.Exists(tryTestPath))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            // If we made it here, we've filled in all the defaults we needed to fill in.
+                            // Thus, we found an architecture/build combination that has an appropriate
+                            // Core_Root path (in the "diff" tree), Product builds in both the base
+                            // and diff trees, and test_root.
+
+                            _arch = arch;
+                            _build = build;
+                            if (tryPlatformPath != null)
+                            {
+                                _platformPath = tryPlatformPath;
+                                Console.WriteLine("Using --core_root={0}", _platformPath);
+                            }
+                            if (tryBasePath != null)
+                            {
+                                _basePath = tryBasePath;
+                                Console.WriteLine("Using --base={0}", _basePath);
+                            }
+                            if (tryDiffPath != null)
+                            {
+                                _diffPath = tryDiffPath;
+                                Console.WriteLine("Using --diff={0}", _diffPath);
+                            }
+                            if (tryTestPath != null)
+                            {
+                                _testPath = tryTestPath;
+                                Console.WriteLine("Using --test_root={0}", _testPath);
+                            }
+                            found = true;
+                            break;
+                        }
+
+                        if (found)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                if (Verbose)
+                {
+                    Console.WriteLine("After setting defaults:");
+                    Console.WriteLine("--base_root: {0}", _baseRoot);
+                    Console.WriteLine("--diff_root: {0}", _diffRoot);
+                    Console.WriteLine("--core_root: {0}", _platformPath);
+                    Console.WriteLine("--arch: {0}", _arch);
+                    Console.WriteLine("--build: {0}", _build);
+                    Console.WriteLine("--output: {0}", _outputPath);
+                    Console.WriteLine("--base: {0}", _basePath);
+                    Console.WriteLine("--diff: {0}", _diffPath);
+                    Console.WriteLine("--test_root: {0}", _testPath);
+                }
+            }
+
+            private string GetRepoRoot()
+            {
+                // git rev-parse --show-toplevel
+                List<string> commandArgs = new List<string> { "rev-parse", "--show-toplevel" };
+                CommandResult result = TryCommand("git", commandArgs, true);
+                if (result.ExitCode != 0)
+                {
+                    if (Verbose)
+                    {
+                        Console.Error.WriteLine("'git rev-parse --show-toplevel' returned non-zero ({0})", result.ExitCode);
+                    }
+                    return null;
+                }
+
+                var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+                var git_root = lines[0];
+                var repo_root = git_root.Replace('/', Path.DirectorySeparatorChar);
+
+                // Is it actually the dotnet/coreclr repo?
+                commandArgs = new List<string> { "remote", "-v" };
+                result = TryCommand("git", commandArgs, true);
+                if (result.ExitCode != 0)
+                {
+                    if (Verbose)
+                    {
+                        Console.Error.WriteLine("'git remote -v' returned non-zero ({0})", result.ExitCode);
+                    }
+                    return null;
+                }
+
+                bool isCoreClr = result.StdOut.Contains("/coreclr");
+                if (!isCoreClr)
+                {
+                    if (Verbose)
+                    {
+                        Console.Error.WriteLine("Doesn't appear to be the dotnet/coreclr repo:");
+                        Console.Error.WriteLine(result.StdOut);
+                    }
+                    return null;
+                }
+
+                if (Verbose)
+                {
+                    Console.WriteLine("Repo root: " + repo_root);
+                }
+                return repo_root;
             }
 
             private void DeriveOutputTag()
@@ -211,7 +451,7 @@ namespace ManagedCodeGen
                     return;
                 }
 
-                var tools = _jObj["asmdiff"]["tools"];
+                var tools = _jObj[s_configFileRootKey]["tools"];
 
                 foreach (var tool in tools)
                 {
@@ -234,93 +474,142 @@ namespace ManagedCodeGen
 
             private void Validate()
             {
-                switch(_command)
+                _validationError = false;
+
+                switch (_command)
                 {
                     case Commands.Diff:
-                    {
                         ValidateDiff();
-                    }
-                    break;
+                        break;
                     case Commands.Install:
-                    {
                         ValidateInstall();
-                    }
-                    break;
+                        break;
                     case Commands.List:
-                    break;
+                        ValidateList();
+                        break;
                 }
+
+                if (_validationError)
+                {
+                    DisplayUsageMessage();
+                    Environment.Exit(-1);
+                }
+            }
+
+            private void DisplayUsageMessage()
+            {
+                Console.Error.WriteLine("");
+                Console.Error.Write(_syntaxResult.GetHelpText());
+            }
+
+            private void DisplayErrorMessage(string error)
+            {
+                Console.Error.WriteLine("error: {0}", error);
+                _validationError = true;
             }
             
             private void ValidateDiff()
             {
                 if (_platformPath == null)
                 {
-                    _syntaxResult.ReportError("Specifiy --core_root <path>");
+                    DisplayErrorMessage("Specify --core_root <path>");
                 }
 
-                if ((_corlibOnly == false) &&
-                    (_frameworksOnly == false) && (_testPath == null))
+                if (_corelib && _frameworks)
                 {
-                    _syntaxResult.ReportError("Specify --test_root <path>");
+                    DisplayErrorMessage("Specify only one of --corelib or --frameworks");
+                }
+
+                if (_benchmarks && _tests)
+                {
+                    DisplayErrorMessage("Specify only one of --benchmarks or --tests");
+                }
+
+                if (_benchmarks && (_testPath == null))
+                {
+                    DisplayErrorMessage("--benchmarks requires specifying --test_root as well");
+                }
+
+                if (_tests && (_testPath == null))
+                {
+                    DisplayErrorMessage("--tests requires specifying --test_root as well");
+                }
+
+                if (!_corelib && !_frameworks && !_benchmarks && !_tests)
+                {
+                    // Setting --corelib as the default
+                    _corelib = true;
                 }
 
                 if (_outputPath == null)
                 {
-                    _syntaxResult.ReportError("Specify --output <path>");
+                    DisplayErrorMessage("Specify --output <path>");
                 }
-
-                if (!Directory.Exists(_outputPath))
+                else if (!Directory.Exists(_outputPath))
                 {
-                    _syntaxResult.ReportError("Can't find --output path.");
+                    DisplayErrorMessage("Can't find --output path.");
                 }
 
                 if ((_basePath == null) && (_diffPath == null))
                 {
-                    _syntaxResult.ReportError("--base <path> or --diff <path> or both must be specified.");
+                    DisplayErrorMessage("Specify either --base <path> or --diff <path> or both.");
                 }
 
                 if (_basePath != null && !Directory.Exists(_basePath))
                 {
-                    _syntaxResult.ReportError("Can't find --base directory.");
+                    DisplayErrorMessage("Can't find --base directory.");
                 }
 
                 if (_diffPath != null && !Directory.Exists(_diffPath))
                 {
-                    _syntaxResult.ReportError("Can't find --diff directory.");
+                    DisplayErrorMessage("Can't find --diff directory.");
                 }
 
                 if (_crossgenExe != null && !File.Exists(_crossgenExe))
                 {
-                    _syntaxResult.ReportError("Can't find --crossgen executable.");
+                    DisplayErrorMessage("Can't find --crossgen executable.");
                 }
-
             }
+
             private void ValidateInstall()
             {
                 if (_jobName == null)
                 {
-                    _syntaxResult.ReportError("Specify --jobName <name>");
+                    DisplayErrorMessage("Specify --job <name>");
                 }
                 
-                if ((_number == null) && !_lastSuccessful)
+                if (_number == null)
                 {
-                    _syntaxResult.ReportError("Specify --number or --last_successful to identify build to install.");
+                    DisplayErrorMessage("Specify --number to identify build to install.");
+                }
+
+                if (!_asmdiffLoaded)
+                {
+                    DisplayErrorMessage("\"install\" command requires a valid " + s_configFileName + " file loaded from the directory specified by the JIT_UTILS_ROOT environment variable.");
+                }
+            }
+
+            private void ValidateList()
+            {
+                if (!_asmdiffLoaded)
+                {
+                    DisplayErrorMessage("\"list\" command requires a valid " + s_configFileName + " file loaded from the directory specified by the JIT_UTILS_ROOT environment variable.");
                 }
             }
 
             public string GetToolPath(string tool, out bool found)
             {
-                var token = _jObj["asmdiff"]["default"][tool];
+                var token = _jObj[s_configFileRootKey]["default"][tool];
 
                 if (token != null)
                 {
                     found = true;
 
-                    string tag = _jObj["asmdiff"]["default"][tool].Value<string>();
+                    string tag = token.Value<string>();
 
                     // Extract set value for tool and see if we can find it
                     // in the installed tools.
-                    var path = _jObj["asmdiff"]["tools"].Children()
+                    var path = _jObj[s_configFileRootKey]["tools"].Children()
                                         .Where(x => (string)x["tag"] == tag)
                                         .Select(x => (string)x["path"]);
                     // If the tag resolves to a tool return it, otherwise just return it 
@@ -334,7 +623,7 @@ namespace ManagedCodeGen
 
             public T ExtractDefault<T>(string name, out bool found)
             {
-                var token = _jObj["asmdiff"]["default"][name];
+                var token = _jObj[s_configFileRootKey]["default"][name];
 
                 if (token != null)
                 {
@@ -346,7 +635,7 @@ namespace ManagedCodeGen
                     }
                     catch (System.FormatException e)
                     {
-                        Console.Error.WriteLine("Bad format for default {0}.  See config.json", name, e);
+                        Console.Error.WriteLine("Bad format for default {0}.  See " + s_configFileName, name, e);
                     }
                 }
 
@@ -357,117 +646,140 @@ namespace ManagedCodeGen
             private void LoadFileConfig()
             {
                 _jitUtilsRoot = Environment.GetEnvironmentVariable("JIT_UTILS_ROOT");
-
-                if (_jitUtilsRoot != null)
+                if (_jitUtilsRoot == null)
                 {
-                    string path = Path.Combine(_jitUtilsRoot, "config.json");
-
-                    if (File.Exists(path))
-                    {
-                        string configJson = File.ReadAllText(path);
-
-                        _jObj = JObject.Parse(configJson);
-                        
-                        // Flag that the config.json is loaded.
-                        _asmdiffLoaded = true;
-
-                        // Check if there is any default config specified.
-                        if (_jObj["asmdiff"]["default"] != null)
-                        {
-                            bool found;
-
-                            // Find baseline tool if any.
-                            string basePath = GetToolPath("base", out found);
-                            if (found && !Directory.Exists(basePath))
-                            {
-                                Console.WriteLine("Default base path {0} not found! Investigate config file entry and retry.", basePath);
-                                Environment.Exit(-1);
-                            }
-
-                            // Find diff tool if any
-                            string diffPath = GetToolPath("diff", out found);
-                            if (found && !Directory.Exists(diffPath))
-                            {
-                                Console.WriteLine("Default diff path {0} not found! Investigate config file entry and retry.", diffPath);
-                                Environment.Exit(-1);
-                            }
-
-                            // Find crossgen tool if any
-                            string crossgenPath = GetToolPath("crossgen", out found);
-                            if (found && !Directory.Exists(crossgenPath))
-                            {
-                                Console.WriteLine("Default crossgen path {0} not found! Investigate config file entry and retry.", crossgenPath);
-                                Environment.Exit(-1);
-                            }
-
-                            // Set up output
-                            var outputPath = ExtractDefault<string>("output", out found);
-                            _outputPath = (found) ? outputPath : _outputPath;
-
-                            // Setup platform path (core_root).
-                            var platformPath = ExtractDefault<string>("core_root", out found);
-                            _platformPath = (found) ? platformPath : _platformPath;
-
-                            // Set up test path (test_root).
-                            var testPath = ExtractDefault<string>("test_root", out found);
-                            _testPath = (found) ? testPath : _testPath;
-
-                            // Set flag from default for analyze.
-                            var analyze = ExtractDefault<bool>("analyze", out found);
-                            _analyze = (found) ? analyze : _analyze;
-                            
-                            // Set flag from default for corlib only.
-                            var corlibOnly = ExtractDefault<bool>("corlibonly", out found);
-                            _corlibOnly = (found) ? corlibOnly : _corlibOnly;
-                            
-                            // Set flag from default for frameworks only.
-                            var frameworksOnly = ExtractDefault<bool>("frameworksonly", out found);
-                            _frameworksOnly = (found) ? frameworksOnly : _frameworksOnly;
-
-                            // Set flag from default for frameworks only.
-                            var benchmarksOnly = ExtractDefault<bool>("benchmarksonly", out found);
-                            _benchmarksOnly = (found) ? frameworksOnly : _benchmarksOnly;
-
-                            // Set flag from default for tag.
-                            var tag = ExtractDefault<string>("tag", out found);
-                            _tag = (found) ? tag : _tag;
-                            
-                            // Set flag from default for verbose.
-                            var verbose = ExtractDefault<bool>("verbose", out found);
-                            _verbose = (found) ? verbose : _verbose;
-                        }
-                    }
-                    else
-                    {
-                        Console.Error.WriteLine("Can't find config.json on {0}", _jitUtilsRoot);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Environment variable JIT_UTILS_ROOT not found - no configuration loaded.");
                     _noJitUtilsRoot = true;
+                    return;
                 }
-            }
 
-            void PrintTools()
-            {
-                var tools = _jObj["asmdiff"]["tools"];
-
-                if (tools != null)
+                string path = Path.Combine(_jitUtilsRoot, s_configFileName);
+                if (!File.Exists(path))
                 {
-                    Console.WriteLine("Installed tools:");
-                    foreach (var tool in tools.Children())
+                    Console.Error.WriteLine("Can't find {0}", path);
+                    return;
+                }
+
+                string configJson = File.ReadAllText(path);
+
+                try
+                {
+                    _jObj = JObject.Parse(configJson);
+                }
+                catch (Newtonsoft.Json.JsonReaderException ex)
+                {
+                    Console.Error.WriteLine("Error reading config file: {0}", ex.Message);
+                    Console.Error.WriteLine("Continuing; ignoring config file.");
+                    return;
+                }
+                
+                // Flag that the config file is loaded.
+                _asmdiffLoaded = true;
+
+                // Check if there is any default config specified.
+                if ((_jObj[s_configFileRootKey] != null) && (_jObj[s_configFileRootKey]["default"] != null))
+                {
+                    bool found;
+
+                    // Find baseline tool if any.
+                    var basePath = GetToolPath("base", out found);
+                    if (found)
                     {
-                        if (_verbose) 
+                        if (!Directory.Exists(basePath))
                         {
-                            Console.WriteLine("\t{0}: {1}", (string)tool["tag"], (string)tool["path"]);
+                            Console.WriteLine("Default base path {0} not found! Investigate config file entry.", basePath);
                         }
                         else
                         {
-                            Console.WriteLine("\t{0}", (string)tool["tag"]);  
-                        }   
-                    }                
+                            _basePath = basePath;
+                        }
+                    }
+
+                    // Find diff tool if any
+                    var diffPath = GetToolPath("diff", out found);
+                    if (found)
+                    {
+                        if (!Directory.Exists(diffPath))
+                        {
+                            Console.WriteLine("Default diff path {0} not found! Investigate config file entry.", diffPath);
+                        }
+                        else
+                        {
+                            _diffPath = diffPath;
+                        }
+                    }
+
+                    // Find crossgen tool if any
+                    var crossgenExe = GetToolPath("crossgen", out found);
+                    if (found)
+                    {
+                        if (!File.Exists(_crossgenExe))
+                        {
+                            Console.WriteLine("Default crossgen path {0} not found! Investigate config file entry.", crossgenExe);
+                        }
+                        else
+                        {
+                            _crossgenExe = crossgenExe;
+                        }
+                    }
+
+                    // Set up output
+                    var outputPath = ExtractDefault<string>("output", out found);
+                    _outputPath = (found) ? outputPath : _outputPath;
+
+                    // Setup platform path (core_root).
+                    var platformPath = ExtractDefault<string>("core_root", out found);
+                    _platformPath = (found) ? platformPath : _platformPath;
+
+                    // Set up test path (test_root).
+                    var testPath = ExtractDefault<string>("test_root", out found);
+                    _testPath = (found) ? testPath : _testPath;
+
+                    var baseRoot = ExtractDefault<string>("base_root", out found);
+                    _baseRoot = (found) ? baseRoot : _baseRoot;
+
+                    var diffRoot = ExtractDefault<string>("diff_root", out found);
+                    _diffRoot = (found) ? diffRoot : _diffRoot;
+
+                    var arch = ExtractDefault<string>("arch", out found);
+                    _arch = (found) ? arch : _arch;
+
+                    var build = ExtractDefault<string>("build", out found);
+                    _build = (found) ? build : _build;
+
+                    // Set flag from default for analyze.
+                    var noanalyze = ExtractDefault<bool>("noanalyze", out found);
+                    _noanalyze = (found) ? noanalyze : _noanalyze;
+                    
+                    // Set flag from default for corelib.
+                    var corelib = ExtractDefault<bool>("corelib", out found);
+                    _corelib = (found) ? corelib : _corelib;
+                    
+                    // Set flag from default for frameworks.
+                    var frameworks = ExtractDefault<bool>("frameworks", out found);
+                    _frameworks = (found) ? frameworks : _frameworks;
+
+                    // Set flag from default for benchmarks.
+                    var benchmarks = ExtractDefault<bool>("benchmarks", out found);
+                    _benchmarks = (found) ? benchmarks : _benchmarks;
+
+                    // Set flag from default for tests.
+                    var tests = ExtractDefault<bool>("tests", out found);
+                    _tests = (found) ? tests : _tests;
+
+                    // Set flag from default for gcinfo.
+                    var gcinfo = ExtractDefault<bool>("gcinfo", out found);
+                    _gcinfo = (found) ? gcinfo : _gcinfo;
+
+                    // Set flag from default for tag.
+                    var tag = ExtractDefault<string>("tag", out found);
+                    _tag = (found) ? tag : _tag;
+                    
+                    // Set flag from default for verbose.
+                    var verbose = ExtractDefault<bool>("verbose", out found);
+                    _verbose = (found) ? verbose : _verbose;
                 }
+
+                Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
             }
 
             void PrintDefault<T>(string parameter) 
@@ -482,38 +794,57 @@ namespace ManagedCodeGen
 
             public int List()
             {
-                if (!_asmdiffLoaded)
-                {
-                    Console.Error.WriteLine("Error: config.json isn't loaded.");
-                    return -1;
-                }
-                
-                Console.WriteLine();
-                
+                var asmdiffNode = _jObj[s_configFileRootKey];
+                if (asmdiffNode == null)
+                    return 0;
+
                 // Check if there is any default config specified.
-                if (_jObj["asmdiff"]["default"] != null)
+                if (asmdiffNode["default"] != null)
                 {
                     Console.WriteLine("Defaults:");
 
                     PrintDefault<string>("base");
                     PrintDefault<string>("diff");
+                    PrintDefault<string>("crossgen");
                     PrintDefault<string>("output");
                     PrintDefault<string>("core_root");
                     PrintDefault<string>("test_root");
+                    PrintDefault<string>("base_root");
+                    PrintDefault<string>("diff_root");
+                    PrintDefault<string>("arch");
+                    PrintDefault<string>("build");
                     PrintDefault<string>("analyze");
-                    PrintDefault<string>("corlibonly");
-                    PrintDefault<string>("frameworksonly");
-                    PrintDefault<string>("benchmarksonly");
+                    PrintDefault<string>("corelib");
+                    PrintDefault<string>("frameworks");
+                    PrintDefault<string>("benchmarks");
+                    PrintDefault<string>("tests");
                     PrintDefault<string>("tag");
                     PrintDefault<string>("verbose");
                     
                     Console.WriteLine();
                 }
 
-                // Print list of sthe installed tools.
-                PrintTools();
+                // Print list of the installed tools.
 
-                Console.WriteLine();
+                var tools = asmdiffNode["tools"];
+                if (tools != null)
+                {
+                    Console.WriteLine("Installed tools:");
+
+                    foreach (var tool in tools.Children())
+                    {
+                        if (_verbose)
+                        {
+                            Console.WriteLine("\t{0}: {1}", (string)tool["tag"], (string)tool["path"]);
+                        }
+                        else
+                        {
+                            Console.WriteLine("\t{0}", (string)tool["tag"]);
+                        }
+                    }
+
+                    Console.WriteLine();
+                }
 
                 return 0;
             }
@@ -530,17 +861,15 @@ namespace ManagedCodeGen
             public bool Sequential { get { return _sequential; } }
             public string Tag { get { return _tag; } }
             public bool HasTag { get { return (_tag != null); } }
-            public bool CoreLibOnly { get { return _corlibOnly; } }
-            public bool FrameworksOnly { get { return _frameworksOnly; } }
-            public bool BenchmarksOnly { get { return _benchmarksOnly; } }
-            public bool DoMSCorelib { get { return !_benchmarksOnly; } }
-            public bool DoFrameworks { get { return !_corlibOnly && !_benchmarksOnly; } }
-            public bool DoTestTree { get { return (!_corlibOnly && !_frameworksOnly); } }
+            public bool CoreLib { get { return _corelib; } }
+            public bool DoFrameworks { get { return _frameworks; } }
+            public bool Benchmarks { get { return _benchmarks; } }
+            public bool DoTestTree { get { return _tests; } }
+            public bool GenerateGCInfo { get { return _gcinfo; } }
             public bool Verbose { get { return _verbose; } }
-            public bool DoAnalyze { get { return _analyze; } }
+            public bool DoAnalyze { get { return !_noanalyze; } }
             public Commands DoCommand { get { return _command; } }
             public string JobName { get { return _jobName; } }
-            public bool DoLastSucessful { get { return _lastSuccessful; } }
             public string JitUtilsRoot { get { return _jitUtilsRoot; } }
             public bool HasJitUtilsRoot { get { return (_jitUtilsRoot != null); } }
             public string RID { get { return _rid; } }
@@ -555,6 +884,8 @@ namespace ManagedCodeGen
             "JIT"
         };
 
+        // This represents the path components (without platform-specific separator characters)
+        // from the root of the test tree to the benchmark directory.
         private static string[] s_benchmarksPath =
         {
             "JIT",
@@ -569,6 +900,13 @@ namespace ManagedCodeGen
             "BenchmarksGame"
         };
 
+        private static string[] s_CoreLibAssembly =
+        {
+            "System.Private.CoreLib.dll"
+        };
+
+        // List of framework assemblies we will run diffs on.
+        // Note: System.Private.CoreLib.dll should be first in this list.
         private static string[] s_frameworkAssemblies =
         {
             "System.Private.CoreLib.dll",
@@ -666,7 +1004,7 @@ namespace ManagedCodeGen
                     break;
                 case Commands.List:
                     {
-                        // List command: list loaded config.json in config object.
+                        // List command: list loaded configuration
                         ret = config.List();
                     }
                     break;
@@ -749,19 +1087,25 @@ namespace ManagedCodeGen
         }
 
         public static int InstallCommand(Config config)
-        {   
-            var asmDiffPath = Path.Combine(config.JitUtilsRoot, "config.json");
-            string configJson = File.ReadAllText(asmDiffPath);
+        {
+            var configFilePath = Path.Combine(config.JitUtilsRoot, s_configFileName);
+            string configJson = File.ReadAllText(configFilePath);
             string tag = String.Format("{0}-{1}", config.JobName, config.Number);
             string toolPath = Path.Combine(config.JitUtilsRoot, "tools", tag);
             var jObj = JObject.Parse(configJson);
-            var tools = (JArray)jObj["asmdiff"]["tools"];
-            int ret = 0;
+
+            if ((jObj[s_configFileRootKey] == null) || (jObj[s_configFileRootKey]["tools"] == null))
+            {
+                Console.Error.WriteLine("\"install\" doesn't know how to add the \"" + s_configFileRootKey + "\":\"tool\" section to the config file");
+                return -1;
+            }
+
+            var tools = (JArray)jObj[s_configFileRootKey]["tools"];
 
             // Early out if the tool is already installed.
             if (tools.Where(x => (string)x["tag"] == tag).Any())
             {
-                Console.Error.WriteLine("{0} is already installed in the config.json. Remove before re-install.", tag);
+                Console.Error.WriteLine("{0} is already installed in the " + s_configFileName + ". Remove before re-install.", tag);
                 return -1;
             }
 
@@ -770,7 +1114,6 @@ namespace ManagedCodeGen
 
             cijobsArgs.Add("copy");
 
-            // Set up job name
             cijobsArgs.Add("--job");
             cijobsArgs.Add(config.JobName);
             
@@ -778,19 +1121,10 @@ namespace ManagedCodeGen
             {
                 cijobsArgs.Add("--branch");
                 cijobsArgs.Add(config.BranchName);
-                
             }
             
-            if (config.DoLastSucessful)
-            {
-                cijobsArgs.Add("--last_successful");
-            }
-            else
-            {
-                // Set up job number
-                cijobsArgs.Add("--number");
-                cijobsArgs.Add(config.Number);
-            }
+            cijobsArgs.Add("--number");
+            cijobsArgs.Add(config.Number);
             
             cijobsArgs.Add("--unzip");
             
@@ -799,7 +1133,7 @@ namespace ManagedCodeGen
 
             if (config.Verbose)
             {
-                Console.WriteLine("ci command: {0} {1}", "cijobs", String.Join(" ", cijobsArgs));
+                Console.WriteLine("Command: {0} {1}", "cijobs", String.Join(" ", cijobsArgs));
             }
             
             CommandResult result = TryCommand("cijobs", cijobsArgs);
@@ -813,6 +1147,12 @@ namespace ManagedCodeGen
             JObject newTool = new JObject();
             newTool.Add("tag", tag);
             string platformPath = Path.Combine(toolPath, "Product");
+            if (!Directory.Exists(platformPath))
+            {
+                Console.Error.WriteLine("cijobs didn't create or populate directory {0}", platformPath);
+                return 1;
+            }
+
             foreach (var dir in Directory.EnumerateDirectories(platformPath))
             {
                 if (Path.GetFileName(dir).ToUpper().Contains(config.Moniker.ToUpper()))
@@ -824,7 +1164,7 @@ namespace ManagedCodeGen
             }
 
             // Overwrite current config.json with new data.
-            using (var file = File.CreateText(asmDiffPath))
+            using (var file = File.CreateText(configFilePath))
             {
                 using (JsonTextWriter writer = new JsonTextWriter(file))
                 {
@@ -832,7 +1172,8 @@ namespace ManagedCodeGen
                     jObj.WriteTo(writer);
                 }
             }
-            return ret;
+
+            return 0;
         }
 
         public class DiffTool
@@ -872,16 +1213,14 @@ namespace ManagedCodeGen
                 return dasmFailures;
             }
 
-            private void StartDasmWorkSingle(List<string> args, string assemblyPath)
+            private void StartDasmWork(List<string> args)
             {
-                List<string> allArgs = new List<string>(args);
-                allArgs.Add(assemblyPath);
-                Task<int> task = Task<int>.Factory.StartNew(() => RunDasmTool(new DasmWorkItem(allArgs)));
+                Task<int> task = Task<int>.Factory.StartNew(() => RunDasmTool(new DasmWorkItem(args)));
                 DasmWorkTasks.Add(task);
 
                 if (m_config.Verbose)
                 {
-                    string command = String.Join(" ", allArgs);
+                    string command = String.Join(" ", args);
                     Console.WriteLine("Started dasm command \"{0}\"", command);
                 }
 
@@ -891,27 +1230,38 @@ namespace ManagedCodeGen
                 }
             }
 
-            // Returns a count of the number of failures.
-            private void StartDasmWork(List<string> baseArgs, List<string> diffArgs, List<string> assemblyPaths)
+            private void StartDasmWorkOne(List<string> commandArgs, string tagBaseDiff, string clrPath, AssemblyInfo assemblyInfo)
             {
-                foreach (var assemblyPath in assemblyPaths)
+                List<string> args = ConstructArgs(commandArgs, clrPath);
+
+                string outputPath = Path.Combine(m_config.OutputPath, tagBaseDiff, assemblyInfo.OutputPath);
+                args.Add("--output");
+                args.Add(outputPath);
+
+                args.Add(assemblyInfo.Path);
+
+                StartDasmWork(args);
+            }
+
+            // Returns a count of the number of failures.
+            private void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
+            {
+                foreach (var assemblyInfo in assemblyWorkList)
                 {
-                    if (baseArgs != null)
+                    if (m_config.HasBasePath)
                     {
-                        StartDasmWorkSingle(baseArgs, assemblyPath);
+                        StartDasmWorkOne(commandArgs, "base", m_config.BasePath, assemblyInfo);
                     }
-                    if (diffArgs != null)
+                    if (m_config.HasDiffPath)
                     {
-                        StartDasmWorkSingle(diffArgs, assemblyPath);
+                        StartDasmWorkOne(commandArgs, "diff", m_config.DiffPath, assemblyInfo);
                     }
                 }
             }
 
-            private List<string> ConstructArgs(List<string> commandArgs, List<string> assemblyPaths, string tag, string clrPath)
+            private List<string> ConstructArgs(List<string> commandArgs, string clrPath)
             {
                 List<string> dasmArgs = commandArgs.ToList();
-                dasmArgs.Add("--tag");
-                dasmArgs.Add(tag);
                 dasmArgs.Add("--crossgen");
                 if (m_config.HasCrossgenExe)
                 {
@@ -933,7 +1283,7 @@ namespace ManagedCodeGen
                     if (crossgenPath == null)
                     {
                         Console.Error.WriteLine("crossgen not found in " + clrPath);
-                        return  null;
+                        return null;
                     }
 
                     dasmArgs.Add(crossgenPath);
@@ -945,21 +1295,9 @@ namespace ManagedCodeGen
             // Returns:
             // 0 on success,
             // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
-            private int RunDasmTool(List<string> commandArgs, List<string> assemblyPaths)
+            private int RunDasmTool(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
-                List<string> baseArgs = null, diffArgs = null;
-
-                if (m_config.HasBasePath)
-                {
-                    baseArgs = ConstructArgs(commandArgs, assemblyPaths, "base", m_config.BasePath);
-                }
-
-                if (m_config.HasDiffPath)
-                {
-                    diffArgs = ConstructArgs(commandArgs, assemblyPaths, "diff", m_config.DiffPath);
-                }
-
-                StartDasmWork(baseArgs, diffArgs, assemblyPaths);
+                StartDasmWorkBaseDiff(commandArgs, assemblyWorkList);
 
                 int dasmFailures = 0;
 
@@ -990,51 +1328,41 @@ namespace ManagedCodeGen
             // Returns 0 on success, 1 on failure.
             public static int DiffCommand(Config config)
             {
-                string diffString;
+                string diffString = "";
 
-                if (config.BenchmarksOnly)
+                if (config.CoreLib)
                 {
-                    diffString = "benchstones, benchmarks game";
+                    diffString += "System.Private.CoreLib.dll";
                 }
-                else
+                else if (config.DoFrameworks)
                 {
-                    diffString = "System.Private.CoreLib.dll";
-
-                    if (config.DoFrameworks)
-                    {
-                        diffString += ", framework assemblies";
-                    }
-
-                    if (config.DoTestTree)
-                    {
-                        diffString += ", " + config.TestRoot;
-                    }
+                    diffString += "System.Private.CoreLib.dll, framework assemblies";
                 }
 
-                Console.WriteLine("Beginning diff of {0}!", diffString);
+                if (config.Benchmarks)
+                {
+                    if (!String.IsNullOrEmpty(diffString)) diffString += ", ";
+                    diffString += "benchstones and benchmarks game in " + config.TestRoot;
+                }
+                else if (config.DoTestTree)
+                {
+                    if (!String.IsNullOrEmpty(diffString)) diffString += ", ";
+                    diffString += "assemblies in " + config.TestRoot;
+                }
 
-                // Add each framework assembly to commandArgs
+                Console.WriteLine("Beginning diff of {0}", diffString);
 
                 // Create subjob that runs jit-dasm, which should be in path, with the 
                 // relevent coreclr assemblies/paths.
 
-                string frameworkArgs = String.Join(" ", s_frameworkAssemblies);
-                string testArgs = String.Join(" ", s_testDirectories);
-
                 List<string> commandArgs = new List<string>();
 
-                // Set up CoreRoot
                 commandArgs.Add("--platform");
                 commandArgs.Add(config.CoreRoot);
 
-                commandArgs.Add("--output");
-                commandArgs.Add(config.OutputPath);
-
-                List<string> assemblyArgs = new List<string>();
-
-                if (config.DoTestTree)
+                if (config.GenerateGCInfo)
                 {
-                    commandArgs.Add("--recursive");
+                    commandArgs.Add("--gcinfo");
                 }
 
                 if (config.Verbose)
@@ -1042,59 +1370,10 @@ namespace ManagedCodeGen
                     commandArgs.Add("--verbose");
                 }
 
-                if (config.CoreLibOnly)
-                {
-                    string coreRoot = config.CoreRoot;
-                    string fullPathAssembly = Path.Combine(coreRoot, "System.Private.CoreLib.dll");
-                    assemblyArgs.Add(fullPathAssembly);
-                }
-                else
-                {
-                    if (config.DoFrameworks)
-                    {
-                        // Set up full framework paths
-                        foreach (var assembly in s_frameworkAssemblies)
-                        {
-                            string coreRoot = config.CoreRoot;
-                            string fullPathAssembly = Path.Combine(coreRoot, assembly);
-
-                            if (!File.Exists(fullPathAssembly))
-                            {
-                                Console.Error.WriteLine("can't find framework assembly {0}", fullPathAssembly);
-                                continue;
-                            }
-
-                            assemblyArgs.Add(fullPathAssembly);
-                        }
-                    }
-
-                    if (config.TestRoot != null)
-                    {
-                        string basepath = config.TestRoot;
-                        if (config.BenchmarksOnly)
-                        {
-                            foreach (var dir in s_benchmarksPath)
-                            {
-                                basepath = Path.Combine(basepath, dir);
-                            }
-                        }
-                        foreach (var dir in config.BenchmarksOnly ? s_benchmarkDirectories : s_testDirectories)
-                        {
-                            string fullPathDir = Path.Combine(basepath, dir);
-
-                            if (!Directory.Exists(fullPathDir))
-                            {
-                                Console.Error.WriteLine("can't find test directory {0}", fullPathDir);
-                                continue;
-                            }
-
-                            assemblyArgs.Add(fullPathDir);
-                        }
-                    }
-                }
+                List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
 
                 DiffTool diffTool = new DiffTool(config);
-                int dasmFailures = diffTool.RunDasmTool(commandArgs, assemblyArgs);
+                int dasmFailures = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
 
                 // Analyze completed run.
 
@@ -1128,6 +1407,142 @@ namespace ManagedCodeGen
                 {
                     return 0; // success result
                 }
+            }
+
+            public static List<AssemblyInfo> GenerateAssemblyWorklist(Config config)
+            {
+                List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
+
+                // CoreLib and the frameworks add specific files, not directories.
+                // These files will all be put in the same output directory. This
+                // works because they all have unique names, and live in the same
+                // source directory already.
+                if (config.CoreLib || config.DoFrameworks)
+                {
+                    foreach (var assembly in config.CoreLib ? s_CoreLibAssembly : s_frameworkAssemblies)
+                    {
+                        string fullPathAssembly = Path.Combine(config.CoreRoot, assembly);
+
+                        if (!File.Exists(fullPathAssembly))
+                        {
+                            Console.Error.WriteLine("Warning: can't find framework assembly {0}", fullPathAssembly);
+                            continue;
+                        }
+
+                        AssemblyInfo info = new AssemblyInfo
+                        {
+                            Path = fullPathAssembly,
+                            OutputPath = ""
+                        };
+
+                        assemblyInfoList.Add(info);
+                    }
+                }
+
+                // The tests are in a tree hierarchy of directories. We will output these to a tree
+                // structure matching their source tree structure, to avoid name conflicts.
+                if (config.Benchmarks || config.DoTestTree)
+                {
+                    string basepath = config.TestRoot;
+                    if (config.Benchmarks)
+                    {
+                        // Construct the benchmark root directory path.
+                        foreach (var dir in s_benchmarksPath)
+                        {
+                            basepath = Path.Combine(basepath, dir);
+                        }
+                    }
+                    foreach (var dir in config.Benchmarks ? s_benchmarkDirectories : s_testDirectories)
+                    {
+                        string fullPathDir = Path.Combine(basepath, dir);
+
+                        if (!Directory.Exists(fullPathDir))
+                        {
+                            Console.Error.WriteLine("Warning: can't find test directory {0}", fullPathDir);
+                            continue;
+                        }
+
+                        // For the directory case create a stack and recursively find any
+                        // assemblies for compilation.
+                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(basepath, fullPathDir, config);
+
+                        // Add info generated at this directory
+                        assemblyInfoList.AddRange(directoryAssemblyInfoList);
+                    }
+                }
+
+                return assemblyInfoList;
+            }
+
+            // Check to see if the passed filePath is to an assembly.
+            private static bool IsAssembly(string filePath)
+            {
+                try
+                {
+                    System.Reflection.AssemblyName diffAssembly =
+                        System.Runtime.Loader.AssemblyLoadContext.GetAssemblyName(filePath);
+                }
+                catch (System.IO.FileNotFoundException)
+                {
+                    // File not found - not an assembly
+                    // TODO - should we log this case?
+                    return false;
+                }
+                catch (System.BadImageFormatException)
+                {
+                    // Explictly not an assembly.
+                    return false;
+                }
+                catch (System.IO.FileLoadException)
+                {
+                    // This is an assembly but it just happens to be loaded.
+                    // (leave true in so as not to rely on fallthrough)
+                    return true;
+                }
+
+                return true;
+            }
+
+            // Recursively search for assemblies from a path given by `rootPath`.
+            // `basePath` specifies the root directory for the purpose of constructing a relative output path.
+            //      It must be a prefix of `rootPath`.
+            private static List<AssemblyInfo> IdentifyAssemblies(string basePath, string rootPath, Config config)
+            {
+                List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
+                string fullBasePath = Path.GetFullPath(basePath);
+                string fullRootPath = Path.GetFullPath(rootPath);
+
+                // Get files that could be assemblies, but discard currently ngen'd assemblies.
+                var subFiles = Directory.EnumerateFiles(fullRootPath, "*", SearchOption.AllDirectories)
+                    .Where(s => (s.EndsWith(".exe") || s.EndsWith(".dll")) && !s.Contains(".ni."));
+
+                foreach (var filePath in subFiles)
+                {
+                    if (config.Verbose)
+                    {
+                        Console.WriteLine("Scanning: {0}", filePath);
+                    }
+
+                    // skip if not an assembly
+                    if (!IsAssembly(filePath))
+                    {
+                        continue;
+                    }
+
+                    string directoryName = Path.GetDirectoryName(filePath);
+                    string fullDirectoryName = Path.GetFullPath(directoryName);
+                    string outputPath = fullDirectoryName.Substring(fullBasePath.Length).TrimStart(Path.DirectorySeparatorChar);
+
+                    AssemblyInfo info = new AssemblyInfo
+                    {
+                        Path = filePath,
+                        OutputPath = outputPath
+                    };
+
+                    assemblyInfoList.Add(info);
+                }
+
+                return assemblyInfoList;
             }
         }
     }

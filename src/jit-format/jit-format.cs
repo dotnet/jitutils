@@ -29,6 +29,9 @@ namespace ManagedCodeGen
         // Define options to be parsed 
         public class Config
         {
+            private static string s_configFileName = "config.json";
+            private static string s_configFileRootKey = "format";
+
             private ArgumentSyntax _syntaxResult;
             private string _arch = null;
             private string _os = null;
@@ -115,9 +118,57 @@ namespace ManagedCodeGen
                 }
             }
 
+            private string GetRepoRoot()
+            {
+                // git rev-parse --show-toplevel
+                List<string> commandArgs = new List<string> { "rev-parse", "--show-toplevel" };
+                CommandResult result = TryCommand("git", commandArgs, true);
+                if (result.ExitCode != 0)
+                {
+                    if (_verbose)
+                    {
+                        Console.Error.WriteLine("'git rev-parse --show-toplevel' returned non-zero ({0})", result.ExitCode);
+                    }
+                    return null;
+                }
+
+                var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+                var git_root = lines[0];
+                var repo_root = git_root.Replace('/', Path.DirectorySeparatorChar);
+
+                // Is it actually the dotnet/coreclr repo?
+                commandArgs = new List<string> { "remote", "-v" };
+                result = TryCommand("git", commandArgs, true);
+                if (result.ExitCode != 0)
+                {
+                    if (_verbose)
+                    {
+                        Console.Error.WriteLine("'git remote -v' returned non-zero ({0})", result.ExitCode);
+                    }
+                    return null;
+                }
+
+                bool isCoreClr = result.StdOut.Contains("/coreclr");
+                if (!isCoreClr)
+                {
+                    if (_verbose)
+                    {
+                        Console.Error.WriteLine("Doesn't appear to be the dotnet/coreclr repo:");
+                        Console.Error.WriteLine(result.StdOut);
+                    }
+                    return null;
+                }
+
+                if (_verbose)
+                {
+                    Console.WriteLine("Repo root: " + repo_root);
+                }
+                return repo_root;
+            }
+
             private void validate()
             {
-                if ((_arch == null))
+                if (_arch == null)
                 {
                     if (_verbose)
                     {
@@ -177,9 +228,22 @@ namespace ManagedCodeGen
 
                 if (_rootPath == null)
                 {
-                    _syntaxResult.ReportError("Specify --coreclr");
+                    if (_verbose)
+                    {
+                        Console.WriteLine("Discovering --coreclr.");
+                    }
+                    _rootPath = GetRepoRoot();
+                    if (_rootPath == null)
+                    {
+                        _syntaxResult.ReportError("Specify --coreclr");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Using --coreclr={0}", _rootPath);
+                    }
                 }
-                else if (!Directory.Exists(_rootPath))
+
+                if (!Directory.Exists(_rootPath))
                 {
                     // If _rootPath doesn't exist, it is an invalid path
                     _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
@@ -254,7 +318,7 @@ namespace ManagedCodeGen
 
                 if (_jitUtilsRoot != null)
                 {
-                    string path = Path.Combine(_jitUtilsRoot, "config.json");
+                    string path = Path.Combine(_jitUtilsRoot, s_configFileName);
 
                     if (File.Exists(path))
                     {
@@ -263,7 +327,7 @@ namespace ManagedCodeGen
                         _jObj = JObject.Parse(configJson);
                         
                         // Check if there is any default config specified.
-                        if (_jObj["format"]["default"] != null)
+                        if (_jObj[s_configFileRootKey]["default"] != null)
                         {
                             bool found;
 
@@ -303,19 +367,19 @@ namespace ManagedCodeGen
                             var fix = ExtractDefault<bool>("fix", out found);
                             _fix = (found) ? fix : _fix;
                         }
+
+                        Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
                     }
                     else
                     {
-                        Console.Error.WriteLine("Can't find config.json on {0}", _jitUtilsRoot);
+                        Console.Error.WriteLine("Can't find {0}", path);
                     }
-
-                    Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
                 }
             }
 
             public T ExtractDefault<T>(string name, out bool found)
             {
-                var token = _jObj["format"]["default"][name];
+                var token = _jObj[s_configFileRootKey]["default"][name];
 
                 if (token != null)
                 {
@@ -327,7 +391,7 @@ namespace ManagedCodeGen
                     }
                     catch (System.FormatException e)
                     {
-                        Console.Error.WriteLine("Bad format for default {0}.  See config.json", name, e);
+                        Console.Error.WriteLine("Bad format for default {0}.  See " + s_configFileName, name, e);
                     }
                 }
 

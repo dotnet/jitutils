@@ -39,7 +39,6 @@ namespace ManagedCodeGen
         private string _crossgenExe = null;
         private string _jitPath = null;
         private string _rootPath = null;
-        private string _tag = null;
         private string _fileName = null;
         private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
         private bool _wait = false;
@@ -56,7 +55,6 @@ namespace ManagedCodeGen
                 syntax.DefineOption("c|crossgen", ref _crossgenExe, "The crossgen compiler exe.");
                 syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
                 syntax.DefineOption("o|output", ref _rootPath, "The output path.");
-                syntax.DefineOption("t|tag", ref _tag, "Name of root in output directory.  Allows for many sets of output.");
                 syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
                 syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
@@ -76,16 +74,14 @@ namespace ManagedCodeGen
 
             // Run validation code on parsed input to ensure we have a sensible scenario.
 
-            validate();
+            Validate();
         }
 
         // Validate arguments
         //
-        // Pass a single tool as --crossgen. Optionally tag the result
-        // directory with a user supplied tag, and optionally specify
-        // a jit for crossgen to use.
+        // Pass a single tool as --crossgen. Optionally specify a jit for crossgen to use.
         //
-        private void validate()
+        private void Validate()
         {
             if (_crossgenExe == null)
             {
@@ -138,10 +134,8 @@ namespace ManagedCodeGen
         }
 
         public bool HasUserAssemblies { get { return AssemblyList.Count > 0; } }
-        public bool DoFileOutput { get { return (this.RootPath != null); } }
         public bool WaitForDebugger { get { return _wait; } }
         public bool UseJitPath { get { return (_jitPath != null); } }
-        public bool HasTag { get { return (_tag != null); } }
         public bool Recursive { get { return _recursive; } }
         public bool UseFileName { get { return (_fileName != null); } }
         public bool DumpGCInfo { get { return _dumpGCInfo; } }
@@ -150,7 +144,6 @@ namespace ManagedCodeGen
         public string JitPath { get { return _jitPath; } }
         public string RootPath { get { return _rootPath; } }
         public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
-        public string Tag { get { return _tag; } }
         public string FileName { get { return _fileName; } }
         public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
     }
@@ -188,22 +181,9 @@ namespace ManagedCodeGen
             
             // The disasm engine encapsulates a particular set of diffs.  An engine is
             // produced with a given code generator and assembly list, which then produces
-            // a set of disasm outputs
+            // a set of disasm outputs.
 
-            string taggedPath = null;
-            if (config.DoFileOutput)
-            {
-                if (config.HasTag)
-                {
-                    taggedPath = Path.Combine(config.RootPath, config.Tag);
-                }
-                else
-                {
-                    taggedPath = config.RootPath;
-                }
-            }
-            
-            DisasmEngine crossgenDisasm = new DisasmEngine(config.CrossgenExecutable, config, taggedPath, assemblyWorkList);
+            DisasmEngine crossgenDisasm = new DisasmEngine(config.CrossgenExecutable, config, config.RootPath, assemblyWorkList);
             crossgenDisasm.GenerateAsm();
             
             if (crossgenDisasm.ErrorCount > 0)
@@ -444,7 +424,7 @@ namespace ManagedCodeGen
                         commandArgs.Insert(1, _jitPath);
                     }
                     
-                    // Set platform assermbly path if it's defined.
+                    // Set platform assembly path if it's defined.
                     if (_platformPaths.Count > 0)
                     {
                         commandArgs.Insert(0, "/Platform_Assemblies_Paths");
