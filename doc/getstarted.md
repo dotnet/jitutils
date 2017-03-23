@@ -18,11 +18,6 @@ GitHub repo for directions on building.
   or just install a recent release following the links above.
 * git - The jit-analyze tool uses `git diff` to check for textual differences since this is
   consistent across platforms, and fast.
-* clang-format - The jit-format tool calls clang-format to run whitespace based formatting changes.
-  We require version 3.8.0 for jit-format. Clang-format and clang-tidy can be installed from the
-  [LLVM downloads page] (http://llvm.org/releases/download.html#3.8.0). We require clang-format and
-  clang-tidy to be on the path for jit-format.
-* clang-tidy - The jit-format tool calls clang-tidy to run more advanced formatting changes.
 
 ## Tools included in the repo
 
@@ -34,7 +29,6 @@ GitHub repo for directions on building.
   total size regression/improvement, and size regression/improvement by file and method.
 * jit-diff - Driver tool that implements a common dev flow.  Includes a configuration file
   for common defaults, and implements directory scheme for "installing" tools for use later.
-* jit-format - Run formatting tools on jit source code. Uses clang-tidy and clang-format.
 
 ## Build the tools
 
@@ -378,7 +372,7 @@ contains installed tools.
 
 ### config.json
 
-A sample [config.json](TODO) is included in the jitutils repo as an example that can be modified
+A sample config.json is included in the jitutils repo as an example that can be modified
 for a developers own context.  We will go through the different elements here for added detail.
 This file supplies the configuration options for both jit-diff and jit-format. The most interesting
 section of the file is the `"default"` section.  Each sub element of default maps directly to jit-diff
@@ -475,129 +469,3 @@ usage: jit-diff install [-j <arg>] [-n <arg>] [-l] [-b <arg>]
 The options to `install` are the same as you would use for the cijobs copy command since jit-diff
 uses cijobs to download the appropriate tools.  I.e. the `install` command is just a wrapper over
 cijobs to simplify getting tools into the default location correctly.
-
-## Formatting Jit Source
-
-The jit-format tool is a tool that will simplify the process of confirming that all jit sources
-follow the [jit coding conventions] (https://github.com/dotnet/coreclr/blob/master/Documentation/coding-guidelines/clr-jit-coding-conventions.md).
-Jit-format will run clang-tidy and clang-format over all of the jit sources, or only over user
-specified files. Currently, clang-tidy will run the modernize-use-nullptr and readability-braces*
-checks. Clang-format will use the .clang-format specification found in the jit directory. A summary
-of what each of the options can be found [here] (http://llvm.org/releases/3.8.0/tools/clang/docs/ClangFormatStyleOptions.html).
-Because jit-format will build a compile_commands.json database from the build log on Windows,
-developers must do a full build of coreclr before running jit-format.
-
-Here's the base help output for jit-format:
-
-```
-jit-format --help
-usage: jit-format [-a <arg>] [-o <arg>] [-b <arg>] [-c <arg>]
-                  [--compile-commands <arg>] [-v] [--untidy]
-                  [--noformat] [-f] [-i] [--projects <arg>...] [--]
-                  <filenames>...
-
-    -a, --arch <arg>            The architecture of the build (options:
-                                x64, x86)
-    -o, --os <arg>              The operating system of the build
-                                (options: Windows, OSX, Ubuntu, Fedora,
-                                etc.)
-    -b, --build <arg>           The build type of the build (options:
-                                Release, Checked, Debug)
-    -c, --coreclr <arg>         Full path to base coreclr directory
-    --compile-commands <arg>    Full path to compile_commands.json
-    -v, --verbose               Enable verbose output.
-    --untidy                    Do not run clang-tidy
-    --noformat                  Do not run clang-format
-    -f, --fix                   Fix formatting errors discovered by
-                                clang-format and clang-tidy.
-    -i, --ignore-errors         Ignore clang-tidy errors
-    --projects <arg>...         List of build projects clang-tidy should
-                                consider (e.g. dll, standalone,
-                                protojit, etc.). Default: dll
-    <filenames>...              Optional list of files that should be
-                                formatted.
-```
-
-A common task for developers would be to format their changes before submitting a
-PR. A developer can run the tool using the tests/scripts/format.py script in the coreclr
-repo:
-
-```
-python tests\scripts\format.py --coreclr C:\michelm\coreclr --arch x64 --os Windows_NT
-```
-
-This will run all build flavors and all projects for the user. This should be done on both
-Windows and Linux. OS options are Windows_NT, Linux, or OSX.
-
-A developer can also run the tool manually:
-
-```
-jit-format -a x64 -b Debug -o Windows_NT -c C:\michelm\coreclr
-```
-
-This will run both clang-tidy and clang-format on all of the jit code and list out all
-of the clang-tidy formatting changes, and the first clang-format change that would be
-made, without actually fixing them.
-
-Often a developer would only be interested in a few files:
-
-```
-jit-format -a x64 -b Debug -o Windows_NT -c C:\michelm\coreclr -v lower.cpp codegenxarch.cpp
-
-Formatting jit directory.
-Formatting dll project.
-Building compile_commands.json.
-Using compile_commands.json found at C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json
-Running clang-tidy.
-Running:
-        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\codegenxarch.cpp
-
-Running:
-        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\lower.cpp
-
-Running: clang-format   C:\michelm\coreclr\src\jit\codegenxarch.cpp
-Running: clang-format   C:\michelm\coreclr\src\jit\lower.cpp
-```
-
-jit-format will only run over those files. The verbose flag will show the user what
-clang-tidy and clang-format invocations are being executed.
-
-When the developer is ready to check in, they will want to make sure they fix any formatting
-errors that clang-tidy and clang-format identified. This can be done with the --fix flag:
-
-```
-jit-format -a x64 -b Debug -o Windows_NT -c C:\michelm\coreclr -v --fix lower.cpp codegenxarch.cpp
-
-Formatting jit directory.
-Formatting dll project.
-Building compile_commands.json.
-Using compile_commands.json found at C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json
-Running clang-tidy.
-Running:
-        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\codegenxarch.cpp
-
-Running:
-        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\michelm\coreclr\src\jit\lower.cpp
-
-Running: clang-format -i  C:\michelm\coreclr\src\jit\codegenxarch.cpp
-Running: clang-format -i  C:\michelm\coreclr\src\jit\lower.cpp
-```
-
-The developer may also only be interested in only running clang-tidy or clang-format without
-running the other tool. This can be done by using the --noformat (no clang-format) or
---untidy (no clang-tidy) flags.
-
-Finally, the developer can pass their own compile_commands.json database to jit-format
-if they already have one built:
-
-```
-jit-format.cmd --fix --noformat --compile-commands C:\michelm\jitutils\test\jit-format\compile_commands.json --coreclr C:\michelm\jitutils\test\jit-format C:\michelm\jitutils\test\jit-format\test.cpp
-Formatting jit directory.
-Formatting dll project.
-Using compile_commands.json found at C:\michelm\jitutils\test\jit-format\compile_commands.json
-Running clang-tidy.
-Running:
-        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\michelm\jitutils\test\jit-format\compile_commands.json C:\michelm\jitutils\test\jit-format\test.cpp
-```
-
-
