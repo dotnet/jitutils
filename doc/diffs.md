@@ -14,7 +14,7 @@ repro to make assembly diff generation streamlined.
 
 jit-diff uses the jit-dasm tool to produce the generated assembly files.
 
-jit-diff has three top-level commands, as shown by the "help":
+jit-diff has three top-level commands, as shown by the help message:
 ```
     $ jit-diff --help
     usage: jit-diff <command> [<args>]
@@ -24,7 +24,7 @@ jit-diff has three top-level commands, as shown by the "help":
         install    Install tool in config.
 ```
 
-The "diff" command has the following help:
+The "jit-diff diff" command has the following help message:
 ```
     $ jit-diff diff --help
     usage: jit-diff diff [-b <arg>] [-d <arg>] [--crossgen <arg>] [-o <arg>]
@@ -57,7 +57,7 @@ The "diff" command has the following help:
         --test_root <arg>       Path to test tree.
 ```
 
-The "list" command has this help:
+The "jit-diff list" command has this help message:
 ```
     $ jit-diff diff --help
     usage: jit-diff list [-v]
@@ -65,7 +65,7 @@ The "list" command has this help:
         -v, --verbose    Enable verbose output
 ```
 
-The "install" command has this help:
+The "jit-diff install" command has this help message:
 ```
     $ jit-diff install --help
     usage: jit-diff install [-j <arg>] [-n <arg>] [-l] [-b <arg>] [-v]
@@ -87,10 +87,23 @@ Explanation:
 2. `-t 5` -- give the diffs a "tag". Thus, the actual root directory will be `c:\diffs\5`.
 3. `-a` -- run jit-analyze on the resultant diffs.
 4. `-f` -- generate diffs over the framework assemblies (a well-known list built in to jit-diff).
-5. `--core_root` -- specify the `CORE_ROOT` directory created by running `tests\runtest.cmd`
-   or `tests\runtest.cmd GenerateLayoutOnly` in the dotnet/coreclr repo.
+5. `--core_root` -- specify the `CORE_ROOT` directory (the "test layout").
 6. `-b` -- specify the directory in which a baseline crossgen.exe can be found.
 7. `-d` -- specify the directory in which a diff (experimental) crossgen.exe can be found.
+
+Note: you create the `CORE_ROOT` directory "layout" by running the runtest script.
+On Windows, this can be created by running
+```
+    tests\runtest.cmd
+```
+or
+```
+    tests\runtest.cmd GenerateLayoutOnly
+```
+in the dotnet/coreclr repo. On non-Windows, consult the test instructions
+[here](https://github.com/dotnet/coreclr/blob/master/Documentation/building/unix-test-instructions.md).
+Note that you can pass `--testDir=NONE` to runtest.sh to get the
+same effect as passing `GenerateLayoutOnly` to runtest.cmd on Windows.
 
 ## jit-analyze
 

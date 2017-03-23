@@ -10,7 +10,7 @@ baseline JIT, for example.
 
 cijobs has two commands: (1) list, and (2) copy.
 
-Sample help command line:
+cijobs help message:
 ```
     $ cijobs --help
     usage: cijobs <command> [<args>]
@@ -23,7 +23,7 @@ Sample help command line:
                 ContentPath(p) parameter
 ```
 
-The "list" command has the following command line:
+The "cijobs list" command has the following help message:
 ```
     $ cijobs list --help
     usage: cijobs list [-j <arg>] [-b <arg>] [-r <arg>] [-m <arg>]
@@ -40,7 +40,7 @@ The "list" command has the following command line:
         -a, --artifacts          List job artifacts on server.
 ```
 
-The "copy" command has the following command line:
+The "cijobs copy" command has the following help message:
 ```
     usage: cijobs copy [-j <arg>] [-n <arg>] [-l] [-c <arg>] [-b <arg>]
                   [-r <arg>] [-o <arg>] [-u] [-p <arg>]
