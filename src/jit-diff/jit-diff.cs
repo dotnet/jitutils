@@ -329,7 +329,6 @@ namespace ManagedCodeGen
                     //    Core_Root: c:\gh\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root
                     //    base/diff: c:\gh\coreclr\bin\Product\Windows_NT.x64.checked
 
-                    bool foundEverything = false;
                     List<string> archList;
                     List<string> buildList;
 
@@ -383,11 +382,13 @@ namespace ManagedCodeGen
                             if (tryBasePath != null)
                             {
                                 _basePath = tryBasePath;
+                                needBasePath = false;
                                 Console.WriteLine("Using --base={0}", _basePath);
                             }
                             if (tryDiffPath != null)
                             {
                                 _diffPath = tryDiffPath;
+                                needDiffPath = false;
                                 Console.WriteLine("Using --diff={0}", _diffPath);
                             }
                             break;
@@ -441,16 +442,19 @@ namespace ManagedCodeGen
                             if (tryPlatformPath != null)
                             {
                                 _platformPath = tryPlatformPath;
+                                needCoreRoot = false;
                                 Console.WriteLine("Using --core_root={0}", _platformPath);
                             }
                             if (tryCrossgen != null)
                             {
                                 _crossgenExe = tryCrossgen;
+                                needCrossgen = false;
                                 Console.WriteLine("Using --crossgen={0}", _crossgenExe);
                             }
                             if (tryTestPath != null)
                             {
                                 _testPath = tryTestPath;
+                                needTestTree = false;
                                 Console.WriteLine("Using --test_root={0}", _testPath);
                             }
 
@@ -464,40 +468,31 @@ namespace ManagedCodeGen
                             break;
                         }
 
-                        if ((!needCoreRoot || (_platformPath != null)) && 
-                            (!needCrossgen || (_crossgenExe != null)) && 
-                            (!needBasePath || (_basePath != null)) &&
-                            (!needDiffPath || (_diffPath != null)) &&
-                            (!needTestTree || (_testPath != null)))
+                        if (!needCoreRoot && !needCrossgen && !needBasePath && !needDiffPath && !needTestTree)
                         {
-                            // We found everything we needed to find.
-                            foundEverything = true;
                             break;
                         }
                     }
 
-                    if (!foundEverything)
+                    if (needCoreRoot)
                     {
-                        if (needCoreRoot && (_platformPath == null))
-                        {
-                            Console.WriteLine("Error: didn't find --core_root default");
-                        }
-                        if (needCrossgen && (_crossgenExe == null))
-                        {
-                            Console.WriteLine("Error: didn't find --crossgen default");
-                        }
-                        if (needTestTree && (_testPath == null))
-                        {
-                            Console.WriteLine("Error: didn't find --test_path default");
-                        }
-                        if (needBasePath && (_basePath == null))
-                        {
-                            Console.WriteLine("Error: didn't find --base default");
-                        }
-                        if (needDiffPath && (_diffPath == null))
-                        {
-                            Console.WriteLine("Error: didn't find --diff default");
-                        }
+                        Console.Error.WriteLine("Error: didn't find --core_root default");
+                    }
+                    if (needCrossgen)
+                    {
+                        Console.Error.WriteLine("Error: didn't find --crossgen default");
+                    }
+                    if (needTestTree)
+                    {
+                        Console.Error.WriteLine("Error: didn't find --test_path default");
+                    }
+                    if (needBasePath)
+                    {
+                        Console.Error.WriteLine("Error: didn't find --base default");
+                    }
+                    if (needDiffPath)
+                    {
+                        Console.Error.WriteLine("Error: didn't find --diff default");
                     }
                 }
 
