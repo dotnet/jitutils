@@ -80,8 +80,8 @@ Only one of `--corelib` or `--frameworks` can be specified.
 
 Only one of `--tests` or `--benchmarks` can be specified.
 
-If `--tests` or `--benchmarks` is specified, you must also specify `--test_root` so the tool knows
-where to find the test tree you wish to use.
+If `--tests` or `--benchmarks` is specified, you may also specify `--test_root` so the tool knows
+where to find the test tree you wish to use, or use the computed default for `--test_root`.
 
 To generate diffs for everything jit-diff knows how to diff, use both `--frameworks` and `--tests`.
 
@@ -91,15 +91,15 @@ First, you must build the dotnet/coreclr repo to produce a crossgen and a JIT (e
 You also need to have a baseline crossgen / JIT available. One way to do this is to have a separate
 clone of the dotnet/coreclr repro that is identical to your working / "diff" clone, except that it
 has no changes made to it. For example, you might have these two directories:
-* `c:\gh\coreclr` - main development directory; clone of dotnet/coreclr. This is where you work.
-* `c:\gh\coreclr_base` - a "baseline" clone of dotnet/coreclr that matches the source of your main
+* `c:\coreclr` - main development directory; clone of dotnet/coreclr. This is where you work.
+* `c:\coreclr_base` - a "baseline" clone of dotnet/coreclr that matches the source of your main
   development directory except for your experimental changes to the JIT.
 
 Build both of these directories with the same architecture and build flavor (e.g., x64 checked),
 producing the compilers to compare.
 
 Also, if you want to generate diffs using the assemblies in the test tree, build the tests in the
-"diff" tree (e.g., in the example above, `c:\gh\coreclr`).
+"diff" tree (e.g., in the example above, `c:\coreclr`).
 
 Ensure the jitutils tools are built, and jit-diff, jit-analyze, and jit-dasm are on the path.
 
@@ -117,29 +117,22 @@ jit-diff has three top-level commands, as shown by the help message:
 
 The "jit-diff diff" command has this help message:
 ```
-    $ jit-diff diff --help
-    usage: jit-diff diff [-b <arg>] [-d <arg>] [--crossgen <arg>] [-o <arg>]
-                    [--noanalyze] [-s] [-t <arg>] [-c] [-f] [--benchmarks]
-                    [--tests] [-v] [--core_root <arg>] [--test_root <arg>]
-                    [--base_root <arg>] [--diff_root <arg>] [--arch <arg>]
+    usage: jit-diff diff [-b [arg]] [-d [arg]] [--crossgen <arg>] [-o <arg>] [--noanalyze] [-s]
+                    [-t <arg>] [-c] [-f] [--benchmarks] [--tests] [--gcinfo] [-v] [--core_root <arg>]
+                    [--test_root <arg>] [--base_root <arg>] [--diff_root <arg>] [--arch <arg>]
                     [--build <arg>]
 
-        -b, --base <arg>      The base compiler directory or tag. Will use
-                              crossgen or clrjit from this directory,
-                              depending on whether --crossgen is specified.
-        -d, --diff <arg>      The diff compiler directory or tag. Will use
-                              crossgen or clrjit from this directory,
-                              depending on whether --crossgen is specified.
-        --crossgen <arg>      The crossgen compiler exe. When this is
-                              specified, will use clrjit from the --base and
-                              --diff directories with this crossgen.
+        -b, --base [arg]      The base compiler directory or tag. Will use crossgen or clrjit from this
+                            directory, depending on whether --crossgen is specified.
+        -d, --diff [arg]      The diff compiler directory or tag. Will use crossgen or clrjit from this
+                            directory, depending on whether --crossgen is specified.
+        --crossgen <arg>      The crossgen compiler exe. When this is specified, will use clrjit from
+                            the --base and --diff directories with this crossgen.
         -o, --output <arg>    The output path.
-        --noanalyze           Do not analyze resulting base, diff dasm
-                              directories. (By default, the directories are
-                              analyzed for diffs.)
+        --noanalyze           Do not analyze resulting base, diff dasm directories. (By default, the
+                            directories are analyzed for diffs.)
         -s, --sequential      Run sequentially; don't do parallel compiles.
-        -t, --tag <arg>       Name of root in output directory. Allows for
-                              many sets of output.
+        -t, --tag <arg>       Name of root in output directory. Allows for many sets of output.
         -c, --corelib         Diff System.Private.CoreLib.dll.
         -f, --frameworks      Diff frameworks.
         --benchmarks          Diff core benchmarks. Must pass --test_root.
@@ -147,12 +140,41 @@ The "jit-diff diff" command has this help message:
         --gcinfo              Add GC info to the disasm output.
         -v, --verbose         Enable verbose output.
         --core_root <arg>     Path to test CORE_ROOT.
-        --test_root <arg>     Path to test tree. Use with --benchmarks or
-                              --tests.
+        --test_root <arg>     Path to test tree. Use with --benchmarks or --tests.
         --base_root <arg>     Path to root of base dotnet/coreclr repo.
         --diff_root <arg>     Path to root of diff dotnet/coreclr repo.
         --arch <arg>          Architecture to diff (x86, x64).
         --build <arg>         Build flavor to diff (checked, debug).
+
+    Examples:
+
+    jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff c:\coreclr\bin\Product\Windows_NT.x86.checked
+        Generate diffs of System.Private.CoreLib.dll by specifying baseline and
+        diff compiler directories explicitly.
+
+    jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff
+        If run within the c:\coreclr git clone of dotnet/coreclr, does the same
+        as the prevous example, using defaults.
+
+    jit-diff diff --output c:\diffs --base --base_root c:\coreclr_base --diff
+        Does the same as the prevous example, using -base_root to find the base
+        directory (if run from c:\coreclr tree).
+
+    jit-diff diff --base --diff
+        Does the same as the prevous example (if run from c:\coreclr tree), but uses
+        default c:\coreclr\bin\diffs output directory, and `base_root` must be specified
+        in the config.json file in the directory pointed to by the JIT_UTILS_ROOT
+        environment variable.
+
+    jit-diff diff --diff
+        Only generates asm using the diff JIT -- does not generate asm from a baseline compiler
+        using all computed defaults.
+
+    jit-diff diff --diff --arch x86
+        Generate diffs, but for x86, even if there is an x64 compiler available.
+
+    jit-diff diff --diff --build debug
+        Generate diffs, but using a debug build, even if there is a checked build available.
 ```
 
 The "jit-diff list" command has this help message:
@@ -177,51 +199,51 @@ The "jit-diff install" command has this help message:
 ## Examples of generating diffs
 
 The tool needs to know:
-* Which base and diff JIT or crossgen to use.
-* Which crossgen to use (if base and diff are specified as JIT, not crossgen).
+* Which base and diff JIT and crossgen to use.
 * Which assemblies to generate dasm for.
 * Where to put the generated dasm.
 
 These can all be specified explicitly. For example:
 
 ```
-    c:\gh\coreclr> jit-diff diff --output c:\diffs --corelib --core_root c:\gh\coreclr\bin\tests\Windows_NT.x64.checked\Tests\Core_Root --base e:\gh\coreclr2\bin\Product\Windows_NT.x64.checked --diff c:\gh\coreclr\bin\Product\Windows_NT.x64.checked
+    c:\coreclr> jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root --base e:\coreclr2\bin\Product\Windows_NT.x64.checked --diff c:\coreclr\bin\Product\Windows_NT.x64.checked --crossgen c:\coreclr\bin\Product\Windows_NT.x64.release
 ```
 
 Explanation:
 1. `--output c:\diffs` -- specify the root directory where diffs will be placed.
 2. `--corelib` -- generate diffs using System.Private.CoreLib.dll.
-4. `--core_root` -- specify the `CORE_ROOT` directory (the "test layout"). Used to specify to crossgen
+3. `--core_root` -- specify the `CORE_ROOT` directory (the "test layout"). Used to specify to crossgen
    where the platform assemblies are. Also, used as the directory where framework assemblies such as
    System.Private.CoreLib.dll can be found for the purpose of using them to generate dasm.
-5. `--base` -- specify the directory in which a baseline crossgen can be found.
-6. `--diff` -- specify the directory in which a diff (experimental) crossgen can be found.
+4. `--base` -- specify the directory in which a baseline JIT can be found.
+5. `--diff` -- specify the directory in which a diff (experimental) JIT can be found.
+6. `--crossgen` -- specify the crossgen.exe to use. Note that this must match the build flavor of `--core_root`.
 
 You create the `CORE_ROOT` directory "layout" by running the runtest script.
 On Windows, this can be created by running the following in the dotnet/coreclr repo root.
 ```
-    c:\gh\coreclr> tests\runtest.cmd
+    c:\coreclr> tests\runtest.cmd
 ```
 or
 ```
-    c:\gh\coreclr> tests\runtest.cmd GenerateLayoutOnly
+    c:\coreclr> tests\runtest.cmd GenerateLayoutOnly
 ```
 On non-Windows, consult the test instructions
 [here](https://github.com/dotnet/coreclr/blob/master/Documentation/building/unix-test-instructions.md).
 Note that you can pass `--testDir=NONE` to runtest.sh to get the
 same effect as passing `GenerateLayoutOnly` to runtest.cmd on Windows.
 
-This command will generate the diffs into the specified output directory. It will automatically create a "tag"
-subdirectory (if the `--tag` switch isn't specified to override the default name), and within that tag
-directory will be "base" and "diff" directories, containing the diffs. The default tag directory looks like
-`dasmset_12`, with a unique number for every run of jit-diff.
+The above jit-diff command will generate both baseline and diff asm code into the specified output directory.
+It will automatically create a unique named subdirectory (if the `--tag` switch isn't specified to override the default name),
+and within that subdirectory will be "base" and "diff" directories, containing the diffs. The default subdirectory
+name looks like `dasmset_12`, with a unique number for every run of jit-diff.
 
-jit-analyze will be run to compare the generated output.
+jit-analyze will be run to compare the generated output if both baseline and diff asm are generated.
 
 You can also run a recursive textual comparison tool like windiff on Windows to visually compare
 the diffs, e.g.:
 ```
-    c:\gh\coreclr> windiff c:\diffs\dasmset_12\base c:\diffs\dasmset_12\diff
+    c:\coreclr> windiff c:\diffs\dasmset_12\base c:\diffs\dasmset_12\diff
 ```
 
 ## Simplified jit-diff usage: defaults
@@ -229,22 +251,30 @@ the diffs, e.g.:
 As seen above, specifying all required information can be quite verbose. jit-diff can automatically determine
 most of the arguments using computed defaults. The above diff can be accomplished using simply:
 ```
-    c:\gh\coreclr> jit-diff diff --base_root e:\gh\coreclr2
+    c:\coreclr> jit-diff diff --diff --base --base_root e:\coreclr2
 ```
+
+You minimally specify:
+* `--diff` with no argument to request the diff compiler be used to generate asm (to a "diff" directory).
+* `--base` with no argument to request the baseline compiler be used to generate asm (to a "base" directory).
+* `--base_root` to specify the dotnet/coreclr repo root that contains the baseline build.
 
 The defaults are:
 * If jit-diff is invoked with the current directory within the dotnet/coreclr repo, then the root of
   this repo serves to find the diff compiler and `CORE_ROOT` directory. (Note that we have no reasonable
   default for determining what the baseline toolset or repo is. This is specified with the `--base_root` argument.)
-* The default output directory is `<repo_root>\diffs` (in this case, c:\gh\coreclr\diffs).
-* The default diff architecture is x64. If this isn't found, x86 is tried.
-* The default diff build flavor is checked. If this isn't found, debug is tried.
+* The default output directory is `<repo_root>\bin\diffs` (in this case, c:\coreclr\bin\diffs).
+* The default architecture is x64. If this isn't found, x86 is tried.
+* The default diff and baseline JIT build flavor is checked. If this isn't found, debug is tried.
+  (Both baseline and diff must be the same flavor.)
 * By default, diffs are done using System.Private.CoreLib.dll. (That is, `--corelib` is the default.)
+* By default, a release build is used for `--core_root`, `--crossgen`, and `--test_root`. If not available,
+  it falls back to checked or debug (but gives a warning that release is preferred).
 
 To instead do diffs over the framework assemblies (not just System.Private.CoreLib.dll), using an x86
 debug build, run:
 ```
-    c:\gh\coreclr> jit-diff diff --frameworks --arch x86 --build debug --base_root e:\gh\coreclr2
+    c:\coreclr> jit-diff diff --base --diff --frameworks --arch x86 --build debug --base_root e:\coreclr2
 ```
 
 To simplify this more, create a dotnet/coreclr repo clone that you will always use for baselines.
@@ -253,9 +283,17 @@ default. See the document [configuring defaults](config.md) for details.
 
 With a `--base_root` default in the config.json file, you can simply run:
 ```
-    c:\gh\coreclr> jit-diff diff
+    c:\coreclr> jit-diff diff --base --diff
 ```
 to generate diffs using all the defaults.
+
+If you only want to generate as from the diff compiler, omit the `--base` argument, e.g.:
+```
+    c:\coreclr> jit-diff diff --diff
+```
+
+Similarly, only pass `--base` to generate baselines (although in this case you also must specify
+`--base_root` so the tool can find the baseline).
 
 The following command-line argument are used to adjust the defaults, such as specifying x86 diffs
 instead of x64 diffs. They are not otherwise required.
@@ -283,7 +321,7 @@ This supports a scenario like the following:
 ## Analyzing diffs: jit-analyze
 
 The jitutils suite includes the jit-analyze tool for analyzing diffs produced by the jit-diff/jit-dasm
-utilities. It is automatically run, by default, when `jit-diff diff` is used.
+utilities. It is automatically run, by default, when `jit-diff diff --base --diff` is used.
 
 jit-analyze cracks the generated baseline and diff `*.dasm` files and computes the code size difference
 between the two based on the output produced
@@ -298,7 +336,7 @@ the previous section do.
 On a significant set of diffs it will produce output like the following:
 
 ```
-$ jit-analyze --base ~/Work/dotnet/output/base --diff ~/Work/dotnet/output/diff
+$ jit-analyze --base ~/Work/dotnet/output/base --diff ~/Work/dotnet/output/diff --recursive
 Found files with textual diffs.
 
 Summary:

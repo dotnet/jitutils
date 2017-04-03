@@ -18,6 +18,19 @@ using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
+    public class Utility
+    {
+        public static string CombinePath(string basePath, string[] pathComponents)
+        {
+            string resultPath = basePath;
+            foreach (var dir in pathComponents)
+            {
+                resultPath = Path.Combine(resultPath, dir);
+            }
+            return resultPath;
+        }
+    }
+
     public class AssemblyInfo
     {
         // Contains full path to assembly.
@@ -42,14 +55,38 @@ namespace ManagedCodeGen
         private static string s_analysisTool = "jit-analyze";
         private static string s_configFileName = "config.json";
         private static string s_configFileRootKey = "asmdiff";
-        private static string s_defaultDiffDirectoryName = "diffs";
+        private static string[] s_defaultDiffDirectoryPath = { "bin", "diffs" };
+
+        private static string GetJitLibraryName(string osMoniker)
+        {
+            switch (osMoniker)
+            {
+                case "Windows":
+                    return "clrjit.dll";
+                default:
+                    return "libclrjit.so";
+            }
+        }
+
+        private static string GetCrossgenExecutableName(string osMoniker)
+        {
+            switch (osMoniker)
+            {
+                case "Windows":
+                    return "crossgen.exe";
+                default:
+                    return "crossgen";
+            }
+        }
 
         public class Config
         {
             private ArgumentSyntax _syntaxResult;
             private Commands _command = Commands.Diff;
-            private string _basePath = null;
-            private string _diffPath = null;
+            private bool _baseSpecified = false;    // True if user specified "--base" or "--base <path>"
+            private bool _diffSpecified = false;    // True if user specified "--diff" or "--diff <path>"
+            private string _basePath = null;        // Non-null if user specified "--base <path>"
+            private string _diffPath = null;        // Non-null if user specified "--base <path>"
             private string _crossgenExe = null;
             private string _outputPath = null;
             private bool _noanalyze = false;
@@ -89,10 +126,10 @@ namespace ManagedCodeGen
                 {
                     // Diff command section.
                     syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff.");
-                    syntax.DefineOption("b|base", ref _basePath,
+                    var baseOption = syntax.DefineOption("b|base", ref _basePath, false,
                         "The base compiler directory or tag. Will use crossgen or clrjit from this directory, " +
                         "depending on whether --crossgen is specified.");
-                    syntax.DefineOption("d|diff", ref _diffPath,
+                    var diffOption = syntax.DefineOption("d|diff", ref _diffPath, false,
                         "The diff compiler directory or tag. Will use crossgen or clrjit from this directory, " +
                         "depending on whether --crossgen is specified.");
                     syntax.DefineOption("crossgen", ref _crossgenExe,
@@ -126,6 +163,9 @@ namespace ManagedCodeGen
                     syntax.DefineOption("n|number", ref _number, "Job number.");
                     syntax.DefineOption("b|branch", ref _branchName, "Name of branch.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
+
+                    _baseSpecified = baseOption.IsSpecified;
+                    _diffSpecified = diffOption.IsSpecified;
                 });
 
                 SetRID();
@@ -221,39 +261,78 @@ namespace ManagedCodeGen
 
             private void SetDefaults()
             {
+                // Figure out what we need to set from defaults.
+
+                bool needOutputPath = (_outputPath == null);                            // We need to find --output
+                bool needCoreRoot = (_platformPath == null);                            // We need to find --core_root
+                bool needCrossgen = (_crossgenExe == null);                             // We need to find --crossgen
+                bool needBasePath = _baseSpecified && (_basePath == null);              // We need to find --base
+                bool needDiffPath = _diffSpecified && (_diffPath == null);              // We need to find --diff
+                bool needTestTree = (Benchmarks || DoTestTree) && (_testPath == null);  // We need to find --test_root
+
+                bool needDiffRoot = (_diffRoot == null) &&
+                    (needOutputPath || needCoreRoot || needCrossgen || needDiffPath || needTestTree);
+
                 // If --diff_root wasn't specified, see if we can figure it out from the current directory
-                // using git. NOTE: we shouldn't do this unless it will be used, that is, if there are some
+                // using git.
+                //
+                // NOTE: we shouldn't do this unless it will be used, that is, if there are some
                 // arguments that are currently unspecified and need this to compute their default.
-                if (_diffRoot == null)
+                //
+                if (needDiffRoot)
                 {
                     _diffRoot = GetRepoRoot();
                 }
 
                 if ((_outputPath == null) && (_diffRoot != null))
                 {
-                    _outputPath = Path.Combine(_diffRoot, s_defaultDiffDirectoryName);
+                    _outputPath = Utility.CombinePath(_diffRoot, s_defaultDiffDirectoryPath);
                     PathUtility.EnsureDirectoryExists(_outputPath);
 
                     Console.WriteLine("Using --output={0}", _outputPath);
                 }
 
-                bool needTestTree = Benchmarks || DoTestTree;
-
-                if ((_platformPath == null) || (_basePath == null) || (_diffPath == null) || ((_testPath == null) && needTestTree))
+                if (needCoreRoot || needCrossgen || needBasePath || needDiffPath || needTestTree)
                 {
-                    // Try all combinations of build and architecture to find one that has both a Core_Root
-                    // and, if necessary, base and diff builds and tests.
+                    // Try all architectures to find one that satisfies all the required defaults.
+                    // All defaults must use the same architecture (e.g., x86 or x64). Note that
+                    // we don't know what architecture a non-default argument (such as a full path
+                    // for --base) is, so it's up to the user to ensure the default architecture
+                    // is the same. Typically, this isn't a problem because either (1) the user
+                    // specifies full paths for both --base and --diff (and the other paths), or
+                    // (2) they specify no full paths, and the defaults logic picks a default, or
+                    // (3) they specify no full paths, but do specify --arch to require a specific
+                    // architecture.
+                    //
+                    // Try all build flavors to find one --base and -diff. Both --base and --diff
+                    // must be the same build flavor (e.g., checked).
+                    //
+                    // Then, if necessary, try all build flavors to find both a Core_Root and, if
+                    // necessary, --test_root. --test_root and --core_root must be the same build
+                    // flavor. If these aren't "release", a warning is given, as it is considered
+                    // best practice to use release builds for these.
                     //
                     // If the user already specified one of --core_root, --base, or --diff, we leave
                     // that alone, and only try to fill in the remaining ones with an appropriate
                     // default.
                     //
+                    // --core_root, --test_root, and --diff are found within the --diff_root tree.
+                    // --base is found within the --base_root tree.
+                    //
+                    // --core_root and --test_root build flavor defaults to (in order): release, checked, debug.
+                    // --base and --diff flavor defaults to (in order): checked, debug.
+                    //
+                    // --crossgen and --core_root need to be from the same build.
+                    //
                     // E.g.:
-                    //    test_root: c:\gh\coreclr\bin\tests\Windows_NT.x64.checked
-                    //    Core_Root: c:\gh\coreclr\bin\tests\Windows_NT.x64.checked\Tests\Core_Root
+                    //    test_root: c:\gh\coreclr\bin\tests\Windows_NT.x64.release
+                    //    Core_Root: c:\gh\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root
                     //    base/diff: c:\gh\coreclr\bin\Product\Windows_NT.x64.checked
 
+                    bool foundEverything = false;
                     List<string> archList;
+                    List<string> buildList;
+
                     if (_arch == null)
                     {
                         archList = new List<string> { "x64", "x86" };
@@ -263,34 +342,23 @@ namespace ManagedCodeGen
                         archList = new List<string> { _arch };
                     }
 
-                    List<string> buildList;
-                    if (_build == null)
+                    foreach (var arch in archList)
                     {
-                        buildList = new List<string> { "checked", "debug" };
-                    }
-                    else
-                    {
-                        buildList = new List<string> { _build };
-                    }
+                        if (_build == null)
+                        {
+                            buildList = new List<string> { "checked", "debug" };
+                        }
+                        else
+                        {
+                            buildList = new List<string> { _build };
+                        }
 
-                    bool found = false;
-                    foreach (var build in buildList)
-                    {
-                        foreach (var arch in archList)
+                        foreach (var build in buildList)
                         {
                             var buildDirName = GetBuildOS() + "." + arch + "." + build;
-                            string tryPlatformPath = null, tryBasePath = null, tryDiffPath = null, tryTestPath = null;
+                            string tryBasePath = null, tryDiffPath = null;
 
-                            if ((_platformPath == null) && (_diffRoot != null))
-                            {
-                                tryPlatformPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName, "Tests", "Core_Root");
-                                if (!Directory.Exists(tryPlatformPath))
-                                {
-                                    continue;
-                                }
-                            }
-
-                            if ((_basePath == null) && (_baseRoot != null))
+                            if (needBasePath && (_baseRoot != null))
                             {
                                 tryBasePath = Path.Combine(_baseRoot, "bin", "Product", buildDirName);
                                 if (!Directory.Exists(tryBasePath))
@@ -299,7 +367,7 @@ namespace ManagedCodeGen
                                 }
                             }
 
-                            if ((_diffPath == null) && (_diffRoot != null))
+                            if (needDiffPath && (_diffRoot != null))
                             {
                                 tryDiffPath = Path.Combine(_diffRoot, "bin", "Product", buildDirName);
                                 if (!Directory.Exists(tryDiffPath))
@@ -308,27 +376,10 @@ namespace ManagedCodeGen
                                 }
                             }
 
-                            if ((_testPath == null) && needTestTree && (_diffRoot != null))
-                            {
-                                tryTestPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName);
-                                if (!Directory.Exists(tryTestPath))
-                                {
-                                    continue;
-                                }
-                            }
-
                             // If we made it here, we've filled in all the defaults we needed to fill in.
                             // Thus, we found an architecture/build combination that has an appropriate
-                            // Core_Root path (in the "diff" tree), Product builds in both the base
-                            // and diff trees, and test_root.
+                            // --diff and --base.
 
-                            _arch = arch;
-                            _build = build;
-                            if (tryPlatformPath != null)
-                            {
-                                _platformPath = tryPlatformPath;
-                                Console.WriteLine("Using --core_root={0}", _platformPath);
-                            }
                             if (tryBasePath != null)
                             {
                                 _basePath = tryBasePath;
@@ -339,18 +390,113 @@ namespace ManagedCodeGen
                                 _diffPath = tryDiffPath;
                                 Console.WriteLine("Using --diff={0}", _diffPath);
                             }
+                            break;
+                        }
+
+                        if (_build == null)
+                        {
+                            buildList = new List<string> { "release", "checked", "debug" };
+                        }
+                        else
+                        {
+                            buildList = new List<string> { _build };
+                        }
+
+                        foreach (var build in buildList)
+                        {
+                            var buildDirName = GetBuildOS() + "." + arch + "." + build;
+                            string tryPlatformPath = null, tryCrossgen = null, tryTestPath = null;
+
+                            if (needCoreRoot && (_diffRoot != null))
+                            {
+                                tryPlatformPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName, "Tests", "Core_Root");
+                                if (!Directory.Exists(tryPlatformPath))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            if (needCrossgen && (_diffRoot != null))
+                            {
+                                tryCrossgen = Path.Combine(_diffRoot, "bin", "Product", buildDirName, GetCrossgenExecutableName(_moniker));
+                                if (!File.Exists(tryCrossgen))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            if (needTestTree && (_diffRoot != null))
+                            {
+                                tryTestPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName);
+                                if (!Directory.Exists(tryTestPath))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            // If we made it here, we've filled in all the defaults we needed to fill in.
+                            // Thus, we found an architecture/build combination that has an appropriate
+                            // Core_Root path (in the "diff" tree) and test_root.
+
+                            if (tryPlatformPath != null)
+                            {
+                                _platformPath = tryPlatformPath;
+                                Console.WriteLine("Using --core_root={0}", _platformPath);
+                            }
+                            if (tryCrossgen != null)
+                            {
+                                _crossgenExe = tryCrossgen;
+                                Console.WriteLine("Using --crossgen={0}", _crossgenExe);
+                            }
                             if (tryTestPath != null)
                             {
                                 _testPath = tryTestPath;
                                 Console.WriteLine("Using --test_root={0}", _testPath);
                             }
-                            found = true;
+
+                            if (build != "release")
+                            {
+                                Console.WriteLine();
+                                Console.WriteLine("Warning: it is best practice to use a release build for --core_root, --crossgen, and --test_root.");
+                                Console.WriteLine();
+                            }
+
                             break;
                         }
 
-                        if (found)
+                        if ((!needCoreRoot || (_platformPath != null)) && 
+                            (!needCrossgen || (_crossgenExe != null)) && 
+                            (!needBasePath || (_basePath != null)) &&
+                            (!needDiffPath || (_diffPath != null)) &&
+                            (!needTestTree || (_testPath != null)))
                         {
+                            // We found everything we needed to find.
+                            foundEverything = true;
                             break;
+                        }
+                    }
+
+                    if (!foundEverything)
+                    {
+                        if (needCoreRoot && (_platformPath == null))
+                        {
+                            Console.WriteLine("Error: didn't find --core_root default");
+                        }
+                        if (needCrossgen && (_crossgenExe == null))
+                        {
+                            Console.WriteLine("Error: didn't find --crossgen default");
+                        }
+                        if (needTestTree && (_testPath == null))
+                        {
+                            Console.WriteLine("Error: didn't find --test_path default");
+                        }
+                        if (needBasePath && (_basePath == null))
+                        {
+                            Console.WriteLine("Error: didn't find --base default");
+                        }
+                        if (needDiffPath && (_diffPath == null))
+                        {
+                            Console.WriteLine("Error: didn't find --diff default");
                         }
                     }
                 }
@@ -361,6 +507,7 @@ namespace ManagedCodeGen
                     Console.WriteLine("--base_root: {0}", _baseRoot);
                     Console.WriteLine("--diff_root: {0}", _diffRoot);
                     Console.WriteLine("--core_root: {0}", _platformPath);
+                    Console.WriteLine("--crossgen: {0}", _crossgenExe);
                     Console.WriteLine("--arch: {0}", _arch);
                     Console.WriteLine("--build: {0}", _build);
                     Console.WriteLine("--output: {0}", _outputPath);
@@ -499,7 +646,43 @@ namespace ManagedCodeGen
             private void DisplayUsageMessage()
             {
                 Console.Error.WriteLine("");
-                Console.Error.Write(_syntaxResult.GetHelpText());
+                Console.Error.Write(_syntaxResult.GetHelpText(100));
+
+                string[] exampleText = {
+                    @"Examples:",
+                    @"",
+                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff c:\coreclr\bin\Product\Windows_NT.x86.checked",
+                    @"      Generate diffs of System.Private.CoreLib.dll by specifying baseline and",
+                    @"      diff compiler directories explicitly.",
+                    @"",
+                    @"  jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff",
+                    @"      If run within the c:\coreclr git clone of dotnet/coreclr, does the same",
+                    @"      as the prevous example, using defaults.",
+                    @"",
+                    @"  jit-diff diff --output c:\diffs --base --base_root c:\coreclr_base --diff",
+                    @"      Does the same as the prevous example, using -base_root to find the base",
+                    @"      directory (if run from c:\coreclr tree).",
+                    @"",
+                    @"  jit-diff diff --base --diff",
+                    @"      Does the same as the prevous example (if run from c:\coreclr tree), but uses",
+                    @"      default c:\coreclr\bin\diffs output directory, and `base_root` must be specified",
+                    @"      in the config.json file in the directory pointed to by the JIT_UTILS_ROOT",
+                    @"      environment variable.",
+                    @"",
+                    @"  jit-diff diff --diff",
+                    @"      Only generates asm using the diff JIT -- does not generate asm from a baseline compiler",
+                    @"      using all computed defaults.",
+                    @"",
+                    @"  jit-diff diff --diff --arch x86",
+                    @"      Generate diffs, but for x86, even if there is an x64 compiler available.",
+                    @"",
+                    @"  jit-diff diff --diff --build debug",
+                    @"      Generate diffs, but using a debug build, even if there is a checked build available."
+                };
+                foreach (var line in exampleText)
+                {
+                    Console.Error.WriteLine(line);
+                }
             }
 
             private void DisplayErrorMessage(string error)
@@ -552,7 +735,7 @@ namespace ManagedCodeGen
 
                 if ((_basePath == null) && (_diffPath == null))
                 {
-                    DisplayErrorMessage("Specify either --base <path> or --diff <path> or both.");
+                    DisplayErrorMessage("Specify either --base or --diff or both.");
                 }
 
                 if (_basePath != null && !Directory.Exists(_basePath))
@@ -886,12 +1069,7 @@ namespace ManagedCodeGen
 
         // This represents the path components (without platform-specific separator characters)
         // from the root of the test tree to the benchmark directory.
-        private static string[] s_benchmarksPath =
-        {
-            "JIT",
-            "Performance",
-            "CodeQuality"
-        };
+        private static string[] s_benchmarksPath = { "JIT", "Performance", "CodeQuality" };
 
         private static string[] s_benchmarkDirectories =
         {
@@ -1052,40 +1230,6 @@ namespace ManagedCodeGen
             }
         }
 
-        private static string FindJitLibrary(string path)
-        {
-            string clrjitPath = Path.Combine(path, "clrjit.dll");
-            if (File.Exists(clrjitPath))
-            {
-                return clrjitPath;
-            }
-
-            clrjitPath = Path.Combine(path, "libclrjit.so");
-            if (File.Exists(clrjitPath))
-            {
-                return clrjitPath;
-            }
-
-            return null;
-        }
-
-        private static string FindCrossgenExecutable(string path)
-        {
-            string crossgenPath = Path.Combine(path, "crossgen.exe");
-            if (File.Exists(crossgenPath))
-            {
-                return crossgenPath;
-            }
-
-            crossgenPath = Path.Combine(path, "crossgen");
-            if (File.Exists(crossgenPath))
-            {
-                return crossgenPath;
-            }
-
-            return null;
-        }
-
         public static int InstallCommand(Config config)
         {
             var configFilePath = Path.Combine(config.JitUtilsRoot, s_configFileName);
@@ -1243,7 +1387,6 @@ namespace ManagedCodeGen
                 StartDasmWork(args);
             }
 
-            // Returns a count of the number of failures.
             private void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
                 foreach (var assemblyInfo in assemblyWorkList)
@@ -1267,10 +1410,10 @@ namespace ManagedCodeGen
                 {
                     dasmArgs.Add(m_config.CrossgenExe);
 
-                    var jitPath = FindJitLibrary(clrPath);
-                    if (jitPath == null)
+                    var jitPath = Path.Combine(clrPath, GetJitLibraryName(m_config.Moniker));
+                    if (!File.Exists(jitPath))
                     {
-                        Console.Error.WriteLine("clrjit not found in " + clrPath);
+                        Console.Error.WriteLine("clrjit not found at " + jitPath);
                         return null;
                     }
 
@@ -1279,10 +1422,10 @@ namespace ManagedCodeGen
                 }
                 else
                 {
-                    var crossgenPath = FindCrossgenExecutable(clrPath);
-                    if (crossgenPath == null)
+                    var crossgenPath = Path.Combine(clrPath, GetCrossgenExecutableName(m_config.Moniker));
+                    if (!Directory.Exists(crossgenPath))
                     {
-                        Console.Error.WriteLine("crossgen not found in " + clrPath);
+                        Console.Error.WriteLine("crossgen not found at " + crossgenPath);
                         return null;
                     }
 
@@ -1377,7 +1520,7 @@ namespace ManagedCodeGen
 
                 // Analyze completed run.
 
-                if (config.DoAnalyze)
+                if (config.DoAnalyze && config.HasDiffPath && config.HasBasePath)
                 {
                     List<string> analysisArgs = new List<string>();
 
@@ -1443,15 +1586,7 @@ namespace ManagedCodeGen
                 // structure matching their source tree structure, to avoid name conflicts.
                 if (config.Benchmarks || config.DoTestTree)
                 {
-                    string basepath = config.TestRoot;
-                    if (config.Benchmarks)
-                    {
-                        // Construct the benchmark root directory path.
-                        foreach (var dir in s_benchmarksPath)
-                        {
-                            basepath = Path.Combine(basepath, dir);
-                        }
-                    }
+                    string basepath = config.Benchmarks ? Utility.CombinePath(config.TestRoot, s_benchmarksPath) : config.TestRoot;
                     foreach (var dir in config.Benchmarks ? s_benchmarkDirectories : s_testDirectories)
                     {
                         string fullPathDir = Path.Combine(basepath, dir);

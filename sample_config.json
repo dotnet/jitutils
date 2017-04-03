@@ -3,10 +3,7 @@
         "default": {
             "base": "e:\\gh\\coreclr2\\bin\\Product\\Windows_NT.x86.checked",
             "diff": "c:\\gh\\coreclr\\bin\\Product\\Windows_NT.x86.checked",
-            "analyze": "true",
-            "corlibonly": "false",
-            "frameworksonly": "true",
-            "benchmarksonly": "false",
+            "frameworks": "true",
             "output": "c:\\diffs",
             "core_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.checked\\Tests\\Core_Root",
             "test_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.Release"
