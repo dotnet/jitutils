@@ -1297,7 +1297,14 @@ namespace ManagedCodeGen
                 if (Path.GetFileName(dir).ToUpper().Contains(config.Moniker.ToUpper()))
                 {
                     newTool.Add("path", Path.GetFullPath(dir));
-                    tools.Last.AddAfterSelf(newTool);
+                    if (tools.HasValues)
+                    {
+                        tools.Last.AddAfterSelf(newTool);
+                    }
+                    else
+                    {
+                        tools.Add(newTool);
+                    }
                     break;
                 }
             }
