@@ -57,25 +57,50 @@ namespace ManagedCodeGen
         private static string s_configFileRootKey = "asmdiff";
         private static string[] s_defaultDiffDirectoryPath = { "bin", "diffs" };
 
-        private static string GetJitLibraryName(string osMoniker)
+        private static string GetJitLibraryName(string platformMoniker)
         {
-            switch (osMoniker)
+            switch (platformMoniker)
             {
                 case "Windows":
                     return "clrjit.dll";
-                default:
+                case "Linux":
                     return "libclrjit.so";
+                case "OSX":
+                    return "libclrjit.dylib";
+                default:
+                    Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
+                    return null;
             }
         }
 
-        private static string GetCrossgenExecutableName(string osMoniker)
+        private static string GetCrossgenExecutableName(string platformMoniker)
         {
-            switch (osMoniker)
+            switch (platformMoniker)
             {
                 case "Windows":
                     return "crossgen.exe";
-                default:
+                case "Linux":
+                case "OSX":
                     return "crossgen";
+                default:
+                    Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
+                    return null;
+            }
+        }
+
+        private static string GetBuildOS(string platformMoniker)
+        {
+            switch (platformMoniker)
+            {
+                case "Windows":
+                    return "Windows_NT";
+                case "Linux":
+                    return "Linux";
+                case "OSX":
+                    return "OSX";
+                default:
+                    Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
+                    return null;
             }
         }
 
@@ -106,10 +131,10 @@ namespace ManagedCodeGen
             private bool _verbose = false;
             private string _jobName;
             private string _number;
+            private bool _lastSuccessful;
             private string _jitUtilsRoot;
             private string _rid;
             private string _platformName;
-            private string _moniker;
             private string _branchName;
 
             private JObject _jObj;
@@ -161,6 +186,7 @@ namespace ManagedCodeGen
                     syntax.DefineCommand("install", ref _command, Commands.Install, "Install tool in " + s_configFileName + ".");
                     syntax.DefineOption("j|job", ref _jobName, "Name of the job.");
                     syntax.DefineOption("n|number", ref _number, "Job number.");
+                    syntax.DefineOption("l|last_successful", ref _lastSuccessful, "Last successful build.");
                     syntax.DefineOption("b|branch", ref _branchName, "Name of branch.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
 
@@ -220,42 +246,24 @@ namespace ManagedCodeGen
                         continue;
                     }
                 }
-
-                switch (_platformName)
-                {
-                    case "Windows":
-                    case "Linux":
-                        {
-                            _moniker = _platformName;
-                        }
-                        break;
-                    case "Darwin":
-                        {
-                            _moniker = "OSX";
-                        }
-                        break;
-                    default:
-                        {
-                            Console.WriteLine("No platform mapping!");
-                            _moniker = "bogus";
-                        }
-                        break;
-                }
             }
 
-            private string GetBuildOS()
+            public string PlatformMoniker
             {
-                switch (_platformName)
+                get
                 {
-                    case "Windows":
-                        return "Windows_NT";
-                    case "Linux":
-                        return "Linux";
-                    case "Darwin":
-                        return "OSX";
-                    default:
-                        Console.Error.WriteLine("No platform mapping!");
-                        return null;
+                    switch (_platformName)
+                    {
+                        case "Windows":
+                            return "Windows";
+                        case "Linux":
+                            return "Linux";
+                        case "Darwin":
+                            return "OSX";
+                        default:
+                            Console.Error.WriteLine("No platform mapping! (Platform name = {0})", _platformName);
+                            return null;
+                    }
                 }
             }
 
@@ -354,7 +362,7 @@ namespace ManagedCodeGen
 
                         foreach (var build in buildList)
                         {
-                            var buildDirName = GetBuildOS() + "." + arch + "." + build;
+                            var buildDirName = GetBuildOS(PlatformMoniker) + "." + arch + "." + build;
                             string tryBasePath = null, tryDiffPath = null;
 
                             if (needBasePath && (_baseRoot != null))
@@ -405,7 +413,7 @@ namespace ManagedCodeGen
 
                         foreach (var build in buildList)
                         {
-                            var buildDirName = GetBuildOS() + "." + arch + "." + build;
+                            var buildDirName = GetBuildOS(PlatformMoniker) + "." + arch + "." + build;
                             string tryPlatformPath = null, tryCrossgen = null, tryTestPath = null;
 
                             if (needCoreRoot && (_diffRoot != null))
@@ -419,7 +427,7 @@ namespace ManagedCodeGen
 
                             if (needCrossgen && (_diffRoot != null))
                             {
-                                tryCrossgen = Path.Combine(_diffRoot, "bin", "Product", buildDirName, GetCrossgenExecutableName(_moniker));
+                                tryCrossgen = Path.Combine(_diffRoot, "bin", "Product", buildDirName, GetCrossgenExecutableName(PlatformMoniker));
                                 if (!File.Exists(tryCrossgen))
                                 {
                                     continue;
@@ -755,10 +763,10 @@ namespace ManagedCodeGen
                 {
                     DisplayErrorMessage("Specify --job <name>");
                 }
-                
-                if (_number == null)
+
+                if ((_number == null) && !_lastSuccessful)
                 {
-                    DisplayErrorMessage("Specify --number to identify build to install.");
+                    DisplayErrorMessage("Specify --number or --last_successful to identify build to install.");
                 }
 
                 if (!_asmdiffLoaded)
@@ -1048,10 +1056,10 @@ namespace ManagedCodeGen
             public bool DoAnalyze { get { return !_noanalyze; } }
             public Commands DoCommand { get { return _command; } }
             public string JobName { get { return _jobName; } }
+            public bool DoLastSucessful { get { return _lastSuccessful; } }
             public string JitUtilsRoot { get { return _jitUtilsRoot; } }
             public bool HasJitUtilsRoot { get { return (_jitUtilsRoot != null); } }
             public string RID { get { return _rid; } }
-            public string Moniker { get { return _moniker; } }
             public string Number { get { return _number; } }
             public string BranchName { get { return _branchName; } }
         }
@@ -1239,6 +1247,11 @@ namespace ManagedCodeGen
                 return -1;
             }
 
+            if ((config.PlatformMoniker == null) || (GetBuildOS(config.PlatformMoniker) == null))
+            {
+                return -1;
+            }
+
             var tools = (JArray)jObj[s_configFileRootKey]["tools"];
 
             // Early out if the tool is already installed.
@@ -1261,10 +1274,17 @@ namespace ManagedCodeGen
                 cijobsArgs.Add("--branch");
                 cijobsArgs.Add(config.BranchName);
             }
-            
-            cijobsArgs.Add("--number");
-            cijobsArgs.Add(config.Number);
-            
+
+            if (config.DoLastSucessful)
+            {
+                cijobsArgs.Add("--last_successful");
+            }
+            else
+            {
+                cijobsArgs.Add("--number");
+                cijobsArgs.Add(config.Number);
+            }
+
             cijobsArgs.Add("--unzip");
             
             cijobsArgs.Add("--output");
@@ -1292,9 +1312,10 @@ namespace ManagedCodeGen
                 return 1;
             }
 
+            string buildOS = GetBuildOS(config.PlatformMoniker).ToUpper();
             foreach (var dir in Directory.EnumerateDirectories(platformPath))
             {
-                if (Path.GetFileName(dir).ToUpper().Contains(config.Moniker.ToUpper()))
+                if (Path.GetFileName(dir).ToUpper().Contains(buildOS))
                 {
                     newTool.Add("path", Path.GetFullPath(dir));
                     if (tools.HasValues)
@@ -1412,7 +1433,7 @@ namespace ManagedCodeGen
                 {
                     dasmArgs.Add(m_config.CrossgenExe);
 
-                    var jitPath = Path.Combine(clrPath, GetJitLibraryName(m_config.Moniker));
+                    var jitPath = Path.Combine(clrPath, GetJitLibraryName(m_config.PlatformMoniker));
                     if (!File.Exists(jitPath))
                     {
                         Console.Error.WriteLine("clrjit not found at " + jitPath);
@@ -1424,7 +1445,7 @@ namespace ManagedCodeGen
                 }
                 else
                 {
-                    var crossgenPath = Path.Combine(clrPath, GetCrossgenExecutableName(m_config.Moniker));
+                    var crossgenPath = Path.Combine(clrPath, GetCrossgenExecutableName(m_config.PlatformMoniker));
                     if (!Directory.Exists(crossgenPath))
                     {
                         Console.Error.WriteLine("crossgen not found at " + crossgenPath);
