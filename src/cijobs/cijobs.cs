@@ -27,6 +27,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Threading;
 using System.Threading.Tasks;
 using System.CommandLine;
 using System.Linq;
@@ -323,6 +324,7 @@ namespace ManagedCodeGen
                 _client.BaseAddress = new Uri("http://ci.dot.net/");
                 _client.DefaultRequestHeaders.Accept.Clear();
                 _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                _client.Timeout = Timeout.InfiniteTimeSpan;
             }
 
             public async Task<bool> DownloadProduct(Config config, string outputPath, string contentPath)
