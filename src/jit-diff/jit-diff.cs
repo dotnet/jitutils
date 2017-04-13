@@ -15,6 +15,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
 namespace ManagedCodeGen
 {
@@ -355,7 +356,26 @@ namespace ManagedCodeGen
 
                     if (_arch == null)
                     {
-                        archList = new List<string> { "x64", "x86" };
+                        Architecture arch = RuntimeInformation.ProcessArchitecture;
+                        switch (arch)
+                        {
+                            case Architecture.X64:
+                                archList = new List<string> { "x64", "x86" };
+                                break;
+                            case Architecture.X86:
+                                archList = new List<string> { "x86", "x64" };
+                                break;
+                            case Architecture.Arm:
+                                archList = new List<string> { "arm" };
+                                break;
+                            case Architecture.Arm64:
+                                archList = new List<string> { "arm64" };
+                                break;
+                            default:
+                                // Unknown. Assume x64.
+                                archList = new List<string> { "x64", "x86" };
+                                break;
+                        }
                     }
                     else
                     {
