@@ -112,11 +112,13 @@ namespace ManagedCodeGen
                 int maxBuildNum = -1;
                 foreach (var dir in Directory.EnumerateDirectories(toolPath))
                 {
+                    var lastComponent = Path.GetFileName(dir);
                     Regex dirPattern = new Regex(@"(.*)-(.*)");
-                    Match dirMatch = dirPattern.Match(dir);
+                    Match dirMatch = dirPattern.Match(lastComponent);
                     if (dirMatch.Success)
                     {
-                        if (int.TryParse(dirMatch.Groups[1].Value, out int thisBuildNum))
+                        var value = dirMatch.Groups[2].Value;
+                        if (int.TryParse(value, out int thisBuildNum))
                         {
                             if (thisBuildNum > maxBuildNum)
                             {
