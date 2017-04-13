@@ -362,16 +362,25 @@ namespace ManagedCodeGen
                 string productString
                     = String.Format("job/{0}/job/{1}/api/json?&tree=jobs[name,url]",
                         productName, branchName);
-                HttpResponseMessage response = await _client.GetAsync(productString);
 
-                if (response.IsSuccessStatusCode)
+                try
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var productJobs = JsonConvert.DeserializeObject<ProductJobs>(json);
-                    return productJobs.jobs;
+                    HttpResponseMessage response = await _client.GetAsync(productString);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var productJobs = JsonConvert.DeserializeObject<ProductJobs>(json);
+                        return productJobs.jobs;
+                    }
+                    else
+                    {
+                        return Enumerable.Empty<Job>();
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
+                    Console.Error.WriteLine("Error enumerating jobs: {0} {1}", ex.Message, ex.InnerException.Message);
                     return Enumerable.Empty<Job>();
                 }
             }
