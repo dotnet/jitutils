@@ -81,7 +81,7 @@ namespace ManagedCodeGen
             {
                 // Extract system RID from dotnet cli
                 List<string> commandArgs = new List<string> { "--info" };
-                CommandResult result = TryCommand("dotnet", commandArgs, true);
+                CommandResult result = Utility.TryCommand("dotnet", commandArgs, true);
 
                 if (result.ExitCode != 0)
                 {
@@ -116,54 +116,6 @@ namespace ManagedCodeGen
                         }
                     }
                 }
-            }
-
-            private string GetRepoRoot()
-            {
-                // git rev-parse --show-toplevel
-                List<string> commandArgs = new List<string> { "rev-parse", "--show-toplevel" };
-                CommandResult result = TryCommand("git", commandArgs, true);
-                if (result.ExitCode != 0)
-                {
-                    if (_verbose)
-                    {
-                        Console.Error.WriteLine("'git rev-parse --show-toplevel' returned non-zero ({0})", result.ExitCode);
-                    }
-                    return null;
-                }
-
-                var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-                var git_root = lines[0];
-                var repo_root = git_root.Replace('/', Path.DirectorySeparatorChar);
-
-                // Is it actually the dotnet/coreclr repo?
-                commandArgs = new List<string> { "remote", "-v" };
-                result = TryCommand("git", commandArgs, true);
-                if (result.ExitCode != 0)
-                {
-                    if (_verbose)
-                    {
-                        Console.Error.WriteLine("'git remote -v' returned non-zero ({0})", result.ExitCode);
-                    }
-                    return null;
-                }
-
-                bool isCoreClr = result.StdOut.Contains("/coreclr");
-                if (!isCoreClr)
-                {
-                    if (_verbose)
-                    {
-                        Console.Error.WriteLine("Doesn't appear to be the dotnet/coreclr repo:");
-                        Console.Error.WriteLine(result.StdOut);
-                    }
-                    return null;
-                }
-
-                if (_verbose)
-                {
-                    Console.WriteLine("Repo root: " + repo_root);
-                }
-                return repo_root;
             }
 
             private void validate()
@@ -232,7 +184,7 @@ namespace ManagedCodeGen
                     {
                         Console.WriteLine("Discovering --coreclr.");
                     }
-                    _rootPath = GetRepoRoot();
+                    _rootPath = Utility.GetRepoRoot(_verbose);
                     if (_rootPath == null)
                     {
                         _syntaxResult.ReportError("Specify --coreclr");
@@ -274,7 +226,7 @@ namespace ManagedCodeGen
 
                             string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
                             string buildPath = Path.Combine(_rootPath, "build.cmd");
-                            CommandResult result = TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
+                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -300,7 +252,7 @@ namespace ManagedCodeGen
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
                             string[] commandArgs = { _arch, _build, "configureonly" };
                             string buildPath = Path.Combine(_rootPath, "build.sh");
-                            CommandResult result = TryCommand(buildPath, commandArgs, true, _rootPath);
+                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, true, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -572,45 +524,6 @@ namespace ManagedCodeGen
             return returncode;
         }
 
-        class ScriptResolverPolicyWrapper : ICommandResolverPolicy
-        {
-            public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
-        }
-
-        public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture, string workingDirectory = null)
-        {
-            try 
-            {
-                Command command =  Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
-
-                if (!string.IsNullOrEmpty(workingDirectory))
-                {
-                    command.WorkingDirectory(workingDirectory);
-                }
-
-                if (capture)
-                {
-                    // Capture stdout/stderr for consumption within tool.
-                    command.CaptureStdOut();
-                    command.CaptureStdErr();
-                }
-                else
-                {
-                    // Wireup stdout/stderr so we can see output.
-                    command.ForwardStdOut();
-                    command.ForwardStdErr();
-                }
-
-                return command.Execute();
-            }
-            catch (CommandUnknownException e)
-            {
-                Console.Error.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
-                Environment.Exit(-1);
-                return CommandResult.Empty;
-            }
-        }
-
         // This method reads in a compile_command.json file, and writes a new json file with only the entries
         // commands for files found in the project specified. For example, if project is dll, it will write a
         // new compile_commands file (called compile_commands_dll.json) with only the entries whose directory
@@ -711,7 +624,7 @@ namespace ManagedCodeGen
                 }
 
                 List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
-                CommandResult result = TryCommand("clang-tidy", commandArgs, true);
+                CommandResult result = Utility.TryCommand("clang-tidy", commandArgs, true);
 
                 if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && result.StdOut.Contains("error:"))))
                 {
@@ -759,7 +672,7 @@ namespace ManagedCodeGen
 
                     // Run clang-format
                     List<string> commandArgs = new List<string> { formatFix, "-style=file", outputReplacementXml, filename };
-                    CommandResult result = TryCommand("clang-format", commandArgs, true);
+                    CommandResult result = Utility.TryCommand("clang-format", commandArgs, true);
 
                     if (result.StdOut.Contains("<replacement ") && !fix)
                     {

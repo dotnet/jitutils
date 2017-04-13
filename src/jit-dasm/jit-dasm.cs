@@ -288,35 +288,6 @@ namespace ManagedCodeGen
             return assemblyInfoList;
         }
 
-        // Check to see if the passed filePath is to an assembly.
-        private static bool IsAssembly(string filePath)
-        {
-            try
-            {
-                System.Reflection.AssemblyName diffAssembly =
-                    System.Runtime.Loader.AssemblyLoadContext.GetAssemblyName(filePath);
-            }
-            catch (System.IO.FileNotFoundException)
-            {
-                // File not found - not an assembly
-                // TODO - should we log this case?
-                return false;
-            }
-            catch (System.BadImageFormatException)
-            {
-                // Explictly not an assembly.
-                return false;
-            }
-            catch (System.IO.FileLoadException)
-            {
-                // This is an assembly but it just happens to be loaded.
-                // (leave true in so as not to rely on fallthrough)
-                return true;
-            }
-
-            return true;
-        }
-
         // Recursivly search for assemblies from a root path.
         private static List<AssemblyInfo> IdentifyAssemblies(string rootPath, Config config)
         {
@@ -328,8 +299,7 @@ namespace ManagedCodeGen
             // Get files that could be assemblies, but discard currently
             // ngen'd assemblies.
             var subFiles = Directory.EnumerateFiles(rootPath, "*", searchOption)
-                .Where(s => (s.EndsWith(".exe") || s.EndsWith(".dll"))
-                    && !s.Contains(".ni."));
+                .Where(s => (s.EndsWith(".exe") || s.EndsWith(".dll")) && !s.Contains(".ni."));
 
             foreach (var filePath in subFiles)
             {
@@ -339,7 +309,7 @@ namespace ManagedCodeGen
                 }
 
                 // skip if not an assembly
-                if (!IsAssembly(filePath))
+                if (!Utility.IsAssembly(filePath))
                 {
                     continue;
                 }

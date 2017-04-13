@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\util\util.cs" Link="util.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.Cli.Utils" Version="1.0.1" />
     <PackageReference Include="System.CommandLine" Version="0.1.0-e170320-1" />
   </ItemGroup>
