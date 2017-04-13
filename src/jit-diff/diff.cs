@@ -92,11 +92,11 @@ namespace ManagedCodeGen
             {
                 foreach (var assemblyInfo in assemblyWorkList)
                 {
-                    if (m_config.HasBasePath)
+                    if (m_config.DoBaseCompiles)
                     {
                         StartDasmWorkOne(commandArgs, "base", m_config.BasePath, assemblyInfo);
                     }
-                    if (m_config.HasDiffPath)
+                    if (m_config.DoDiffCompiles)
                     {
                         StartDasmWorkOne(commandArgs, "diff", m_config.DiffPath, assemblyInfo);
                     }
@@ -114,7 +114,7 @@ namespace ManagedCodeGen
                     var jitPath = Path.Combine(clrPath, GetJitLibraryName(m_config.PlatformMoniker));
                     if (!File.Exists(jitPath))
                     {
-                        Console.Error.WriteLine("clrjit not found at " + jitPath);
+                        Console.Error.WriteLine("clrjit not found at {0}", jitPath);
                         return null;
                     }
 
@@ -124,9 +124,9 @@ namespace ManagedCodeGen
                 else
                 {
                     var crossgenPath = Path.Combine(clrPath, GetCrossgenExecutableName(m_config.PlatformMoniker));
-                    if (!Directory.Exists(crossgenPath))
+                    if (!File.Exists(crossgenPath))
                     {
-                        Console.Error.WriteLine("crossgen not found at " + crossgenPath);
+                        Console.Error.WriteLine("crossgen not found at {0}", crossgenPath);
                         return null;
                     }
 
@@ -221,7 +221,7 @@ namespace ManagedCodeGen
 
                 // Analyze completed run.
 
-                if (config.DoAnalyze && config.HasDiffPath && config.HasBasePath)
+                if (config.DoAnalyze && config.DoDiffCompiles && config.DoBaseCompiles)
                 {
                     List<string> analysisArgs = new List<string>();
 

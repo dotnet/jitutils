@@ -277,7 +277,13 @@ namespace ManagedCodeGen
 
                 bool needOutputPath = (_outputPath == null);                            // We need to find --output
                 bool needCoreRoot = (_platformPath == null);                            // We need to find --core_root
-                bool needCrossgen = (_crossgenExe == null);                             // We need to find --crossgen
+
+                // It's not clear we should find a default for crossgen: in the current code, if crossgen is specified,
+                // then we always use that. If not specified, we find crossgen in either the base path or diff path,
+                // depending on what we are generating. That seems appropriate to continue, without this default.
+                // bool needCrossgen = (_crossgenExe == null);                             // We need to find --crossgen
+                bool needCrossgen = false;
+
                 bool needBasePath = _baseSpecified && (_basePath == null);              // We need to find --base
                 bool needDiffPath = _diffSpecified && (_diffPath == null);              // We need to find --diff
                 bool needTestTree = (Benchmarks || DoTestTree) && (_testPath == null);  // We need to find --test_root
@@ -947,7 +953,7 @@ namespace ManagedCodeGen
                     {
                         if (!File.Exists(_crossgenExe))
                         {
-                            Console.WriteLine("Default crossgen path {0} not found! Investigate config file entry.", crossgenExe);
+                            Console.WriteLine("Default crossgen file {0} not found! Investigate config file entry.", crossgenExe);
                         }
                         else
                         {
@@ -1122,12 +1128,12 @@ namespace ManagedCodeGen
                 return 0;
             }
 
+            public bool DoDiffCompiles { get { return _diffSpecified; } }
+            public bool DoBaseCompiles { get { return _baseSpecified; } }
             public string CoreRoot { get { return _platformPath; } }
             public string TestRoot { get { return _testPath; } }
             public string BasePath { get { return _basePath; } }
-            public bool HasBasePath { get { return (_basePath != null); } }
             public string DiffPath { get { return _diffPath; } }
-            public bool HasDiffPath { get { return (_diffPath != null); } }
             public string CrossgenExe { get { return _crossgenExe; } }
             public bool HasCrossgenExe { get { return (_crossgenExe != null); } }
             public string OutputPath { get { return _outputPath; } }
