@@ -537,6 +537,12 @@ namespace ManagedCodeGen
                     }
                 }
 
+                if (!_corelib && !_frameworks && !_benchmarks && !_tests)
+                {
+                    // Setting --corelib as the default
+                    _corelib = true;
+                }
+
                 if (Verbose)
                 {
                     Console.WriteLine("After setting defaults:");
@@ -721,7 +727,7 @@ namespace ManagedCodeGen
                     @"      environment variable.",
                     @"",
                     @"  jit-diff diff --diff",
-                    @"      Only generates asm using the diff JIT -- does not generate asm from a baseline compiler",
+                    @"      Only generates asm using the diff JIT -- does not generate asm from a baseline compiler --",
                     @"      using all computed defaults.",
                     @"",
                     @"  jit-diff diff --diff --arch x86",
@@ -762,18 +768,12 @@ namespace ManagedCodeGen
 
                 if (_benchmarks && (_testPath == null))
                 {
-                    DisplayErrorMessage("--benchmarks requires specifying --test_root as well");
+                    DisplayErrorMessage("--benchmarks requires specifying --test_root or --diff_root or running in the coreclr tree");
                 }
 
                 if (_tests && (_testPath == null))
                 {
-                    DisplayErrorMessage("--tests requires specifying --test_root as well");
-                }
-
-                if (!_corelib && !_frameworks && !_benchmarks && !_tests)
-                {
-                    // Setting --corelib as the default
-                    _corelib = true;
+                    DisplayErrorMessage("--tests requires specifying --test_root or --diff_root or running in the coreclr tree");
                 }
 
                 if (_outputPath == null)
