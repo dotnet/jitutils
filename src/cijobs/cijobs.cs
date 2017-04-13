@@ -620,7 +620,7 @@ namespace ManagedCodeGen
                 }
                 
                 string tag = String.Format("{0}-{1}", config.JobName, config.Number);
-                string outputPath = config.OutputPath;
+                string outputPath = Path.Combine(config.OutputPath, tag);
 
                 // Create directory if it doesn't exist.
                 Directory.CreateDirectory(outputPath);
