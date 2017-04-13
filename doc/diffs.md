@@ -23,19 +23,28 @@ See the [CoreCLR](https://github.com/dotnet/coreclr) GitHub repo for directions 
 
 ## Dependencies
 
-* dotnet - The dotnet CLI is used to determine the current processor architecture "RID".
+* dotnet - The dotnet CLI is used to build the tools. It is also used to determine the
+  current processor architecture "RID". Install it from [here](https://dot.net).
 * git - The jit-analyze tool uses `git diff` to check for textual differences since this is
   consistent across platforms, and fast. It is also used to determine if the current
   directory is a dotnet/coreclr repo root, to provide for default arguments.
 
 ## Build the tools
 
+### The easy way
+
 A `bootstrap.{cmd,sh}` script is provided in the jitutils root directory which will validate all tool dependencies,
 build the repo, publish the resulting binaries to a common "bin" directory, and place them on the path.
 This can be run to set up the developer in one shot.
 
-To build jitutils not using the bootstrap script, run: `build.{cmd,sh}`. By
-default the script just builds the tools and does not publish them in a separate directory.
+### The flexible way
+
+To build jitutils not using the bootstrap script:
+
+* Run `dotnet restore` in the root (once).
+* Run `build.{cmd,sh}`.
+
+By default the script just builds the tools and does not publish them in a separate directory.
 To publish the utilities add the '-p' flag which publishes each utility to the ./bin directory 
 in the root of the repo.  Additionally, to download the default set of framework assemblies 
 that can be used for generating asm diffs, add '-f'.
@@ -110,9 +119,10 @@ jit-diff has three top-level commands, as shown by the help message:
     $ jit-diff --help
     usage: jit-diff <command> [<args>]
 
-        diff       Run asm diff.
-        list       List defaults and available tools in config.json.
-        install    Install tool in config.json.
+        diff         Run asm diff.
+        list         List defaults and available tools in config.json.
+        install      Install tool in config.json.
+        uninstall    Uninstall tool from config.json.
 ```
 
 The "jit-diff diff" command has this help message:
@@ -196,6 +206,14 @@ The "jit-diff install" command has this help message:
         -v, --verbose            Enable verbose output
 ```
 
+The "jit-diff uninstall" command has this help message:
+```
+    $ jit-diff uninstall --help
+    usage: jit-diff uninstall [-t <arg>]
+
+        -t, --tag <arg>    Name of tool tag in config file.
+```
+
 ## Examples of generating diffs
 
 The tool needs to know:
@@ -214,7 +232,7 @@ Explanation:
 2. `--corelib` -- generate diffs using System.Private.CoreLib.dll.
 3. `--core_root` -- specify the `CORE_ROOT` directory (the "test layout"). Used to specify to crossgen
    where the platform assemblies are. Also, used as the directory where framework assemblies such as
-   System.Private.CoreLib.dll can be found for the purpose of using them to generate dasm.
+   System.Runtime.dll can be found for the purpose of using them to generate dasm.
 4. `--base` -- specify the directory in which a baseline JIT can be found.
 5. `--diff` -- specify the directory in which a diff (experimental) JIT can be found.
 6. `--crossgen` -- specify the crossgen.exe to use. Note that this must match the build flavor of `--core_root`.
@@ -262,7 +280,8 @@ You minimally specify:
 The defaults are:
 * If jit-diff is invoked with the current directory within the dotnet/coreclr repo, then the root of
   this repo serves to find the diff compiler and `CORE_ROOT` directory. (Note that we have no reasonable
-  default for determining what the baseline toolset or repo is. This is specified with the `--base_root` argument.)
+  default for determining what the baseline toolset or repo is. This is specified with the `--base_root`
+  argument or by providing a full path with the `--base` argument.)
 * The default output directory is `<repo_root>\bin\diffs` (in this case, c:\coreclr\bin\diffs).
 * The default architecture is x64. If this isn't found, x86 is tried.
 * The default diff and baseline JIT build flavor is checked. If this isn't found, debug is tried.

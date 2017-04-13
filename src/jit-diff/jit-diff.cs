@@ -167,8 +167,8 @@ namespace ManagedCodeGen
                     syntax.DefineOption("t|tag", ref _tag, "Name of root in output directory. Allows for many sets of output.");
                     syntax.DefineOption("c|corelib", ref _corelib, "Diff System.Private.CoreLib.dll.");
                     syntax.DefineOption("f|frameworks", ref _frameworks, "Diff frameworks.");
-                    syntax.DefineOption("benchmarks", ref _benchmarks, "Diff core benchmarks. Must pass --test_root.");
-                    syntax.DefineOption("tests", ref _tests, "Diff all tests. Must pass --test_root.");
+                    syntax.DefineOption("benchmarks", ref _benchmarks, "Diff core benchmarks.");
+                    syntax.DefineOption("tests", ref _tests, "Diff all tests.");
                     syntax.DefineOption("gcinfo", ref _gcinfo, "Add GC info to the disasm output.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("core_root", ref _platformPath, "Path to test CORE_ROOT.");
@@ -176,7 +176,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("base_root", ref _baseRoot, "Path to root of base dotnet/coreclr repo.");
                     syntax.DefineOption("diff_root", ref _diffRoot, "Path to root of diff dotnet/coreclr repo.");
                     syntax.DefineOption("arch", ref _arch, "Architecture to diff (x86, x64).");
-                    syntax.DefineOption("build", ref _build, "Build flavor to diff (checked, debug).");
+                    syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
 
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
@@ -299,16 +299,13 @@ namespace ManagedCodeGen
 
                 // If --diff_root wasn't specified, see if we can figure it out from the current directory
                 // using git.
-                //
-                // NOTE: we shouldn't do this unless it will be used, that is, if there are some
-                // arguments that are currently unspecified and need this to compute their default.
-                //
+
                 if (needDiffRoot)
                 {
                     _diffRoot = GetRepoRoot();
                 }
 
-                if ((_outputPath == null) && (_diffRoot != null))
+                if (needOutputPath && (_diffRoot != null))
                 {
                     _outputPath = Utility.CombinePath(_diffRoot, s_defaultDiffDirectoryPath);
                     PathUtility.EnsureDirectoryExists(_outputPath);
@@ -329,12 +326,12 @@ namespace ManagedCodeGen
                     // architecture.
                     //
                     // Try all build flavors to find one --base and -diff. Both --base and --diff
-                    // must be the same build flavor (e.g., checked).
+                    // must be the same build flavor (e.g., Checked).
                     //
                     // Then, if necessary, try all build flavors to find both a Core_Root and, if
                     // necessary, --test_root. --test_root and --core_root must be the same build
-                    // flavor. If these aren't "release", a warning is given, as it is considered
-                    // best practice to use release builds for these.
+                    // flavor. If these aren't "Release", a warning is given, as it is considered
+                    // best practice to use Release builds for these.
                     //
                     // If the user already specified one of --core_root, --base, or --diff, we leave
                     // that alone, and only try to fill in the remaining ones with an appropriate
@@ -343,15 +340,15 @@ namespace ManagedCodeGen
                     // --core_root, --test_root, and --diff are found within the --diff_root tree.
                     // --base is found within the --base_root tree.
                     //
-                    // --core_root and --test_root build flavor defaults to (in order): release, checked, debug.
-                    // --base and --diff flavor defaults to (in order): checked, debug.
+                    // --core_root and --test_root build flavor defaults to (in order): Release, Checked, Debug.
+                    // --base and --diff flavor defaults to (in order): Checked, Debug.
                     //
                     // --crossgen and --core_root need to be from the same build.
                     //
                     // E.g.:
-                    //    test_root: c:\gh\coreclr\bin\tests\Windows_NT.x64.release
-                    //    Core_Root: c:\gh\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root
-                    //    base/diff: c:\gh\coreclr\bin\Product\Windows_NT.x64.checked
+                    //    test_root: c:\gh\coreclr\bin\tests\Windows_NT.x64.Release
+                    //    Core_Root: c:\gh\coreclr\bin\tests\Windows_NT.x64.Release\Tests\Core_Root
+                    //    base/diff: c:\gh\coreclr\bin\Product\Windows_NT.x64.Checked
 
                     List<string> archList;
                     List<string> buildList;
@@ -369,7 +366,7 @@ namespace ManagedCodeGen
                     {
                         if (_build == null)
                         {
-                            buildList = new List<string> { "checked", "debug" };
+                            buildList = new List<string> { "Checked", "Debug" };
                         }
                         else
                         {
@@ -420,7 +417,7 @@ namespace ManagedCodeGen
 
                         if (_build == null)
                         {
-                            buildList = new List<string> { "release", "checked", "debug" };
+                            buildList = new List<string> { "Release", "Checked", "Debug" };
                         }
                         else
                         {
@@ -482,10 +479,10 @@ namespace ManagedCodeGen
                                 Console.WriteLine("Using --test_root={0}", _testPath);
                             }
 
-                            if (build != "release")
+                            if (build != "Release")
                             {
                                 Console.WriteLine();
-                                Console.WriteLine("Warning: it is best practice to use a release build for --core_root, --crossgen, and --test_root.");
+                                Console.WriteLine("Warning: it is best practice to use a Release build for --core_root, --crossgen, and --test_root.");
                                 Console.WriteLine();
                             }
 
@@ -685,11 +682,11 @@ namespace ManagedCodeGen
                     string[] diffExampleText = {
                     @"Examples:",
                     @"",
-                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff c:\coreclr\bin\Product\Windows_NT.x86.checked",
+                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.Release\Tests\Core_Root --base c:\coreclr_base\bin\Product\Windows_NT.x64.Checked --diff c:\coreclr\bin\Product\Windows_NT.x86.Checked",
                     @"      Generate diffs of System.Private.CoreLib.dll by specifying baseline and",
                     @"      diff compiler directories explicitly.",
                     @"",
-                    @"  jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff",
+                    @"  jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.Checked --diff",
                     @"      If run within the c:\coreclr git clone of dotnet/coreclr, does the same",
                     @"      as the prevous example, using defaults.",
                     @"",
@@ -710,8 +707,8 @@ namespace ManagedCodeGen
                     @"  jit-diff diff --diff --arch x86",
                     @"      Generate diffs, but for x86, even if there is an x64 compiler available.",
                     @"",
-                    @"  jit-diff diff --diff --build debug",
-                    @"      Generate diffs, but using a debug build, even if there is a checked build available."
+                    @"  jit-diff diff --diff --build Debug",
+                    @"      Generate diffs, but using a Debug build, even if there is a Checked build available."
                     };
                     foreach (var line in diffExampleText)
                     {
