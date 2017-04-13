@@ -47,10 +47,11 @@ namespace ManagedCodeGen
         public enum Commands
         {
             Install,
+            Uninstall,
             Diff,
             List
         }
-        
+
         private static string s_asmTool = "jit-dasm";
         private static string s_analysisTool = "jit-analyze";
         private static string s_configFileName = "config.json";
@@ -108,10 +109,10 @@ namespace ManagedCodeGen
         {
             private ArgumentSyntax _syntaxResult;
             private Commands _command = Commands.Diff;
-            private bool _baseSpecified = false;    // True if user specified "--base" or "--base <path>"
-            private bool _diffSpecified = false;    // True if user specified "--diff" or "--diff <path>"
-            private string _basePath = null;        // Non-null if user specified "--base <path>"
-            private string _diffPath = null;        // Non-null if user specified "--base <path>"
+            private bool _baseSpecified = false;    // True if user specified "--base" or "--base <path>" or "--base <tag>"
+            private bool _diffSpecified = false;    // True if user specified "--diff" or "--diff <path>" or "--diff <tag>"
+            private string _basePath = null;        // Non-null if user specified "--base <path>" or "--base <tag>"
+            private string _diffPath = null;        // Non-null if user specified "--diff <path>" or "--diff <tag>"
             private string _crossgenExe = null;
             private string _outputPath = null;
             private bool _noanalyze = false;
@@ -129,16 +130,16 @@ namespace ManagedCodeGen
             private bool _tests = false;
             private bool _gcinfo = false;
             private bool _verbose = false;
-            private string _jobName;
-            private string _number;
-            private bool _lastSuccessful;
-            private string _jitUtilsRoot;
-            private string _rid;
-            private string _platformName;
-            private string _branchName;
+            private string _jobName = null;
+            private string _number = null;
+            private bool _lastSuccessful = false;
+            private string _jitUtilsRoot = null;
+            private string _rid = null;
+            private string _platformName = null;
+            private string _branchName = null;
 
             private JObject _jObj;
-            private bool _asmdiffLoaded = false;
+            private bool _configFileLoaded = false;
             private bool _noJitUtilsRoot = false;
             private bool _validationError = false;
 
@@ -190,17 +191,21 @@ namespace ManagedCodeGen
                     syntax.DefineOption("b|branch", ref _branchName, "Name of branch.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
 
+                    // Uninstall command section.
+                    syntax.DefineCommand("uninstall", ref _command, Commands.Uninstall, "Uninstall tool from " + s_configFileName + ".");
+                    syntax.DefineOption("t|tag", ref _tag, "Name of tool tag in config file.");
+
                     _baseSpecified = baseOption.IsSpecified;
                     _diffSpecified = diffOption.IsSpecified;
                 });
 
                 SetRID();
 
+                ExpandToolTags();
+
                 SetDefaults();
 
                 Validate();
-
-                ExpandToolTags();
 
                 if (_command == Commands.Diff)
                 {
@@ -270,6 +275,17 @@ namespace ManagedCodeGen
             private void SetDefaults()
             {
                 // Figure out what we need to set from defaults.
+
+                switch (_command)
+                {
+                    case Commands.Diff:
+                        break;
+                    case Commands.Install:
+                    case Commands.Uninstall:
+                    case Commands.List:
+                        // Don't need any defaults.
+                        return;
+                }
 
                 bool needOutputPath = (_outputPath == null);                            // We need to find --output
                 bool needCoreRoot = (_platformPath == null);                            // We need to find --core_root
@@ -484,23 +500,23 @@ namespace ManagedCodeGen
 
                     if (needCoreRoot)
                     {
-                        Console.Error.WriteLine("Error: didn't find --core_root default");
+                        Console.Error.WriteLine("error: didn't find --core_root default");
                     }
                     if (needCrossgen)
                     {
-                        Console.Error.WriteLine("Error: didn't find --crossgen default");
+                        Console.Error.WriteLine("error: didn't find --crossgen default");
                     }
                     if (needTestTree)
                     {
-                        Console.Error.WriteLine("Error: didn't find --test_path default");
+                        Console.Error.WriteLine("error: didn't find --test_path default");
                     }
                     if (needBasePath)
                     {
-                        Console.Error.WriteLine("Error: didn't find --base default");
+                        Console.Error.WriteLine("error: didn't find --base default");
                     }
                     if (needDiffPath)
                     {
-                        Console.Error.WriteLine("Error: didn't find --diff default");
+                        Console.Error.WriteLine("error: didn't find --diff default");
                     }
                 }
 
@@ -595,13 +611,23 @@ namespace ManagedCodeGen
 
             private void ExpandToolTags()
             {
-                if (_noJitUtilsRoot)
+                if (!_configFileLoaded)
                 {
                     // Early out if there is no JIT_UTILS_ROOT.
                     return;
                 }
 
+                if (_jObj[s_configFileRootKey] == null)
+                {
+                    // No configuration for this tool
+                    return;
+                }
+
                 var tools = _jObj[s_configFileRootKey]["tools"];
+                if (tools == null)
+                {
+                    return;
+                }
 
                 foreach (var tool in tools)
                 {
@@ -612,7 +638,7 @@ namespace ManagedCodeGen
                     {
                         // passed base tag matches installed tool, reset path.
                         _basePath = path;
-                    } 
+                    }
 
                     if (_diffPath == tag)
                     {
@@ -634,6 +660,9 @@ namespace ManagedCodeGen
                     case Commands.Install:
                         ValidateInstall();
                         break;
+                    case Commands.Uninstall:
+                        ValidateUninstall();
+                        break;
                     case Commands.List:
                         ValidateList();
                         break;
@@ -651,7 +680,9 @@ namespace ManagedCodeGen
                 Console.Error.WriteLine("");
                 Console.Error.Write(_syntaxResult.GetHelpText(100));
 
-                string[] exampleText = {
+                if (_command == Commands.Diff)
+                {
+                    string[] diffExampleText = {
                     @"Examples:",
                     @"",
                     @"  jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff c:\coreclr\bin\Product\Windows_NT.x86.checked",
@@ -681,10 +712,11 @@ namespace ManagedCodeGen
                     @"",
                     @"  jit-diff diff --diff --build debug",
                     @"      Generate diffs, but using a debug build, even if there is a checked build available."
-                };
-                foreach (var line in exampleText)
-                {
-                    Console.Error.WriteLine(line);
+                    };
+                    foreach (var line in diffExampleText)
+                    {
+                        Console.Error.WriteLine(line);
+                    }
                 }
             }
 
@@ -693,7 +725,7 @@ namespace ManagedCodeGen
                 Console.Error.WriteLine("error: {0}", error);
                 _validationError = true;
             }
-            
+
             private void ValidateDiff()
             {
                 if (_platformPath == null)
@@ -769,15 +801,52 @@ namespace ManagedCodeGen
                     DisplayErrorMessage("Specify --number or --last_successful to identify build to install.");
                 }
 
-                if (!_asmdiffLoaded)
+                if (_noJitUtilsRoot)
+                {
+                    DisplayErrorMessage("JIT_UTILS_ROOT environment variable not set.");
+                }
+                else if (!_configFileLoaded)
+                {
+                    DisplayErrorMessage(s_configFileName + " file not loaded.");
+                }
+                if (!_configFileLoaded)
                 {
                     DisplayErrorMessage("\"install\" command requires a valid " + s_configFileName + " file loaded from the directory specified by the JIT_UTILS_ROOT environment variable.");
                 }
             }
 
+            private void ValidateUninstall()
+            {
+                if (_tag == null)
+                {
+                    DisplayErrorMessage("Specify --tag <tag>");
+                }
+
+                if (_noJitUtilsRoot)
+                {
+                    DisplayErrorMessage("JIT_UTILS_ROOT environment variable not set.");
+                }
+                else if (!_configFileLoaded)
+                {
+                    DisplayErrorMessage(s_configFileName + " file not loaded.");
+                }
+                if (!_configFileLoaded)
+                {
+                    DisplayErrorMessage("\"uninstall\" command requires a valid " + s_configFileName + " file loaded from the directory specified by the JIT_UTILS_ROOT environment variable.");
+                }
+            }
+
             private void ValidateList()
             {
-                if (!_asmdiffLoaded)
+                if (_noJitUtilsRoot)
+                {
+                    DisplayErrorMessage("JIT_UTILS_ROOT environment variable not set.");
+                }
+                else if (!_configFileLoaded)
+                {
+                    DisplayErrorMessage(s_configFileName + " file not loaded.");
+                }
+                if (!_configFileLoaded)
                 {
                     DisplayErrorMessage("\"list\" command requires a valid " + s_configFileName + " file loaded from the directory specified by the JIT_UTILS_ROOT environment variable.");
                 }
@@ -785,6 +854,13 @@ namespace ManagedCodeGen
 
             public string GetToolPath(string tool, out bool found)
             {
+                if (!_configFileLoaded || (_jObj[s_configFileRootKey] == null) || (_jObj[s_configFileRootKey]["default"] == null))
+                {
+                    // This should never happen; the caller should ensure that.
+                    found = false;
+                    return null;
+                }
+
                 var token = _jObj[s_configFileRootKey]["default"][tool];
 
                 if (token != null)
@@ -809,6 +885,13 @@ namespace ManagedCodeGen
 
             public T ExtractDefault<T>(string name, out bool found)
             {
+                if (!_configFileLoaded || (_jObj[s_configFileRootKey] == null) || (_jObj[s_configFileRootKey]["default"] == null))
+                {
+                    // This should never happen; the caller should ensure that.
+                    found = false;
+                    return default(T);
+                }
+
                 var token = _jObj[s_configFileRootKey]["default"][name];
 
                 if (token != null)
@@ -838,14 +921,14 @@ namespace ManagedCodeGen
                     return;
                 }
 
-                string path = Path.Combine(_jitUtilsRoot, s_configFileName);
-                if (!File.Exists(path))
+                string configFilePath = Path.Combine(_jitUtilsRoot, s_configFileName);
+                if (!File.Exists(configFilePath))
                 {
-                    Console.Error.WriteLine("Can't find {0}", path);
+                    Console.Error.WriteLine("Can't find {0}", configFilePath);
                     return;
                 }
 
-                string configJson = File.ReadAllText(path);
+                string configJson = File.ReadAllText(configFilePath);
 
                 try
                 {
@@ -857,12 +940,20 @@ namespace ManagedCodeGen
                     Console.Error.WriteLine("Continuing; ignoring config file.");
                     return;
                 }
-                
-                // Flag that the config file is loaded.
-                _asmdiffLoaded = true;
 
+                // Flag that the config file is loaded.
+                _configFileLoaded = true;
+
+                Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
+
+                // Now process the configuration file data.
+
+                if (_jObj[s_configFileRootKey] == null)
+                {
+                    Console.Error.WriteLine("Warning: no {0} section of config file {1}", s_configFileRootKey, configFilePath);
+                }
                 // Check if there is any default config specified.
-                if ((_jObj[s_configFileRootKey] != null) && (_jObj[s_configFileRootKey]["default"] != null))
+                else if (_jObj[s_configFileRootKey]["default"] != null)
                 {
                     bool found;
 
@@ -935,11 +1026,11 @@ namespace ManagedCodeGen
                     // Set flag from default for analyze.
                     var noanalyze = ExtractDefault<bool>("noanalyze", out found);
                     _noanalyze = (found) ? noanalyze : _noanalyze;
-                    
+
                     // Set flag from default for corelib.
                     var corelib = ExtractDefault<bool>("corelib", out found);
                     _corelib = (found) ? corelib : _corelib;
-                    
+
                     // Set flag from default for frameworks.
                     var frameworks = ExtractDefault<bool>("frameworks", out found);
                     _frameworks = (found) ? frameworks : _frameworks;
@@ -959,54 +1050,88 @@ namespace ManagedCodeGen
                     // Set flag from default for tag.
                     var tag = ExtractDefault<string>("tag", out found);
                     _tag = (found) ? tag : _tag;
-                    
+
                     // Set flag from default for verbose.
                     var verbose = ExtractDefault<bool>("verbose", out found);
                     _verbose = (found) ? verbose : _verbose;
                 }
-
-                Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
             }
 
-            void PrintDefault<T>(string parameter) 
+            public enum DefaultType
+            {
+                DT_path,
+                DT_file,
+                DT_bool,
+                DT_string
+            }
+
+            void PrintDefault(string parameter, DefaultType dt)
             {
                 bool found;
-                var defaultValue = ExtractDefault<T>(parameter, out found);
+                var defaultValue = ExtractDefault<string>(parameter, out found);
                 if (found)
                 {
                     Console.WriteLine("\t{0}: {1}", parameter, defaultValue);
+
+                    switch (dt)
+                    {
+                        case DefaultType.DT_path:
+                            if (!Directory.Exists(defaultValue))
+                            {
+                                Console.WriteLine("\t\tWarning: path not found");
+                            }
+                            break;
+                        case DefaultType.DT_file:
+                            if (!File.Exists(defaultValue))
+                            {
+                                Console.WriteLine("\t\tWarning: file not found");
+                            }
+                            break;
+                        case DefaultType.DT_bool:
+                            break;
+                        case DefaultType.DT_string:
+                            break;
+                    }
                 }
             }
 
-            public int List()
+            public int ListCommand()
             {
+                string configPath = Path.Combine(_jitUtilsRoot, s_configFileName);
+                Console.WriteLine("Listing {0} key in {1}", s_configFileRootKey, configPath);
+                Console.WriteLine();
+
                 var asmdiffNode = _jObj[s_configFileRootKey];
                 if (asmdiffNode == null)
+                {
+                    Console.WriteLine("No {0} key data.", s_configFileRootKey);
                     return 0;
+                }
 
                 // Check if there is any default config specified.
                 if (asmdiffNode["default"] != null)
                 {
                     Console.WriteLine("Defaults:");
 
-                    PrintDefault<string>("base");
-                    PrintDefault<string>("diff");
-                    PrintDefault<string>("crossgen");
-                    PrintDefault<string>("output");
-                    PrintDefault<string>("core_root");
-                    PrintDefault<string>("test_root");
-                    PrintDefault<string>("base_root");
-                    PrintDefault<string>("diff_root");
-                    PrintDefault<string>("arch");
-                    PrintDefault<string>("build");
-                    PrintDefault<string>("analyze");
-                    PrintDefault<string>("corelib");
-                    PrintDefault<string>("frameworks");
-                    PrintDefault<string>("benchmarks");
-                    PrintDefault<string>("tests");
-                    PrintDefault<string>("tag");
-                    PrintDefault<string>("verbose");
-                    
+                    PrintDefault("base", DefaultType.DT_path);
+                    PrintDefault("diff", DefaultType.DT_path);
+                    PrintDefault("crossgen", DefaultType.DT_file);
+                    PrintDefault("output", DefaultType.DT_path);
+                    PrintDefault("core_root", DefaultType.DT_path);
+                    PrintDefault("test_root", DefaultType.DT_path);
+                    PrintDefault("base_root", DefaultType.DT_path);
+                    PrintDefault("diff_root", DefaultType.DT_path);
+                    PrintDefault("arch", DefaultType.DT_string);
+                    PrintDefault("build", DefaultType.DT_string);
+                    PrintDefault("noanalyze", DefaultType.DT_bool);
+                    PrintDefault("corelib", DefaultType.DT_bool);
+                    PrintDefault("frameworks", DefaultType.DT_bool);
+                    PrintDefault("benchmarks", DefaultType.DT_bool);
+                    PrintDefault("tests", DefaultType.DT_bool);
+                    PrintDefault("gcinfo", DefaultType.DT_bool);
+                    PrintDefault("tag", DefaultType.DT_string);
+                    PrintDefault("verbose", DefaultType.DT_bool);
+
                     Console.WriteLine();
                 }
 
@@ -1019,13 +1144,19 @@ namespace ManagedCodeGen
 
                     foreach (var tool in tools.Children())
                     {
+                        string tag = (string)tool["tag"];
+                        string path = (string)tool["path"];
                         if (_verbose)
                         {
-                            Console.WriteLine("\t{0}: {1}", (string)tool["tag"], (string)tool["path"]);
+                            Console.WriteLine("\t{0}: {1}", tag, path);
                         }
                         else
                         {
-                            Console.WriteLine("\t{0}", (string)tool["tag"]);
+                            Console.WriteLine("\t{0}", tag);
+                        }
+                        if (!Directory.Exists(path))
+                        {
+                            Console.WriteLine("\t\tWarning: tool not found");
                         }
                     }
 
@@ -1175,7 +1306,7 @@ namespace ManagedCodeGen
         {
             Config config = new Config(args);
             int ret = 0;
-            
+
             switch (config.DoCommand)
             {
                 case Commands.Diff:
@@ -1186,7 +1317,7 @@ namespace ManagedCodeGen
                 case Commands.List:
                     {
                         // List command: list loaded configuration
-                        ret = config.List();
+                        ret = config.ListCommand();
                     }
                     break;
                 case Commands.Install:
@@ -1194,8 +1325,13 @@ namespace ManagedCodeGen
                         ret = InstallCommand(config);
                     }
                     break;
+                case Commands.Uninstall:
+                    {
+                        ret = UninstallCommand(config);
+                    }
+                    break;
             }
-            
+
             return ret;
         }
 
@@ -1206,9 +1342,9 @@ namespace ManagedCodeGen
 
         public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture = false)
         {
-            try 
+            try
             {
-                Command command =  Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
+                Command command = Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
 
                 if (capture)
                 {
@@ -1227,7 +1363,7 @@ namespace ManagedCodeGen
             }
             catch (CommandUnknownException e)
             {
-                Console.Error.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
+                Console.Error.WriteLine("\nerror: {0} command not found!  Add {0} to the path.", name, e);
                 Environment.Exit(-1);
                 return CommandResult.Empty;
             }
@@ -1237,13 +1373,11 @@ namespace ManagedCodeGen
         {
             var configFilePath = Path.Combine(config.JitUtilsRoot, s_configFileName);
             string configJson = File.ReadAllText(configFilePath);
-            string tag = String.Format("{0}-{1}", config.JobName, config.Number);
-            string toolPath = Path.Combine(config.JitUtilsRoot, "tools", tag);
             var jObj = JObject.Parse(configJson);
 
             if ((jObj[s_configFileRootKey] == null) || (jObj[s_configFileRootKey]["tools"] == null))
             {
-                Console.Error.WriteLine("\"install\" doesn't know how to add the \"" + s_configFileRootKey + "\":\"tool\" section to the config file");
+                Console.Error.WriteLine("\"install\" doesn't know how to add the \"" + s_configFileRootKey + "\":\"tools\" section to the config file");
                 return -1;
             }
 
@@ -1254,12 +1388,21 @@ namespace ManagedCodeGen
 
             var tools = (JArray)jObj[s_configFileRootKey]["tools"];
 
-            // Early out if the tool is already installed.
-            if (tools.Where(x => (string)x["tag"] == tag).Any())
+            // Early out if the tool is already installed. We can only do this if we're not doing
+            // "--last_successful", in which case we don't know what the build number (and hence
+            // tag) is.
+            string tag = null;
+            if (!config.DoLastSucessful)
             {
-                Console.Error.WriteLine("{0} is already installed in the " + s_configFileName + ". Remove before re-install.", tag);
-                return -1;
+                tag = String.Format("{0}-{1}", config.JobName, config.Number);
+                if (tools.Where(x => (string)x["tag"] == tag).Any())
+                {
+                    Console.Error.WriteLine("{0} is already installed in the " + s_configFileName + ". Remove before re-install.", tag);
+                    return -1;
+                }
             }
+
+            string toolPath = Path.Combine(config.JitUtilsRoot, "tools");
 
             // Issue cijobs command to download bits            
             List<string> cijobsArgs = new List<string>();
@@ -1268,7 +1411,7 @@ namespace ManagedCodeGen
 
             cijobsArgs.Add("--job");
             cijobsArgs.Add(config.JobName);
-            
+
             if (config.BranchName != null)
             {
                 cijobsArgs.Add("--branch");
@@ -1286,7 +1429,7 @@ namespace ManagedCodeGen
             }
 
             cijobsArgs.Add("--unzip");
-            
+
             cijobsArgs.Add("--output");
             cijobsArgs.Add(toolPath);
 
@@ -1294,7 +1437,7 @@ namespace ManagedCodeGen
             {
                 Console.WriteLine("Command: {0} {1}", "cijobs", String.Join(" ", cijobsArgs));
             }
-            
+
             CommandResult result = TryCommand("cijobs", cijobsArgs);
 
             if (result.ExitCode != 0)
@@ -1302,6 +1445,46 @@ namespace ManagedCodeGen
                 Console.Error.WriteLine("cijobs command returned with {0} failures", result.ExitCode);
                 return result.ExitCode;
             }
+
+            // There is a convention that cijobs creates a directory to store the job within
+            // the toolPath named:
+            //      <job-name>-<version-number>
+            // for example:
+            //      checked_windows_nt-1234
+            //
+            // However, if we passed "--last_successful", we don't know that number! So, figure it out.
+
+            if (config.DoLastSucessful)
+            {
+                // Find the largest numbered build with this job name.
+                int maxBuildNum = -1;
+                foreach (var dir in Directory.EnumerateDirectories(toolPath))
+                {
+                    Regex dirPattern = new Regex(@"(.*)-(.*)");
+                    Match dirMatch = dirPattern.Match(dir);
+                    if (dirMatch.Success)
+                    {
+                        if (int.TryParse(dirMatch.Groups[1].Value, out int thisBuildNum))
+                        {
+                            if (thisBuildNum > maxBuildNum)
+                            {
+                                maxBuildNum = thisBuildNum;
+                            }
+                        }
+                    }
+                }
+
+                if (maxBuildNum == -1)
+                {
+                    Console.Error.WriteLine("Error: couldn't determine last successful build directory in {0}", toolPath);
+                    return -1;
+                }
+
+                string buildNum = maxBuildNum.ToString();
+                tag = String.Format("{0}-{1}", config.JobName, buildNum);
+            }
+
+            toolPath = Path.Combine(toolPath, tag);
 
             JObject newTool = new JObject();
             newTool.Add("tag", tag);
@@ -1329,6 +1512,55 @@ namespace ManagedCodeGen
                     break;
                 }
             }
+
+            // Overwrite current config.json with new data.
+            using (var file = File.CreateText(configFilePath))
+            {
+                using (JsonTextWriter writer = new JsonTextWriter(file))
+                {
+                    writer.Formatting = Formatting.Indented;
+                    jObj.WriteTo(writer);
+                }
+            }
+
+            return 0;
+        }
+
+        public static int UninstallCommand(Config config)
+        {
+            var configFilePath = Path.Combine(config.JitUtilsRoot, s_configFileName);
+            string configJson = File.ReadAllText(configFilePath);
+            var jObj = JObject.Parse(configJson);
+
+            if ((jObj[s_configFileRootKey] == null) || (jObj[s_configFileRootKey]["tools"] == null))
+            {
+                Console.Error.WriteLine("Error: no \"" + s_configFileRootKey + "\":\"tools\" section in the config file");
+                return -1;
+            }
+
+            var tools = (JArray)jObj[s_configFileRootKey]["tools"];
+            var elem = tools.Children()
+                            .Where(x => (string)x["tag"] == config.Tag);
+            if (!elem.Any())
+            {
+                Console.WriteLine("{0} is not installed in {1}.", config.Tag, s_configFileName);
+                return -1;
+            }
+
+            var jobj = elem.First();
+            string path = (string)jobj["path"];
+            if (path != null)
+            {
+                Console.WriteLine("Warning: you should remove install directory {0}.", path);
+
+                // We could do this:
+                //      Directory.Delete(path, true);
+                // However, the "install" command copies down a lot more than just this directory,
+                // so removing this directory still leaves around a lot of stuff.
+            }
+
+            Console.WriteLine("Removing tag {0} from config file.", config.Tag);
+            jobj.Remove();
 
             // Overwrite current config.json with new data.
             using (var file = File.CreateText(configFilePath))
