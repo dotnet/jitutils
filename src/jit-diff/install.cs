@@ -82,7 +82,7 @@ namespace ManagedCodeGen
 
             cijobsArgs.Add("--unzip");
 
-            cijobsArgs.Add("--output");
+            cijobsArgs.Add("--output_root");
             cijobsArgs.Add(toolPath);
 
             if (config.Verbose)
