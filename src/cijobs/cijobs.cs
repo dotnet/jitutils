@@ -622,6 +622,12 @@ namespace ManagedCodeGen
                 string tag = String.Format("{0}-{1}", config.JobName, config.Number);
                 string outputPath = Path.Combine(config.OutputPath, tag);
 
+                if (Directory.Exists(outputPath))
+                {
+                    Console.WriteLine("Directory {0} already exists.", outputPath);
+                    return;
+                }
+
                 // Create directory if it doesn't exist.
                 Directory.CreateDirectory(outputPath);
 
