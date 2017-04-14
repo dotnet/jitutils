@@ -13,3 +13,7 @@ project.lock.json
 # vs files
 .vs
 browse.VC.db
+
+# vi
+
+*~

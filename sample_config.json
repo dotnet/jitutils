@@ -1,0 +1,41 @@
+{
+    "asmdiff" : {
+        "default": {
+            "base": "e:\\gh\\coreclr2\\bin\\Product\\Windows_NT.x86.checked",
+            "diff": "c:\\gh\\coreclr\\bin\\Product\\Windows_NT.x86.checked",
+            "frameworks": "true",
+            "output": "c:\\diffs",
+            "core_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.checked\\Tests\\Core_Root",
+            "test_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.Release"
+        },
+        "tools": [
+            {
+                "tag": "checked_osx-1439",
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1439/Product/OSX.x64.Checked"
+            },
+            {
+                "tag": "checked_osx-1442",
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1442/Product/OSX.x64.Checked"
+            },
+            {
+                "tag": "checked_osx-1443",
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1443/Product/OSX.x64.Checked"
+            },
+            {
+                "tag": "checked_osx-1526",
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1526/Product/OSX.x64.Checked"
+            }
+        ]
+    },
+    "format" : {
+        "default": {
+            "arch": "x64",
+            "build": "Checked",
+            "os": "Windows_NT",
+            "coreclr": "C:\\gh\\coreclr",
+            "verbose": "true",
+            "fix": "true",
+            "untidy": "false"
+        }
+    }
+}

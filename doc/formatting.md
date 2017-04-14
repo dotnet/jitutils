@@ -4,7 +4,8 @@ JIT source code is automatically formatted by the jit-format tool.
 The idea is to automatically enforce the
 [CLR JIT Coding Conventions](https://github.com/dotnet/coreclr/blob/master/Documentation/coding-guidelines/clr-jit-coding-conventions.md)
 where possible, although the tool by its nature ends up defining the
-coding conventions by the formatting it enforces.
+coding conventions by the formatting it enforces. The tool invokes clang-format and clang-tidy
+to do its work.
 
 ## jit-format
 
@@ -41,19 +42,6 @@ Sample help command line
         <filenames>...              Optional list of files that should be
                                     formatted.
 ```
-
-## Dependencies
-
-* clang-format - The jit-format tool calls clang-format to run whitespace based formatting changes.
-* clang-tidy - The jit-format tool calls clang-tidy to run more advanced formatting changes.
-
-Running `bootstrap.cmd` or `bootstrap.sh` will download the correct version of clang-format and clang-tidy
-for your platform, if the correct version is not already on your path.
-
-We require version 3.8.0 for jit-format. If you wish to install it yourself,
-clang-format and clang-tidy can be installed from the
-[LLVM downloads page](http://llvm.org/releases/download.html#3.8.0).
-We require clang-format and clang-tidy to be on the path for jit-format.
 
 ## Using jit-format
 
@@ -173,3 +161,7 @@ macro to prevent this from happening, used as follows:
 
 #ifdef SOME_KIND_OF_IFDEF
 ```
+
+## Configuring defaults
+
+See the document [configuring defaults](config.md) for details on setting up a set of default configurations.

@@ -4,15 +4,15 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-//  cijobs - Continuious integration build jobs tool enables the listing of
+//  cijobs - Continuous integration build jobs tool enables the listing of
 //  jobs built in the CI system as well as downloading their artifacts. This
-//  functionality allows for the speed up of some common dev tasks but taking
+//  functionality allows for the speed up of some common dev tasks by taking
 //  advantage of work being done in the cloud.
 //
 //  Scenario 1: Start new work. When beginning a new set of changes, listing 
 //  job status can help you find a commit to start your work from. The tool
 //  answers questions like "are the CentOS build jobs passing?" and "what was
-//  the commit hash for the last successful tizen arm32 build?"
+//  the commit hash for the last successful Tizen arm32 build?"
 //
 //  Scenario 2: Copy artifacts to speed up development flow. The tool enables
 //  developers to download builds from the cloud so that developers can avoid 
@@ -33,10 +33,10 @@ using System.CommandLine;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.IO.Compression;
-using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Tools.Common;
+//using Microsoft.DotNet.Cli.Utils;
+//using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+//using Newtonsoft.Json.Linq;
 
 namespace ManagedCodeGen
 {
@@ -76,6 +76,7 @@ namespace ManagedCodeGen
             private string _commit;
             private bool _unzip = false;
             private string _outputPath;
+            private string _outputRoot;
             private bool _artifacts = false;
 
             public Config(string[] args)
@@ -91,7 +92,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("b|branch", ref _branchName, 
                         "Name of the branch (default is master).");
                     syntax.DefineOption("r|repo", ref _repoName, 
-                        "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr). Default is dotnet_coreclr");
+                        "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr). Default is dotnet_coreclr.");
                     syntax.DefineOption("m|match", ref _matchPattern, 
                         "Regex pattern used to select jobs output.");
                     syntax.DefineOption("n|number", ref _number, "Job number.");
@@ -113,10 +114,13 @@ namespace ManagedCodeGen
                     syntax.DefineOption("b|branch", ref _branchName, 
                         "Name of the branch (default is master).");
                     syntax.DefineOption("r|repo", ref _repoName, 
-                        "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr). Default is dotnet_coreclr");
-                    syntax.DefineOption("o|output", ref _outputPath, "Output path.");
+                        "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr). Default is dotnet_coreclr.");
+                    syntax.DefineOption("o|output", ref _outputPath, "The path where output will be placed.");
+                    syntax.DefineOption("or|output_root", ref _outputRoot,
+                        "The root directory where output will be placed. A subdirectory named by job and build number will be created within this to store the output.");
                     syntax.DefineOption("u|unzip", ref _unzip, "Unzip copied artifacts");
-                    syntax.DefineOption("p|ContentPath", ref _contentPath, "Relative product zip path. Default is artifact/bin/Product/*zip*/Product.zip");
+                    syntax.DefineOption("p|ContentPath", ref _contentPath,
+                        "Relative product zip path. Default is artifact/bin/Product/*zip*/Product.zip");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
@@ -156,11 +160,17 @@ namespace ManagedCodeGen
                 {
                     _syntaxResult.ReportError("Must have only one of --number <num>, --last_successful, and --commit <commit> for copy.");
                 }
-                
-                if (_outputPath == null)
+
+                if ((_outputPath == null) && (_outputRoot == null))
                 {
-                    _syntaxResult.ReportError("Must have --output <path> for copy.");
+                    _syntaxResult.ReportError("Must specify either --output <path> or --output_root <path> for copy.");
                 }
+
+                if ((_outputPath != null) && (_outputRoot != null))
+                {
+                    _syntaxResult.ReportError("Must specify only one of --output <path> or --output_root <path>.");
+                }
+
                 if (_contentPath == null)
                 {
                     _contentPath = "artifact/bin/Product/*zip*/Product.zip";
@@ -221,6 +231,7 @@ namespace ManagedCodeGen
             public string Commit { get { return _commit; } }
             public bool DoUnzip { get { return _unzip; } }
             public string OutputPath { get { return _outputPath; } }
+            public string OutputRoot { get { return _outputRoot; } }
             public bool Artifacts { get { return _artifacts; } }
         }
 
@@ -362,16 +373,25 @@ namespace ManagedCodeGen
                 string productString
                     = String.Format("job/{0}/job/{1}/api/json?&tree=jobs[name,url]",
                         productName, branchName);
-                HttpResponseMessage response = await _client.GetAsync(productString);
 
-                if (response.IsSuccessStatusCode)
+                try
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var productJobs = JsonConvert.DeserializeObject<ProductJobs>(json);
-                    return productJobs.jobs;
+                    HttpResponseMessage response = await _client.GetAsync(productString);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var productJobs = JsonConvert.DeserializeObject<ProductJobs>(json);
+                        return productJobs.jobs;
+                    }
+                    else
+                    {
+                        return Enumerable.Empty<Job>();
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
+                    Console.Error.WriteLine("Error enumerating jobs: {0} {1}", ex.Message, ex.InnerException.Message);
                     return Enumerable.Empty<Job>();
                 }
             }
@@ -609,9 +629,23 @@ namespace ManagedCodeGen
                     Build commitBuild = builds.First();
                     config.Number = commitBuild.number;
                 }
-                
-                string tag = String.Format("{0}-{1}", config.JobName, config.Number);
-                string outputPath = config.OutputPath;
+
+                string outputPath;
+
+                if (config.OutputRoot == null)
+                {
+                    outputPath = config.OutputPath;
+                }
+                else
+                {
+                    string tag = String.Format("{0}-{1}", config.JobName, config.Number);
+                    outputPath = Path.Combine(config.OutputRoot, tag);
+                }
+
+                if (Directory.Exists(outputPath))
+                {
+                    Console.WriteLine("Warning: directory {0} already exists.", outputPath);
+                }
 
                 // Create directory if it doesn't exist.
                 Directory.CreateDirectory(outputPath);
@@ -626,7 +660,7 @@ namespace ManagedCodeGen
                 // Copy product tools to output location. 
                 bool success = await cic.DownloadProduct(config, outputPath, contentPath);
 
-                if (config.DoUnzip)
+                if (success && config.DoUnzip)
                 {
                     // unzip archive in place.
                     var zipPath = Path.Combine(outputPath, Path.GetFileName(contentPath));

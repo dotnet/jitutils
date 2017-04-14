@@ -29,6 +29,9 @@ namespace ManagedCodeGen
         // Define options to be parsed 
         public class Config
         {
+            private static string s_configFileName = "config.json";
+            private static string s_configFileRootKey = "format";
+
             private ArgumentSyntax _syntaxResult;
             private string _arch = null;
             private string _os = null;
@@ -78,7 +81,7 @@ namespace ManagedCodeGen
             {
                 // Extract system RID from dotnet cli
                 List<string> commandArgs = new List<string> { "--info" };
-                CommandResult result = TryCommand("dotnet", commandArgs, true);
+                CommandResult result = Utility.TryCommand("dotnet", commandArgs, true);
 
                 if (result.ExitCode != 0)
                 {
@@ -117,7 +120,7 @@ namespace ManagedCodeGen
 
             private void validate()
             {
-                if ((_arch == null))
+                if (_arch == null)
                 {
                     if (_verbose)
                     {
@@ -177,9 +180,22 @@ namespace ManagedCodeGen
 
                 if (_rootPath == null)
                 {
-                    _syntaxResult.ReportError("Specify --coreclr");
+                    if (_verbose)
+                    {
+                        Console.WriteLine("Discovering --coreclr.");
+                    }
+                    _rootPath = Utility.GetRepoRoot(_verbose);
+                    if (_rootPath == null)
+                    {
+                        _syntaxResult.ReportError("Specify --coreclr");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Using --coreclr={0}", _rootPath);
+                    }
                 }
-                else if (!Directory.Exists(_rootPath))
+
+                if (!Directory.Exists(_rootPath))
                 {
                     // If _rootPath doesn't exist, it is an invalid path
                     _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
@@ -210,7 +226,7 @@ namespace ManagedCodeGen
 
                             string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
                             string buildPath = Path.Combine(_rootPath, "build.cmd");
-                            CommandResult result = TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
+                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -236,7 +252,7 @@ namespace ManagedCodeGen
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
                             string[] commandArgs = { _arch, _build, "configureonly" };
                             string buildPath = Path.Combine(_rootPath, "build.sh");
-                            CommandResult result = TryCommand(buildPath, commandArgs, true, _rootPath);
+                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, true, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -254,7 +270,7 @@ namespace ManagedCodeGen
 
                 if (_jitUtilsRoot != null)
                 {
-                    string path = Path.Combine(_jitUtilsRoot, "config.json");
+                    string path = Path.Combine(_jitUtilsRoot, s_configFileName);
 
                     if (File.Exists(path))
                     {
@@ -263,7 +279,7 @@ namespace ManagedCodeGen
                         _jObj = JObject.Parse(configJson);
                         
                         // Check if there is any default config specified.
-                        if (_jObj["format"]["default"] != null)
+                        if (_jObj[s_configFileRootKey]["default"] != null)
                         {
                             bool found;
 
@@ -303,19 +319,19 @@ namespace ManagedCodeGen
                             var fix = ExtractDefault<bool>("fix", out found);
                             _fix = (found) ? fix : _fix;
                         }
+
+                        Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
                     }
                     else
                     {
-                        Console.Error.WriteLine("Can't find config.json on {0}", _jitUtilsRoot);
+                        Console.Error.WriteLine("Can't find {0}", path);
                     }
-
-                    Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
                 }
             }
 
             public T ExtractDefault<T>(string name, out bool found)
             {
-                var token = _jObj["format"]["default"][name];
+                var token = _jObj[s_configFileRootKey]["default"][name];
 
                 if (token != null)
                 {
@@ -327,7 +343,7 @@ namespace ManagedCodeGen
                     }
                     catch (System.FormatException e)
                     {
-                        Console.Error.WriteLine("Bad format for default {0}.  See config.json", name, e);
+                        Console.Error.WriteLine("Bad format for default {0}.  See " + s_configFileName, name, e);
                     }
                 }
 
@@ -508,45 +524,6 @@ namespace ManagedCodeGen
             return returncode;
         }
 
-        class ScriptResolverPolicyWrapper : ICommandResolverPolicy
-        {
-            public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
-        }
-
-        public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture, string workingDirectory = null)
-        {
-            try 
-            {
-                Command command =  Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
-
-                if (!string.IsNullOrEmpty(workingDirectory))
-                {
-                    command.WorkingDirectory(workingDirectory);
-                }
-
-                if (capture)
-                {
-                    // Capture stdout/stderr for consumption within tool.
-                    command.CaptureStdOut();
-                    command.CaptureStdErr();
-                }
-                else
-                {
-                    // Wireup stdout/stderr so we can see output.
-                    command.ForwardStdOut();
-                    command.ForwardStdErr();
-                }
-
-                return command.Execute();
-            }
-            catch (CommandUnknownException e)
-            {
-                Console.Error.WriteLine("\nError: {0} command not found!  Add {0} to the path.", name, e);
-                Environment.Exit(-1);
-                return CommandResult.Empty;
-            }
-        }
-
         // This method reads in a compile_command.json file, and writes a new json file with only the entries
         // commands for files found in the project specified. For example, if project is dll, it will write a
         // new compile_commands file (called compile_commands_dll.json) with only the entries whose directory
@@ -647,7 +624,7 @@ namespace ManagedCodeGen
                 }
 
                 List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
-                CommandResult result = TryCommand("clang-tidy", commandArgs, true);
+                CommandResult result = Utility.TryCommand("clang-tidy", commandArgs, true);
 
                 if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && result.StdOut.Contains("error:"))))
                 {
@@ -695,7 +672,7 @@ namespace ManagedCodeGen
 
                     // Run clang-format
                     List<string> commandArgs = new List<string> { formatFix, "-style=file", outputReplacementXml, filename };
-                    CommandResult result = TryCommand("clang-format", commandArgs, true);
+                    CommandResult result = Utility.TryCommand("clang-format", commandArgs, true);
 
                     if (result.StdOut.Contains("<replacement ") && !fix)
                     {
