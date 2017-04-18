@@ -141,11 +141,9 @@ namespace ManagedCodeGen
                     // Diff command section.
                     syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff.");
                     var baseOption = syntax.DefineOption("b|base", ref _basePath, false,
-                        "The base compiler directory or tag. Will use crossgen or clrjit from this directory, " +
-                        "depending on whether --crossgen is specified.");
+                        "The base compiler directory or tag. Will use crossgen or clrjit from this directory.");
                     var diffOption = syntax.DefineOption("d|diff", ref _diffPath, false,
-                        "The diff compiler directory or tag. Will use crossgen or clrjit from this directory, " +
-                        "depending on whether --crossgen is specified.");
+                        "The diff compiler directory or tag. Will use crossgen or clrjit from this directory.");
                     syntax.DefineOption("crossgen", ref _crossgenExe,
                         "The crossgen compiler exe. When this is specified, will use clrjit from the --base and " +
                         "--diff directories with this crossgen.");
@@ -279,8 +277,8 @@ namespace ManagedCodeGen
                 bool needCoreRoot = (_platformPath == null);                            // We need to find --core_root
 
                 // It's not clear we should find a default for crossgen: in the current code, if crossgen is specified,
-                // then we always use that. If not specified, we find crossgen in either the base path or diff path,
-                // depending on what we are generating. That seems appropriate to continue, without this default.
+                // then we always use that. If not specified, we find crossgen in core_root. That seems appropriate to
+                // continue, without this default.
                 // bool needCrossgen = (_crossgenExe == null);                             // We need to find --crossgen
                 bool needCrossgen = false;
 

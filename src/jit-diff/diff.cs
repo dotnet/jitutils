@@ -110,20 +110,10 @@ namespace ManagedCodeGen
                 if (m_config.HasCrossgenExe)
                 {
                     dasmArgs.Add(m_config.CrossgenExe);
-
-                    var jitPath = Path.Combine(clrPath, GetJitLibraryName(m_config.PlatformMoniker));
-                    if (!File.Exists(jitPath))
-                    {
-                        Console.Error.WriteLine("clrjit not found at {0}", jitPath);
-                        return null;
-                    }
-
-                    dasmArgs.Add("--jit");
-                    dasmArgs.Add(jitPath);
                 }
                 else
                 {
-                    var crossgenPath = Path.Combine(clrPath, GetCrossgenExecutableName(m_config.PlatformMoniker));
+                    var crossgenPath = Path.Combine(m_config.CoreRoot, GetCrossgenExecutableName(m_config.PlatformMoniker));
                     if (!File.Exists(crossgenPath))
                     {
                         Console.Error.WriteLine("crossgen not found at {0}", crossgenPath);
@@ -132,6 +122,16 @@ namespace ManagedCodeGen
 
                     dasmArgs.Add(crossgenPath);
                 }
+
+                var jitPath = Path.Combine(clrPath, GetJitLibraryName(m_config.PlatformMoniker));
+                if (!File.Exists(jitPath))
+                {
+                    Console.Error.WriteLine("clrjit not found at {0}", jitPath);
+                    return null;
+                }
+
+                dasmArgs.Add("--jit");
+                dasmArgs.Add(jitPath);
 
                 return dasmArgs;
             }

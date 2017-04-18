@@ -132,10 +132,8 @@ The "jit-diff diff" command has this help message:
                     [--test_root <arg>] [--base_root <arg>] [--diff_root <arg>] [--arch <arg>]
                     [--build <arg>]
 
-        -b, --base [arg]      The base compiler directory or tag. Will use crossgen or clrjit from this
-                            directory, depending on whether --crossgen is specified.
-        -d, --diff [arg]      The diff compiler directory or tag. Will use crossgen or clrjit from this
-                            directory, depending on whether --crossgen is specified.
+        -b, --base [arg]      The base compiler directory or tag. Will use clrjit from this directory.
+        -d, --diff [arg]      The diff compiler directory or tag. Will use clrjit from this directory.
         --crossgen <arg>      The crossgen compiler exe. When this is specified, will use clrjit from
                             the --base and --diff directories with this crossgen.
         -o, --output <arg>    The output path.
@@ -287,7 +285,7 @@ The defaults are:
 * The default diff and baseline JIT build flavor is checked. If this isn't found, debug is tried.
   (Both baseline and diff must be the same flavor.)
 * By default, diffs are done using System.Private.CoreLib.dll. (That is, `--corelib` is the default.)
-* By default, a release build is used for `--core_root`, `--crossgen`, and `--test_root`. If not available,
+* By default, a release build is used for `--core_root` and `--test_root`. If not available,
   it falls back to checked or debug (but gives a warning that release is preferred).
 
 To instead do diffs over the framework assemblies (not just System.Private.CoreLib.dll), using an x86
