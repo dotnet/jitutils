@@ -19,8 +19,24 @@ using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
+    using DasmWorkTask = Task<(DasmWorkKind kind, int errorCount)>;
+
+    enum DasmWorkKind
+    {
+        Base,
+        Diff
+    }
+
     public partial class jitdiff
     {
+        public class DasmResult
+        {
+            public int BaseErrors = 0;
+            public int DiffErrors = 0;
+            public bool CaughtException = false;
+            public bool Success => ((BaseErrors == 0) && (DiffErrors == 0) && !CaughtException);
+        }
+
         public class DiffTool
         {
             private class DasmWorkItem
@@ -34,7 +50,7 @@ namespace ManagedCodeGen
             }
 
             private Config m_config;
-            private List<Task<int>> DasmWorkTasks = new List<Task<int>>();
+            private List<DasmWorkTask> DasmWorkTasks = new List<DasmWorkTask>();
 
             public DiffTool(Config config)
             {
@@ -58,9 +74,9 @@ namespace ManagedCodeGen
                 return dasmFailures;
             }
 
-            private void StartDasmWork(List<string> args)
+            private void StartDasmWork(DasmWorkKind kind, List<string> args)
             {
-                Task<int> task = Task<int>.Factory.StartNew(() => RunDasmTool(new DasmWorkItem(args)));
+                var task = DasmWorkTask.Factory.StartNew(() => (kind, RunDasmTool(new DasmWorkItem(args))));
                 DasmWorkTasks.Add(task);
 
                 if (m_config.Verbose)
@@ -75,7 +91,7 @@ namespace ManagedCodeGen
                 }
             }
 
-            private void StartDasmWorkOne(List<string> commandArgs, string tagBaseDiff, string clrPath, AssemblyInfo assemblyInfo)
+            private void StartDasmWorkOne(DasmWorkKind kind, List<string> commandArgs, string tagBaseDiff, string clrPath, AssemblyInfo assemblyInfo)
             {
                 List<string> args = ConstructArgs(commandArgs, clrPath);
 
@@ -85,7 +101,7 @@ namespace ManagedCodeGen
 
                 args.Add(assemblyInfo.Path);
 
-                StartDasmWork(args);
+                StartDasmWork(kind, args);
             }
 
             private void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
@@ -94,11 +110,11 @@ namespace ManagedCodeGen
                 {
                     if (m_config.DoBaseCompiles)
                     {
-                        StartDasmWorkOne(commandArgs, "base", m_config.BasePath, assemblyInfo);
+                        StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
                     }
                     if (m_config.DoDiffCompiles)
                     {
-                        StartDasmWorkOne(commandArgs, "diff", m_config.DiffPath, assemblyInfo);
+                        StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
                     }
                 }
             }
@@ -136,37 +152,42 @@ namespace ManagedCodeGen
                 return dasmArgs;
             }
 
-            // Returns:
-            // 0 on success,
-            // Otherwise, a count of the number of failures generating asm, as reported by the asm tool.
-            private int RunDasmTool(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
+            private DasmResult RunDasmTool(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
                 StartDasmWorkBaseDiff(commandArgs, assemblyWorkList);
 
-                int dasmFailures = 0;
+                DasmResult result = new DasmResult();
 
                 try
                 {
-                    Task<int>[] taskArray = DasmWorkTasks.ToArray();
+                    var taskArray = DasmWorkTasks.ToArray();
                     Task.WaitAll(taskArray);
 
-                    foreach (Task<int> t in taskArray)
+                    foreach (var t in taskArray)
                     {
-                        dasmFailures += t.Result;
+                        if (t.Result.kind == DasmWorkKind.Base)
+                        {
+                            result.BaseErrors += t.Result.errorCount;
+                        }
+                        else
+                        {
+                            result.DiffErrors += t.Result.errorCount;
+                        }
                     }
                 }
                 catch (AggregateException ex)
                 {
                     Console.Error.WriteLine("Dasm task failed with {0}", ex.Message);
-                    dasmFailures += ex.InnerExceptions.Count;
+                    result.CaughtException = true;
                 }
 
-                if (dasmFailures != 0)
+                if (!result.Success)
                 {
-                    Console.Error.WriteLine("Dasm commands returned with total of {0} failures", dasmFailures);
+                    Console.Error.WriteLine("Dasm commands returned {0} base failures, {1} diff failures{2}.",
+                        result.BaseErrors, result.DiffErrors, (result.CaughtException ? ", exception occurred" : ""));
                 }
 
-                return dasmFailures;
+                return result;
             }
 
             // Returns 0 on success, 1 on failure.
@@ -217,7 +238,7 @@ namespace ManagedCodeGen
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
 
                 DiffTool diffTool = new DiffTool(config);
-                int dasmFailures = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
+                DasmResult dasmResult = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
 
                 // Analyze completed run.
 
@@ -240,10 +261,11 @@ namespace ManagedCodeGen
                 // Report any failures to generate asm at the very end (again). This is so
                 // this information doesn't get buried in previous output.
 
-                if (dasmFailures != 0)
+                if (!dasmResult.Success)
                 {
                     Console.Error.WriteLine("");
-                    Console.Error.WriteLine("Warning: {0} failures detected generating asm", dasmFailures);
+                    Console.Error.WriteLine("Warning: Failures detected generating asm: {0} base, {1} diff{2}",
+                        dasmResult.BaseErrors, dasmResult.DiffErrors, (dasmResult.CaughtException ? ", exception occurred" : ""));
 
                     return 1; // failure result
                 }
