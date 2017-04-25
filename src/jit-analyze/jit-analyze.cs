@@ -154,6 +154,7 @@ namespace ManagedCodeGen
             public int reconciledCountBase;
             public int reconciledBytesDiff;
             public int reconciledCountDiff;
+            public int methodsInBoth;
             public IEnumerable<MethodInfo> methodsOnlyInBase;
             public IEnumerable<MethodInfo> methodsOnlyInDiff;
             public IEnumerable<MethodDelta> methodDeltaList;
@@ -306,6 +307,7 @@ namespace ManagedCodeGen
                     baseBytes = jointList.Sum(x => x.baseBytes),
                     diffBytes = jointList.Sum(x => x.diffBytes),
                     deltaBytes = jointList.Sum(x => x.deltaBytes),
+                    methodsInBoth = jointList.Count(),
                     methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer),
                     methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer),
                     methodDeltaList = jointList.Where(x => x.deltaBytes != 0)
@@ -361,6 +363,7 @@ namespace ManagedCodeGen
             int fileImprovementCount = sortedFileImprovements.Count();
             int fileRegressionCount = sortedFileRegressions.Count();
             int sortedFileCount = fileImprovementCount + fileRegressionCount;
+            int unchangedFileCount = fileDeltaList.Count() - sortedFileCount;
 
             if (fileRegressionCount > 0)
             {
@@ -384,8 +387,8 @@ namespace ManagedCodeGen
                 }
             }
 
-            Console.WriteLine("\n{0} total files with size differences ({1} improved, {2} regressed).",
-                sortedFileCount, fileImprovementCount, fileRegressionCount);
+            Console.WriteLine("\n{0} total files with size differences ({1} improved, {2} regressed), {3} unchanged.",
+                sortedFileCount, fileImprovementCount, fileRegressionCount, unchangedFileCount);
 
             var methodDeltaList = fileDeltaList
                                         .SelectMany(fd => fd.methodDeltaList, (fd, md) => new
@@ -404,6 +407,7 @@ namespace ManagedCodeGen
             int methodImprovementCount = sortedMethodImprovements.Count();
             int methodRegressionCount = sortedMethodRegressions.Count();
             int sortedMethodCount = methodImprovementCount + methodRegressionCount;
+            int unchangedMethodCount = fileDeltaList.Sum(x => x.methodsInBoth) - sortedMethodCount;
 
             if (methodRegressionCount > 0)
             {
@@ -435,8 +439,8 @@ namespace ManagedCodeGen
                 }
             }
 
-            Console.WriteLine("\n{0} total methods with size differences ({1} improved, {2} regressed).",
-                sortedMethodCount, methodImprovementCount, methodRegressionCount);
+            Console.WriteLine("\n{0} total methods with size differences ({1} improved, {2} regressed), {3} unchanged.",
+                sortedMethodCount, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
 
             return Math.Abs(totalDiffBytes);
         }
