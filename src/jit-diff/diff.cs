@@ -129,7 +129,7 @@ namespace ManagedCodeGen
                 }
                 else
                 {
-                    var crossgenPath = Path.Combine(m_config.CoreRoot, GetCrossgenExecutableName(m_config.PlatformMoniker));
+                    var crossgenPath = Path.Combine(clrPath, GetCrossgenExecutableName(m_config.PlatformMoniker));
                     if (!File.Exists(crossgenPath))
                     {
                         Console.Error.WriteLine("crossgen not found at {0}", crossgenPath);
