@@ -37,15 +37,23 @@ description = """Simple script to grab all of the config.xml files for jobs.
 
               Note that the api_token can either be the token or the path to
               a file containing the token.
+
+              If you are having a problem with connecting try passing the, download
+              basline only then download the diff only after waiting a little.
+
+              Github will unforuntately rate limit OAuth connections.
               """
 
 parser = argparse.ArgumentParser(description=description)
 
-parser.add_argument("-api_token", dest="api_token", nargs='?', default=None)
+parser.add_argument("-api_token", dest="api_token", nargs='?', default=None, help="Github API Token. Can be the path to a file or string.")
 parser.add_argument("-branch", dest="branch", nargs='?', default="")
 parser.add_argument("-output_location", dest="output_location", nargs='?', default="output")
-parser.add_argument("-sim_connections", dest="sim_connections", nargs='?', default=multiprocessing.cpu_count())
-parser.add_argument("-username", dest="username", nargs='?', default=None)
+parser.add_argument("-sim_connections", dest="sim_connections", nargs='?', default=multiprocessing.cpu_count(), help="The amount of parrallel conntections to launch.")
+parser.add_argument("-username", dest="username", nargs='?', default=None, help="Github username for the API Token.")
+
+parser.add_argument("--baseline_only", dest="baseline_only", action="store_true", default=False, help="Download the baseline config files only.")
+parser.add_argument("--diff_only", dest="diff_only", action="store_true", default=False, help="Download the diff config files only.")
 
 ################################################################################
 # Classes
@@ -119,7 +127,7 @@ class Job:
         self.job_name = job_name
         self.job_url = job_url
 
-    def get_config_file(self):
+    def get_config_file(self, output_location):
         """ For a job get the config file.
 
         Args:
@@ -128,6 +136,19 @@ class Job:
         Returns:
             config_xml (str): config.xml contents.
         """
+
+        location = os.path.join(output_location, "%s.xml" % self.job_name)
+
+        # We may be redownloading because the download was interupted.
+        # skip this file because we already have a copy.
+        if os.path.isfile(location):
+            print "Skipping: %s.xml. Item exists. If this is unexpected please delete the output folder." % self.job_name
+            config_xml = None
+            
+            with open(location) as file_handle:
+                config_xml = file_handle.read().strip()
+
+            return config_xml
 
         url = "%sconfig.xml" % self.job_url
 
@@ -212,6 +233,9 @@ def main(args):
     output_location = args.output_location
     sim_connections = args.sim_connections
     username = args.username
+    
+    baseline_only = args.baseline_only
+    diff_only = args.diff_only
 
     valid_branches = ["master", 
                       "release_1.0.0", 
@@ -221,6 +245,7 @@ def main(args):
     assert branch in valid_branches, "Error branch: %s is invalid." % branch
     assert username is not None, "Error username expected."
     assert api_token is not None, "Error a valid api token is required."
+    assert (baseline_only and diff_only) is False, "Error, both baseline only and diff only cannot be set."
 
     if os.path.isfile(api_token):
         with open(api_token) as file_handle:
@@ -233,14 +258,23 @@ def main(args):
     authenticator.authenticate()
 
     step = int(sim_connections)
-    old_output_location = os.path.join(output_location, "old")
-    new_output_location = os.path.join(output_location, "new")
+    old_output_location = os.path.join(output_location, "base")
+    new_output_location = os.path.join(output_location, "diff")
 
     main_rest_url = "https://ci.dot.net/job/dotnet_coreclr/job/%s/api/json" % branch
-    prtest_url = "https://ci.dot.net/job/dotnet_coreclr/job/%s/job/GenPRTest/" % branch
+    prtest_url = "https://ci.dot.net/job/dotnet_coreclr/job/%s/job/GenPRTest/api/json" % branch
 
     locations = [main_rest_url, prtest_url]
     outputs = [old_output_location, new_output_location]
+
+    if baseline_only is True:
+        locations = [main_rest_url]
+        outputs = [old_output_location]
+            
+    elif diff_only is True:
+        locations = [prtest_url]
+        outputs = [new_output_location]
+
     for index, output_dir in enumerate(outputs):
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
@@ -251,7 +285,7 @@ def main(args):
             """Worker function for the multithreading
             """
 
-            job.write_config_file(output_location, job.get_config_file())
+            job.write_config_file(output_location, job.get_config_file(output_location))
 
 
         def join_threads():
