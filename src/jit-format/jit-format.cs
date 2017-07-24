@@ -575,7 +575,7 @@ namespace ManagedCodeGen
 
             // write commands back to a file.
             string newCompileCommandsFileName = Path.Combine(Path.GetDirectoryName(compileCommandFile), "compile_commands.json");
-            string json = JsonConvert.SerializeObject(newCommands.ToArray(), Formatting.Indented);
+            string json = JsonConvert.SerializeObject(newCommands.ToArray(), Newtonsoft.Json.Formatting.Indented);
             System.IO.File.WriteAllText(newCompileCommandsFileName, json);
 
             return newCompileCommandsFileName;
