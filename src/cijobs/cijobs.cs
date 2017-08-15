@@ -134,7 +134,7 @@ namespace ManagedCodeGen
             {
                 if (!Uri.IsWellFormedUriString(_server, UriKind.Absolute))
                 {
-                    _syntaxResult.ReportError("Invalid uri: ${_server}.");
+                    _syntaxResult.ReportError($"Invalid uri: {_server}.");
                 }
                 switch (_command)
                 {
