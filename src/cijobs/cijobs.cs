@@ -66,6 +66,7 @@ namespace ManagedCodeGen
             private ArgumentSyntax _syntaxResult;
             private Command _command = Command.List;
             private ListOption _listOption = ListOption.Invalid;
+            private string _server = "http://ci.dot.net/";
             private string _jobName;
             private string _contentPath;
             private string _repoName = "dotnet_coreclr";
@@ -88,6 +89,7 @@ namespace ManagedCodeGen
                     // before changing.
                     syntax.DefineCommand("list", ref _command, Command.List, 
                         "List jobs on dotnet-ci.cloudapp.net for the repo.");
+                    syntax.DefineOption("s|server", ref _server, "Url of the server. Defaults to http://ci.dot.net/");
                     syntax.DefineOption("j|job", ref _jobName, "Name of the job.");
                     syntax.DefineOption("b|branch", ref _branchName, 
                         "Name of the branch (default is master).");
@@ -106,6 +108,7 @@ namespace ManagedCodeGen
                         + "This command copies a zip of artifacts from a repo (defaulted to dotnet_coreclr)." 
                         + " The default location of the zips is the Product sub-directory, though "
                         + "that can be changed using the ContentPath(p) parameter");
+                    syntax.DefineOption("s|server", ref _server, "Url of the server. Defaults to http://ci.dot.net/");
                     syntax.DefineOption("j|job", ref _jobName, "Name of the job.");
                     syntax.DefineOption("n|number", ref _number, "Job number.");
                     syntax.DefineOption("l|last_successful", ref _lastSuccessful, 
@@ -129,6 +132,10 @@ namespace ManagedCodeGen
 
             private void validate()
             {
+                if (!Uri.IsWellFormedUriString(_server, UriKind.Absolute))
+                {
+                    _syntaxResult.ReportError("Invalid uri: ${_server}.");
+                }
                 switch (_command)
                 {
                     case Command.List:
@@ -222,6 +229,7 @@ namespace ManagedCodeGen
             public Command DoCommand { get { return _command; } }
             public ListOption DoListOption { get { return _listOption; } }
             public string JobName { get { return _jobName; } }
+            public string Server { get { return _server; } }
             public string ContentPath { get { return _contentPath; } }
             public int Number { get { return _number; } set { this._number = value; } }
             public string MatchPattern { get { return _matchPattern; } }
@@ -332,7 +340,7 @@ namespace ManagedCodeGen
             public CIClient(Config config)
             {
                 _client = new HttpClient();
-                _client.BaseAddress = new Uri("http://ci.dot.net/");
+                _client.BaseAddress = new Uri(config.Server);
                 _client.DefaultRequestHeaders.Accept.Clear();
                 _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 _client.Timeout = Timeout.InfiniteTimeSpan;
