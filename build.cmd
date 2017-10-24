@@ -85,10 +85,10 @@ exit /b 0
 echo.
 echo  build.cmd [-b ^<BUILD TYPE^>] [-f] [-h] [-p] [-t ^<TARGET^>]
 echo.
-echo      -b ^<BUILD TYPE^> : Build type, can be Debug or Release.
+echo      -b ^<BUILD TYPE^>   : Build type, can be Debug or Release.
 echo      -h                : Show this message.
 echo      -f                : Publish default framework directory in ^<script_root^>\fx.
 echo      -p                : Publish utilities.
-echo      -t ^<TARGET^>     : Target framework. Default is netcoreapp2.0.
+echo      -t ^<TARGET^>       : Target framework. Default is netcoreapp2.0.
 echo. 
 exit /b 1
