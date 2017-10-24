@@ -60,7 +60,7 @@ set projects=jit-diff jit-dasm jit-analyze jit-format cijobs
 REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
-        dotnet publish -c %buildType% -t %tfm% -o %appInstallDir% .\src\%%p
+        dotnet publish -c %buildType% -f %tfm% -o %appInstallDir% .\src\%%p
         copy .\wrapper.bat %appInstallDir%\%%p.bat
     ) else (
         dotnet build -c %buildType% -f %tfm% .\src\%%p
