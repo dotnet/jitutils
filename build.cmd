@@ -15,6 +15,7 @@ set fxInstallDir=%scriptDir%fx
 set buildType=Release
 set publish=false
 set fx=false
+set tfm=netcoreapp2.0
 
 for /f "usebackq tokens=1,2" %%a in (`dotnet --info`) do (
     if "%%a"=="RID:" set platform=%%b
@@ -36,6 +37,11 @@ if /i "%1"=="-p" (
     set publish=true
     goto :nextArg
 )
+if /i "%1"=="-t" (
+    set tfm=%2
+    shift
+    goto :nextArg
+)
 if /i "%1" == "-h" (
     goto :usage
 )
@@ -54,10 +60,10 @@ set projects=jit-diff jit-dasm jit-analyze jit-format cijobs
 REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
-        dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
+        dotnet publish -c %buildType% -t %tfm% -o %appInstallDir% .\src\%%p
         copy .\wrapper.bat %appInstallDir%\%%p.bat
     ) else (
-        dotnet build  -c %buildType% .\src\%%p
+        dotnet build -c %buildType% -f %tfm% .\src\%%p
     )
 )
 
@@ -66,7 +72,7 @@ if %fx%==true (
     @REM for subsequent publish to be able to accept --runtime parameter to
     @REM publish it as standalone.
     dotnet restore --runtime %platform% .\src\packages
-    dotnet publish -c %buildType% -o %fxInstallDir% --runtime %platform% .\src\packages
+    dotnet publish -c %buildType% -f %tfm% -o %fxInstallDir% --runtime %platform% .\src\packages
     
     @REM remove package version of mscorlib* - refer to core root version for diff testing
     if exist %fxInstallDir%\mscorlib* del /q %fxInstallDir%\mscorlib*
@@ -77,11 +83,12 @@ exit /b 0
 
 :usage
 echo.
-echo  build.cmd [-b ^<BUILD TYPE^>] [-f] [-h] [-p]
+echo  build.cmd [-b ^<BUILD TYPE^>] [-f] [-h] [-p] [-t ^<TARGET^>]
 echo.
 echo      -b ^<BUILD TYPE^> : Build type, can be Debug or Release.
 echo      -h                : Show this message.
 echo      -f                : Publish default framework directory in ^<script_root^>\fx.
 echo      -p                : Publish utilities.
+echo      -t ^<TARGET^>     : Target framework. Default is netcoreapp2.0."
 echo. 
 exit /b 1
