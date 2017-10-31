@@ -52,12 +52,13 @@ that can be used for generating asm diffs, add '-f'.
 ```
  $ ./build.sh -h
 
-build.sh [-b <BUILD TYPE>] [-f] [-h] [-p]
+build.sh [-b <BUILD TYPE>] [-f] [-h] [-p] [-t <TARGET>]
 
     -b <BUILD TYPE> : Build type, can be Debug or Release.
     -h              : Show this message.
     -f              : Install default framework directory in <script_root>/fx.
     -p              : Publish utilities.
+    -t <TARGET>     : Target framework. Default is netcoreapp2.0.
 ```
 
 ## 50,000 foot view
