@@ -422,7 +422,7 @@ namespace ManagedCodeGen
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
 
-                    if (method.baseCount == method.diffCount)
+                    if ((method.baseCount == method.diffCount) && (method.baseCount > 0))
                     {
                         Console.Write(" ({0} methods)", method.baseCount);
                     }
@@ -431,10 +431,6 @@ namespace ManagedCodeGen
                         Console.Write(" ({0}/{1} methods)", method.baseCount, method.diffCount);
                     }
 
-                    if (method.baseBytes == 0)
-                    {
-                        Console.Write(" only in diff");
-                    }
                     Console.WriteLine();
                 }
             }
@@ -447,7 +443,7 @@ namespace ManagedCodeGen
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
 
-                    if (method.baseCount == method.diffCount)
+                    if ((method.baseCount == method.diffCount) && (method.baseCount > 0))
                     {
                         Console.Write(" ({0} methods)", method.baseCount);
                     }
@@ -456,10 +452,6 @@ namespace ManagedCodeGen
                         Console.Write(" ({0}/{1} methods)", method.baseCount, method.diffCount);
                     }
 
-                    if (method.diffBytes == 0)
-                    {
-                        Console.Write(" only in base");
-                    }
                     Console.WriteLine();
                 }
             }
