@@ -422,9 +422,12 @@ namespace ManagedCodeGen
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
 
-                    if ((method.baseCount == method.diffCount) && (method.baseCount > 0))
+                    if (method.baseCount == method.diffCount)
                     {
-                        Console.Write(" ({0} methods)", method.baseCount);
+                        if (method.baseCount > 1)
+                        {
+                            Console.Write(" ({0} methods)", method.baseCount);
+                        }
                     }
                     else
                     {
@@ -443,9 +446,12 @@ namespace ManagedCodeGen
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
 
-                    if ((method.baseCount == method.diffCount) && (method.baseCount > 0))
+                    if (method.baseCount == method.diffCount)
                     {
-                        Console.Write(" ({0} methods)", method.baseCount);
+                        if (method.baseCount > 1)
+                        {
+                            Console.Write(" ({0} methods)", method.baseCount);
+                        }
                     }
                     else
                     {
