@@ -28,7 +28,7 @@ namespace ManagedCodeGen
             private int _count = 5;
             private string _json;
             private string _tsv;
-            private bool _reconcile = true;
+            private bool _noreconcile = false;
 
             public Config(string[] args)
             {
@@ -44,6 +44,8 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
+                    syntax.DefineOption("noreconcile", ref _noreconcile,
+                        "Do not reconcile unique methods in base/diff");
                     syntax.DefineOption("json", ref _json,
                         "Dump analysis data to specified file in JSON format.");
                     syntax.DefineOption("tsv", ref _tsv,
@@ -77,7 +79,7 @@ namespace ManagedCodeGen
             public string JsonFileName { get { return _json; } }
             public bool DoGenerateJson { get { return _json != null; } }
             public bool DoGenerateTSV { get { return _tsv != null; } }
-            public bool Reconcile { get { return _reconcile; } }
+            public bool Reconcile { get { return !_noreconcile; } }
         }
 
         public class FileInfo
@@ -396,7 +398,10 @@ namespace ManagedCodeGen
                                             path = fd.path,
                                             name = md.name,
                                             deltaBytes = md.deltaBytes,
-                                            count = md.baseOffsets != null ? md.baseOffsets.Count() : 1
+                                            baseBytes = md.baseBytes,
+                                            diffBytes = md.diffBytes,
+                                            baseCount = md.baseOffsets == null ? 0 : md.baseOffsets.Count(),
+                                            diffCount = md.diffOffsets == null ? 0 : md.diffOffsets.Count()
                                         }).ToList();
             var sortedMethodImprovements = methodDeltaList
                                             .Where(x => x.deltaBytes < 0)
@@ -416,10 +421,19 @@ namespace ManagedCodeGen
                 foreach (var method in sortedMethodRegressions.GetRange(0, Math.Min(methodRegressionCount, requestedCount)))
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
-                    if (method.count > 1)
+
+                    if (method.baseCount == method.diffCount)
                     {
-                        Console.Write(" ({0} methods)", method.count);
+                        if (method.baseCount > 1)
+                        {
+                            Console.Write(" ({0} methods)", method.baseCount);
+                        }
                     }
+                    else
+                    {
+                        Console.Write(" ({0}/{1} methods)", method.baseCount, method.diffCount);
+                    }
+
                     Console.WriteLine();
                 }
             }
@@ -431,10 +445,19 @@ namespace ManagedCodeGen
                 foreach (var method in sortedMethodImprovements.GetRange(0, Math.Min(methodImprovementCount, requestedCount)))
                 {
                     Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
-                    if (method.count > 1)
+
+                    if (method.baseCount == method.diffCount)
                     {
-                        Console.Write(" ({0} methods)", method.count);
+                        if (method.baseCount > 1)
+                        {
+                            Console.Write(" ({0} methods)", method.baseCount);
+                        }
                     }
+                    else
+                    {
+                        Console.Write(" ({0}/{1} methods)", method.baseCount, method.diffCount);
+                    }
+
                     Console.WriteLine();
                 }
             }
