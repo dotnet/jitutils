@@ -112,6 +112,7 @@ namespace ManagedCodeGen
             private string _diffRoot = null;
             private string _arch = null;
             private string _build = null;
+            private string _altjit = null;
             private bool _corelib = false;
             private bool _frameworks = false;
             private bool _benchmarks = false;
@@ -163,6 +164,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("diff_root", ref _diffRoot, "Path to root of diff dotnet/coreclr repo.");
                     syntax.DefineOption("arch", ref _arch, "Architecture to diff (x86, x64).");
                     syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
+                    syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
 
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
@@ -1153,6 +1155,7 @@ namespace ManagedCodeGen
             public string RID { get { return _rid; } }
             public string Number { get { return _number; } }
             public string BranchName { get { return _branchName; } }
+            public string AltJit { get { return _altjit; } }
         }
 
         private static string[] s_testDirectories =

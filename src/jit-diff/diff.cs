@@ -139,10 +139,20 @@ namespace ManagedCodeGen
                     dasmArgs.Add(crossgenPath);
                 }
 
-                var jitPath = Path.Combine(clrPath, GetJitLibraryName(m_config.PlatformMoniker));
+                string jitName;
+                if (m_config.AltJit != null)
+                {
+                    jitName = m_config.AltJit;
+                }
+                else
+                {
+                    jitName = GetJitLibraryName(m_config.PlatformMoniker);
+                }
+
+                var jitPath = Path.Combine(clrPath, jitName);
                 if (!File.Exists(jitPath))
                 {
-                    Console.Error.WriteLine("clrjit not found at {0}", jitPath);
+                    Console.Error.WriteLine("JIT not found at {0}", jitPath);
                     return null;
                 }
 
@@ -233,6 +243,12 @@ namespace ManagedCodeGen
                 if (config.Verbose)
                 {
                     commandArgs.Add("--verbose");
+                }
+
+                if (config.AltJit != null)
+                {
+                    commandArgs.Add("--altjit");
+                    commandArgs.Add(config.AltJit);
                 }
 
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);

@@ -36,6 +36,7 @@ namespace ManagedCodeGen
     public class Config
     {
         private ArgumentSyntax _syntaxResult;
+        private string _altjit = null;
         private string _crossgenExe = null;
         private string _jitPath = null;
         private string _rootPath = null;
@@ -52,6 +53,7 @@ namespace ManagedCodeGen
         {
             _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
             {
+                syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
                 syntax.DefineOption("c|crossgen", ref _crossgenExe, "The crossgen compiler exe.");
                 syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
                 syntax.DefineOption("o|output", ref _rootPath, "The output path.");
@@ -142,6 +144,7 @@ namespace ManagedCodeGen
         public bool DoVerboseOutput { get { return _verbose; } }
         public string CrossgenExecutable { get { return _crossgenExe; } }
         public string JitPath { get { return _jitPath; } }
+        public string AltJit { get { return _altjit; } }
         public string RootPath { get { return _rootPath; } }
         public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
         public string FileName { get { return _fileName; } }
@@ -339,6 +342,7 @@ namespace ManagedCodeGen
             private string _rootPath = null;
             private IReadOnlyList<string> _platformPaths;
             private string _jitPath = null;
+            private string _altjit = null;
             private List<AssemblyInfo> _assemblyInfoList;
             public bool doGCDump = false;
             public bool verbose = false;
@@ -354,6 +358,7 @@ namespace ManagedCodeGen
                 _rootPath = outputPath;
                 _platformPaths = config.PlatformPaths;
                 _jitPath = config.JitPath;
+                _altjit = config.AltJit;
                 _assemblyInfoList = assemblyInfoList;
 
                 this.doGCDump = config.DumpGCInfo;
@@ -450,6 +455,18 @@ namespace ManagedCodeGen
                     if (this.doGCDump)
                     {
                         generateCmd.EnvironmentVariable("COMPlus_NgenGCDump", "*");
+                    }
+
+                    if (this._altjit != null)
+                    {
+                        generateCmd.EnvironmentVariable("COMPlus_AltJit", "*");
+                        generateCmd.EnvironmentVariable("COMPlus_AltJitNgen", "*");
+                        generateCmd.EnvironmentVariable("COMPlus_AltJitName", _altjit);
+
+                        if (this.verbose)
+                        {
+                            Console.WriteLine("Setting AltJit for {0}", _altjit);
+                        }
                     }
 
                     if (this.verbose)
