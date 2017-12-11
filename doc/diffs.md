@@ -131,21 +131,23 @@ The "jit-diff diff" command has this help message:
     usage: jit-diff diff [-b [arg]] [-d [arg]] [--crossgen <arg>] [-o <arg>] [--noanalyze] [-s]
                     [-t <arg>] [-c] [-f] [--benchmarks] [--tests] [--gcinfo] [-v] [--core_root <arg>]
                     [--test_root <arg>] [--base_root <arg>] [--diff_root <arg>] [--arch <arg>]
-                    [--build <arg>]
-
-        -b, --base [arg]      The base compiler directory or tag. Will use clrjit from this directory.
-        -d, --diff [arg]      The diff compiler directory or tag. Will use clrjit from this directory.
+                    [--build <arg>] [--altjit <arg>]
+    
+        -b, --base [arg]      The base compiler directory or tag. Will use crossgen or clrjit from this
+                              directory.
+        -d, --diff [arg]      The diff compiler directory or tag. Will use crossgen or clrjit from this
+                              directory.
         --crossgen <arg>      The crossgen compiler exe. When this is specified, will use clrjit from
-                            the --base and --diff directories with this crossgen.
+                              the --base and --diff directories with this crossgen.
         -o, --output <arg>    The output path.
         --noanalyze           Do not analyze resulting base, diff dasm directories. (By default, the
-                            directories are analyzed for diffs.)
+                              directories are analyzed for diffs.)
         -s, --sequential      Run sequentially; don't do parallel compiles.
         -t, --tag <arg>       Name of root in output directory. Allows for many sets of output.
         -c, --corelib         Diff System.Private.CoreLib.dll.
         -f, --frameworks      Diff frameworks.
-        --benchmarks          Diff core benchmarks. Must pass --test_root.
-        --tests               Diff all tests. Must pass --test_root.
+        --benchmarks          Diff core benchmarks.
+        --tests               Diff all tests.
         --gcinfo              Add GC info to the disasm output.
         -v, --verbose         Enable verbose output.
         --core_root <arg>     Path to test CORE_ROOT.
@@ -153,37 +155,39 @@ The "jit-diff diff" command has this help message:
         --base_root <arg>     Path to root of base dotnet/coreclr repo.
         --diff_root <arg>     Path to root of diff dotnet/coreclr repo.
         --arch <arg>          Architecture to diff (x86, x64).
-        --build <arg>         Build flavor to diff (checked, debug).
-
+        --build <arg>         Build flavor to diff (Checked, Debug).
+        --altjit <arg>        If set, the name of the altjit to use (e.g., protononjit.dll).
+    
     Examples:
-
-    jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff c:\coreclr\bin\Product\Windows_NT.x86.checked
-        Generate diffs of System.Private.CoreLib.dll by specifying baseline and
-        diff compiler directories explicitly.
-
-    jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.checked --diff
-        If run within the c:\coreclr git clone of dotnet/coreclr, does the same
-        as the prevous example, using defaults.
-
-    jit-diff diff --output c:\diffs --base --base_root c:\coreclr_base --diff
-        Does the same as the prevous example, using -base_root to find the base
-        directory (if run from c:\coreclr tree).
-
-    jit-diff diff --base --diff
-        Does the same as the prevous example (if run from c:\coreclr tree), but uses
-        default c:\coreclr\bin\diffs output directory, and `base_root` must be specified
-        in the config.json file in the directory pointed to by the JIT_UTILS_ROOT
-        environment variable.
-
-    jit-diff diff --diff
-        Only generates asm using the diff JIT -- does not generate asm from a baseline compiler
-        using all computed defaults.
-
-    jit-diff diff --diff --arch x86
-        Generate diffs, but for x86, even if there is an x64 compiler available.
-
-    jit-diff diff --diff --build debug
-        Generate diffs, but using a debug build, even if there is a checked build available.
+    
+      jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.Release\Tests\Core_Root --base c:\coreclr_base\bin\Product
+    \Windows_NT.x64.Checked --diff c:\coreclr\bin\Product\Windows_NT.x86.Checked
+          Generate diffs of System.Private.CoreLib.dll by specifying baseline and
+          diff compiler directories explicitly.
+    
+      jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.Checked --diff
+          If run within the c:\coreclr git clone of dotnet/coreclr, does the same
+          as the prevous example, using defaults.
+    
+      jit-diff diff --output c:\diffs --base --base_root c:\coreclr_base --diff
+          Does the same as the prevous example, using -base_root to find the base
+          directory (if run from c:\coreclr tree).
+    
+      jit-diff diff --base --diff
+          Does the same as the prevous example (if run from c:\coreclr tree), but uses
+          default c:\coreclr\bin\diffs output directory, and `base_root` must be specified
+          in the config.json file in the directory pointed to by the JIT_UTILS_ROOT
+          environment variable.
+    
+      jit-diff diff --diff
+          Only generates asm using the diff JIT -- does not generate asm from a baseline compiler --
+          using all computed defaults.
+    
+      jit-diff diff --diff --arch x86
+          Generate diffs, but for x86, even if there is an x64 compiler available.
+    
+      jit-diff diff --diff --build Debug
+          Generate diffs, but using a Debug build, even if there is a Checked build available.
 ```
 
 The "jit-diff list" command has this help message:
@@ -434,23 +438,24 @@ prebuilt base from the CI builds, or building it locally.
 Sample help command line:
 ```
     $ jit-dasm --help
-    usage: jit-dasm [-c <arg>] [-j <arg>] [-o <arg>] [-t <arg>] [-f <arg>]
-                    [--gcinfo] [-v] [-r] [-p <arg>...] [--] <assembly>...
+    usage: jit-dasm [--altjit <arg>] [-c <arg>] [-j <arg>] [-o <arg>]
+                [-f <arg>] [--gcinfo] [-v] [-r] [-p <arg>...] [--]
+                <assembly>...
 
-        -c, --crossgen <arg>       The crossgen compiler exe.
-        -j, --jit <arg>            The full path to the jit library.
-        -o, --output <arg>         The output path.
-        -t, --tag <arg>            Name of root in output directory.  Allows
-                                   for many sets of output.
-        -f, --file <arg>           Name of file to take list of assemblies
-                                   from. Both a file and assembly list can
-                                   be used.
-        --gcinfo                   Add GC info to the disasm output.
-        -v, --verbose              Enable verbose output.
-        -r, --recursive            Scan directories recursively.
-        -p, --platform <arg>...    Path to platform assemblies
-        <assembly>...              The list of assemblies or directories to
-                                   scan for assemblies.
+    --altjit <arg>             If set, the name of the altjit to use
+                               (e.g., protononjit.dll).
+    -c, --crossgen <arg>       The crossgen compiler exe.
+    -j, --jit <arg>            The full path to the jit library.
+    -o, --output <arg>         The output path.
+    -f, --file <arg>           Name of file to take list of assemblies
+                               from. Both a file and assembly list can
+                               be used.
+    --gcinfo                   Add GC info to the disasm output.
+    -v, --verbose              Enable verbose output.
+    -r, --recursive            Scan directories recursively.
+    -p, --platform <arg>...    Path to platform assemblies
+    <assembly>...              The list of assemblies or directories to
+                               scan for assemblies.
 ```
 
 ## packages
