@@ -391,6 +391,9 @@ namespace ManagedCodeGen
                     // includes a full path to the generated .ni.dll file, which makes all base/diff
                     // asm files appear to have diffs.
                     commandArgs.Insert(0, "/silent");
+                    // Also pass /nologo to avoid spurious diffs that sometimes appear when errors
+                    // occur (sometimes the logo lines and error lines are interleaved).
+                    commandArgs.Insert(0, "/nologo");
 
                     // Set jit path if it's defined.
                     if (_jitPath != null)
