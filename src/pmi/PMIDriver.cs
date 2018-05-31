@@ -25,9 +25,6 @@ namespace PMIDriver
         const int PREPALL_TIMEOUT = 1800000; //30 minutes
         const int PREPALL_MAX_RETRY_COUNT = 5;
 
-        //static StringBuilder sbOutput;
-        //static StringBuilder sbError;
-
         public static int Drive(string assemblyName)
         {
             if (File.Exists(PMI_FILE_MARKER))
@@ -71,10 +68,10 @@ namespace PMIDriver
                             }
                             else
                             {
-                                pi.methodToPrep = nextMethodToPrep+1;
+                                pi.methodToPrep = nextMethodToPrep + 1;
                                 using (var writer = new StreamWriter(File.Create(PREVIOUS_PMI_FILE_MARKER)))
                                 {
-                                    writer.Write("{0}", pi.methodToPrep+1);
+                                    writer.Write("{0}", pi.methodToPrep + 1);
                                 }
                             }
                         }
@@ -83,7 +80,8 @@ namespace PMIDriver
                             Console.WriteLine(ex.Message);
                             if (errors.Count > 0)
                             {
-                                File.WriteAllLines(String.Format("{0}.err", Path.GetFileNameWithoutExtension(pi.assemblyName)), errors);
+                                File.WriteAllLines(String.Format("{0}.err",
+                                    Path.GetFileNameWithoutExtension(pi.assemblyName)), errors);
                             }
                             else
                             {
@@ -99,14 +97,18 @@ namespace PMIDriver
                             {
                                 // There is some problem with this file. Abondon this file.
                                 isFileCompleted = true;
-                                File.AppendAllText(String.Format("{0}.err", Path.GetFileNameWithoutExtension(pi.assemblyName)), String.Format("PROBLEM with file - {0} cant be found", PREVIOUS_PMI_FILE_MARKER));
+                                File.AppendAllText(String.Format("{0}.err",
+                                    Path.GetFileNameWithoutExtension(pi.assemblyName)),
+                                    String.Format("PROBLEM with file - {0} cant be found", PREVIOUS_PMI_FILE_MARKER));
                             }
 
                             if (!File.Exists(PMI_FILE_MARKER))
                             {
                                 // There is some problem with this file. Abondon this file.
                                 isFileCompleted = true;
-                                File.AppendAllText(String.Format("{0}.err", Path.GetFileNameWithoutExtension(pi.assemblyName)), String.Format("PROBLEM with file - {0} cant be found", PMI_FILE_MARKER));
+                                File.AppendAllText(String.Format("{0}.err",
+                                    Path.GetFileNameWithoutExtension(pi.assemblyName)),
+                                    String.Format("PROBLEM with file - {0} cant be found", PMI_FILE_MARKER));
                             }
                         }
                     }
@@ -161,8 +163,23 @@ namespace PMIDriver
                 p.StartInfo.UseShellExecute = false;
                 p.StartInfo.RedirectStandardOutput = true;
                 p.StartInfo.RedirectStandardError = true;
-                p.StartInfo.FileName = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName; // spawn ourself; find our full path name.
-                p.StartInfo.Arguments = "PREPALL \"" + pi.assemblyName + "\"" + " " + pi.methodToPrep;
+
+                // Fetch our command line. Split off the arguments.
+#if NETCOREAPP2_1
+                // For .Net Core the PMI assembly is an argument to dotnet.
+                string newCommandLine = Environment.CommandLine.Replace("DRIVEALL", "PREPALL");
+#else
+                // For .Net Framework the OS knows how to bootstrap .Net when
+                // passed the PMI assembly as an executable.
+                string newCommandLine = "PREPALL \"" + pi.assemblyName + "\"";
+#endif
+                newCommandLine += " " + pi.methodToPrep;
+
+                Process thisProcess = Process.GetCurrentProcess();
+                string driverName = thisProcess.MainModule.FileName;
+
+                p.StartInfo.FileName = driverName;
+                p.StartInfo.Arguments = newCommandLine;
 
                 p.Start();
                 szOutput = p.StandardOutput.ReadToEnd();
