@@ -602,6 +602,8 @@ class Worker
         // Only handle the very simplest cases for now
         if (genericArguments.Length > 2)
         {
+            Console.WriteLine();
+            Console.WriteLine($"Failed to instantiate {type.FullName} -- too many type parameters");
             return results;
         }
 
@@ -652,15 +654,22 @@ class Worker
                     results.Add(newType);
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                // Probably missing a constraint check
+                Console.WriteLine();
+                Console.WriteLine($"TypeInstantationException {type.FullName} - {e.Message}");
             }
 
             if (instantiationCount >= instantiationLimit)
             {
                 break;
             }
+        }
+
+        if (instantiationCount == 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"Failed to instantiate {type.FullName} -- could not find valid type substitutions");
         }
 
         return results;
@@ -673,6 +682,8 @@ class Worker
     static bool AreConstraintsSatisfied(Type type, Type parameterType)
     {
         bool areConstraintsSatisfied = true;
+
+        // Check special constraints
         GenericParameterAttributes gpa = parameterType.GenericParameterAttributes;
 
         if ((gpa & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
@@ -682,7 +693,9 @@ class Worker
                 areConstraintsSatisfied = false;
             }
         }
-        else
+
+        // If all special constaints are satisfied, check type constraints
+        if (areConstraintsSatisfied)
         {
             Type[] constraints = parameterType.GetGenericParameterConstraints();
 
