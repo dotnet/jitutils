@@ -14,7 +14,7 @@ using System.Reflection;
 //
 // In .Net Core, PrepareMethod should give codegen that is very similar to
 // the code one would see if the method were actually called (the same is not
-// as true in .Net Framework -- in paritcular the jit may make very different
+// as true in .Net Framework -- in particular the jit may make very different
 // inlining decisions).
 //
 // Assemblies defining generic types and generic methods require special handling.
