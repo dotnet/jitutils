@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Reflection;
 
@@ -31,18 +32,29 @@ class Visitor
     protected DateTime startTime;
     protected string assemblyName;
 
-    public void Init(string assemblyPath)
+    public virtual void Start()
     {
-        assemblyName = assemblyPath;
+
+    }
+
+    public virtual void Finish()
+    {
+
     }
 
     public virtual void StartAssembly(Assembly assembly)
     {
         startTime = DateTime.Now;
+        assemblyName = assembly.GetName().Name;
     }
 
     public virtual void FinishAssembly(Assembly assembly)
     {
+    }
+
+    public virtual void UninstantiableType(Type t)
+    {
+
     }
 
     public virtual void StartType(Type type)
@@ -62,35 +74,73 @@ class Visitor
         return true;
     }
 
+    public virtual void UninstantiableMethod(MethodBase method)
+    {
+
+    }
+
+    public virtual void UninstantiableMethods(MethodBase[] methods)
+    {
+
+    }
+
     public TimeSpan ElapsedTime()
     {
         return DateTime.Now - startTime;
     }
 }
 
-// Support for counting types and methods.
+// Support for counting assemblies, types and methods.
 class CounterBase : Visitor
 {
     protected int typeCount;
+    protected int uninstantiableTypeCount;
     protected int methodCount;
+    protected int uninstantiableMethodCount;
+
+    public int TypeCount => typeCount;
+    public int UninstantiableTypeCount => uninstantiableTypeCount;
+    public int MethodCount => methodCount;
+    public int UninstantiableMethodCount => uninstantiableMethodCount;
 
     public override void StartAssembly(Assembly assembly)
     {
         base.StartAssembly(assembly);
         typeCount = 0;
         methodCount = 0;
+        uninstantiableTypeCount = 0;
+        uninstantiableMethodCount = 0;
     }
 
     public override void FinishType(Type type)
     {
-        typeCount++;
         base.FinishType(type);
+        typeCount++;
+    }
+
+    public override void UninstantiableType(Type t)
+    {
+        base.UninstantiableType(t);
+        uninstantiableTypeCount++;
     }
 
     public override bool FinishMethod(Type type, MethodBase method)
     {
+        bool result = base.FinishMethod(type, method);
         methodCount++;
-        return base.FinishMethod(type, method);
+        return result;
+    }
+
+    public override void UninstantiableMethod(MethodBase method)
+    {
+        base.UninstantiableMethod(method);
+        uninstantiableMethodCount++;
+    }
+
+    public override void UninstantiableMethods(MethodBase[] methods)
+    {
+        base.UninstantiableMethods(methods);
+        uninstantiableMethodCount += methods.Length;
     }
 }
 
@@ -115,7 +165,8 @@ class Counter : CounterBase
         TimeSpan elapsed = ElapsedTime();
         Console.WriteLine(
             $"Counts {assemblyName} - #types: {typeCount}, #methods: {methodCount}, " +
-            $"elapsed time: {elapsed}, elapsed ms: {elapsed.TotalMilliseconds}");
+            $"skipped types: {uninstantiableTypeCount}, skipped methods: {uninstantiableMethodCount}, " +
+            $"elapsed ms: {elapsed.TotalMilliseconds:F2}");
     }
 }
 
@@ -144,22 +195,21 @@ abstract class PrepareBase : CounterBase
         TimeSpan elapsed = ElapsedTime();
         Console.WriteLine(
             $"Completed assembly {assemblyName} - #types: {typeCount}, #methods: {methodsPrepared}, " +
-            $"elapsed time: {elapsed}, elapsed ms: {elapsed.TotalMilliseconds}");
+            $"skipped types: {uninstantiableTypeCount}, skipped methods: {uninstantiableMethodCount}, " +
+            $"elapsed ms: {elapsed.TotalMilliseconds:F2}");
     }
 
     public override void StartType(Type type)
     {
         base.StartType(type);
-        Console.WriteLine("Start type {0}", type.FullName);
+        Console.WriteLine($"Start type {type.FullName}");
         startType = DateTime.Now;
     }
 
     public override void FinishType(Type type)
     {
         TimeSpan elapsedType = DateTime.Now - startType;
-        Console.WriteLine("Completed type {0}, type elapsed time: {1}, elapsed ms: {2}",
-            type.FullName, elapsedType, elapsedType.TotalMilliseconds);
-
+        Console.WriteLine($"Completed type {type.FullName}, elapsed ms: {elapsedType.TotalMilliseconds:F2}");
         base.FinishType(type);
     }
 
@@ -184,65 +234,65 @@ abstract class PrepareBase : CounterBase
         catch (System.EntryPointNotFoundException)
         {
             Console.WriteLine();
-            Console.WriteLine("EntryPointNotFoundException {0}::{1}", type.FullName, method.Name);
+            Console.WriteLine($"EntryPointNotFoundException {type.FullName}::{method.Name}");
         }
         catch (System.BadImageFormatException)
         {
             Console.WriteLine();
-            Console.WriteLine("BadImageFormatException {0}::{1}", type.FullName, method.Name);
+            Console.WriteLine($"BadImageFormatException {type.FullName}::{method.Name}");
         }
         catch (System.MissingMethodException)
         {
             Console.WriteLine();
-            Console.WriteLine("MissingMethodException {0}::{1}", type.FullName, method.Name);
+            Console.WriteLine($"MissingMethodException {type.FullName}::{method.Name}");
         }
         catch (System.ArgumentException e)
         {
             Console.WriteLine();
-            Console.WriteLine("ArgumentException {0}::{1} {2}",
-                type.FullName, method.Name, e.Message.Split(new char[] { '\r', '\n' })[0]);
+            string msg = e.Message.Split(new char[] { '\r', '\n' })[0];
+            Console.WriteLine($"ArgumentException {type.FullName}::{method.Name} {msg}");
         }
         catch (System.IO.FileNotFoundException eFileNotFound)
         {
             Console.WriteLine();
-            Console.WriteLine("FileNotFoundException {0}::{1} - {2} ({3})",
-                type.FullName, method.Name, eFileNotFound.FileName, eFileNotFound.Message);
+            Console.WriteLine($"FileNotFoundException {type.FullName}::{method.Name}" +
+                $" - {eFileNotFound.FileName} ({eFileNotFound.Message})");
         }
         catch (System.DllNotFoundException eDllNotFound)
         {
             Console.WriteLine();
-            Console.WriteLine("DllNotFoundException {0}::{1} ({2})", type.FullName, method.Name, eDllNotFound.Message);
+            Console.WriteLine($"DllNotFoundException {type.FullName}::{method.Name} ({eDllNotFound.Message})");
         }
         catch (System.TypeInitializationException eTypeInitialization)
         {
             Console.WriteLine();
-            Console.WriteLine("TypeInitializationException {0}::{1} - {2} ({3})",
-                type.FullName, method.Name, eTypeInitialization.TypeName, eTypeInitialization.Message);
+            Console.WriteLine("TypeInitializationException {type.FullName}::{method.Name}" +
+                $"{eTypeInitialization.TypeName} ({eTypeInitialization.Message})");
         }
         catch (System.Runtime.InteropServices.MarshalDirectiveException)
         {
             Console.WriteLine();
-            Console.WriteLine("MarshalDirectiveException {0}::{1}", type.FullName, method.Name);
+            Console.WriteLine($"MarshalDirectiveException {type.FullName}::{method.Name}");
         }
         catch (System.TypeLoadException)
         {
             Console.WriteLine();
-            Console.WriteLine("TypeLoadException {0}::{1}", type.FullName, method.Name);
+            Console.WriteLine($"TypeLoadException {type.FullName}::{method.Name}");
         }
         catch (System.OverflowException)
         {
             Console.WriteLine();
-            Console.WriteLine("OverflowException {0}::{1}", type.FullName, method.Name);
+            Console.WriteLine($"OverflowException {type.FullName}::{method.Name}");
         }
         catch (System.InvalidProgramException)
         {
             Console.WriteLine();
-            Console.WriteLine("InvalidProgramException {0}::{1}", type.FullName, method.Name);
+            Console.WriteLine($"InvalidProgramException {type.FullName}::{method.Name}");
         }
         catch (Exception e)
         {
             Console.WriteLine();
-            Console.WriteLine("Unknown exception");
+            Console.WriteLine($"Unknown exception {type.FullName}::{method.Name}");
             Console.WriteLine(e);
         }
 
@@ -255,7 +305,7 @@ abstract class PrepareBase : CounterBase
 
         using (var writer = new StreamWriter(File.Create("NextMethodToPrep.marker")))
         {
-            writer.Write("{0}", nextMethodToPrep);
+            writer.Write($"{nextMethodToPrep}");
         }
     }
 }
@@ -275,8 +325,9 @@ class PrepareAll : PrepareBase
     {
         base.StartAssembly(assembly);
         Console.WriteLine($"Prepall for {assemblyName}");
-        pmiFullLogFileName = String.Format("{0}.pmi", Path.GetFileNameWithoutExtension(assemblyName));
-        pmiPartialLogFileName = String.Format("{0}.pmiPartial", Path.GetFileNameWithoutExtension(assemblyName));
+        string baseName = Path.GetFileNameWithoutExtension(assemblyName);
+        pmiFullLogFileName = $"{baseName}.pmi";
+        pmiPartialLogFileName = $"{baseName}.pmiPartial";
     }
 
     public override void AttemptMethod(Type type, MethodBase method)
@@ -289,22 +340,20 @@ class PrepareAll : PrepareBase
 
             if (method.IsAbstract)
             {
-                Console.WriteLine("PREPALL type# {0} method# {1} {2}::{3} - skipping (abstract)",
-                    typeCount, methodCount, type.FullName, method.Name);
+                Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (abstract)");
             }
             else if (method.ContainsGenericParameters)
             {
-                Console.WriteLine("PREPALL type# {0} method# {1} {2}::{3} - skipping (generic parameters)",
-                    typeCount, methodCount, type.FullName, method.Name);
+                Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}  - skipping (generic parameters)");
+                UninstantiableMethod(method);
             }
             else
             {
-                Console.Write("PREPALL type# {0} method# {1} {2}::{3}", typeCount, methodCount, type.FullName, method.Name);
+                Console.Write($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
-                    Console.WriteLine(", elapsed time: {0}, elapsed ms: {1}",
-                        elapsedFunc, elapsedFunc.TotalMilliseconds);
+                    Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
                 }
             }
         }
@@ -342,22 +391,19 @@ class PrepareOne : PrepareBase
 
             if (method.IsAbstract)
             {
-                Console.WriteLine("PREPONE type# {0} method# {1} {2}::{3} - skipping (abstract)",
-                    typeCount, methodCount, type.FullName, method.Name);
+                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (abstract)");
             }
             else if (method.ContainsGenericParameters)
             {
-                Console.WriteLine("PREPONE type# {0} method# {1} {2}::{3} - skipping (generic parameters)",
-                    typeCount, methodCount, type.FullName, method.Name);
+                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}  - skipping (generic parameters)");
             }
             else
             {
-                Console.Write("PREPONE type# {0} method# {1} {2}::{3}", typeCount, methodCount, type.FullName, method.Name);
+                Console.Write($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
-                    Console.WriteLine(", elapsed time: {0}, elapsed ms: {1}",
-                        elapsedFunc, elapsedFunc.TotalMilliseconds);
+                    Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
                 }
             }
         }
@@ -388,9 +434,16 @@ class Worker
 {
     Visitor visitor;
 
+    int goodAssemblyCount;
+    int badAssemblyCount;
+    int nonAssemblyCount;
+
     public Worker(Visitor v)
     {
         visitor = v;
+        goodAssemblyCount = 0;
+        badAssemblyCount = 0;
+        nonAssemblyCount = 0;
     }
 
     private static BindingFlags BindingFlagsForCollectingAllMethodsOrCtors = (
@@ -401,7 +454,7 @@ class Worker
         BindingFlags.Static
     );
 
-    private static Assembly LoadAssembly(string assemblyPath)
+    private Assembly LoadAssembly(string assemblyPath)
     {
         Assembly result = null;
 
@@ -415,27 +468,33 @@ class Worker
             try
             {
                 result = Assembly.LoadFrom(assemblyPath);
+                goodAssemblyCount++;
             }
             catch (ArgumentException)
             {
-                Console.WriteLine("Assembly load failure ({0}): ArgumentException", assemblyPath);
+                Console.WriteLine($"Assembly load failure ({assemblyPath}): ArgumentException");
+                badAssemblyCount++;
             }
             catch (BadImageFormatException e)
             {
-                Console.WriteLine("Assembly load failure ({0}): BadImageFormatException (is it a managed assembly?)", assemblyPath);
+                Console.WriteLine($"Assembly load failure ({assemblyPath}): BadImageFormatException (is it a managed assembly?)");
                 Console.WriteLine(e);
+                nonAssemblyCount++;
             }
             catch (FileLoadException)
             {
-                Console.WriteLine("Assembly load failure ({0}): FileLoadException", assemblyPath);
+                Console.WriteLine($"Assembly load failure ({assemblyPath}): FileLoadException");
+                badAssemblyCount++;
             }
             catch (FileNotFoundException)
             {
-                Console.WriteLine("Assembly load failure ({0}): file not found", assemblyPath);
+                Console.WriteLine($"Assembly load failure ({assemblyPath}): file not found");
+                badAssemblyCount++;
             }
             catch (UnauthorizedAccessException)
             {
-                Console.WriteLine("Assembly load failure ({0}): UnauthorizedAccessException", assemblyPath);
+                Console.WriteLine($"Assembly load failure ({assemblyPath}): UnauthorizedAccessException");
+                badAssemblyCount++;
             }
         }
 
@@ -478,6 +537,8 @@ class Worker
             result.Add(typeof(GlobalMethodHolder));
         }
 
+        string assemblyName = assembly.GetName().Name;
+
         try
         {
             result.AddRange(assembly.GetTypes());
@@ -485,7 +546,8 @@ class Worker
         }
         catch (ReflectionTypeLoadException e)
         {
-            Console.WriteLine("ReflectionTypeLoadException {0}", assembly);
+
+            Console.WriteLine($"ReflectionTypeLoadException {assemblyName}");
             Exception[] ea = e.LoaderExceptions;
             foreach (Exception e2 in ea)
             {
@@ -493,13 +555,24 @@ class Worker
                 string temp = ts[1];
                 ts = temp.Split(',');
                 temp = ts[0];
-                Console.WriteLine("ReflectionTypeLoadException {0} {1}", temp, assembly);
+                Console.WriteLine($"ReflectionTypeLoadException {assemblyName}   ex: {e2.Message}");
+            }
+
+            if (e.Types != null)
+            {
+                foreach (Type t in e.Types)
+                {
+                    if (t != null)
+                    {
+                        Console.WriteLine($"ReflectionTypeLoadException {assemblyName} type: {t.Name}");
+                    }
+                }
             }
             return null;
         }
         catch (FileLoadException)
         {
-            Console.WriteLine("FileLoadException {0}", assembly);
+            Console.WriteLine($"FileLoadException {assemblyName}");
             return null;
         }
         catch (FileNotFoundException e)
@@ -507,9 +580,51 @@ class Worker
             string temp = e.ToString();
             string[] ts = temp.Split('\'');
             temp = ts[1];
-            Console.WriteLine("FileNotFoundException {1} {0}", temp, assembly);
+            Console.WriteLine($"FileNotFoundException {assemblyName} : {temp}");
             return null;
         }
+    }
+
+    public int Work(IEnumerable<string> assemblyNames)
+    {
+        int maxResult = 0;
+        int goodTypeCount = 0;
+        int badTypeCount = 0;
+        int goodMethodCount = 0;
+        int badMethodCount = 0;
+        DateTime startTime = DateTime.Now;
+
+        visitor.Start();
+
+        foreach (string assemblyName in assemblyNames)
+        {
+            int thisResult = Work(assemblyName);
+
+            if ((thisResult == 0) && visitor is CounterBase)
+            {
+                CounterBase counterVisitor = visitor as CounterBase;
+                goodTypeCount += counterVisitor.TypeCount;
+                goodMethodCount += counterVisitor.MethodCount;
+                badTypeCount += counterVisitor.UninstantiableTypeCount;
+                badMethodCount += counterVisitor.UninstantiableMethodCount;
+            }
+
+            maxResult = Math.Max(thisResult, maxResult);
+        }
+
+        visitor.Finish();
+
+        // Produce summary if visitor's final output is not sufficient.
+        if ((badAssemblyCount > 0) || (nonAssemblyCount > 0) || (goodAssemblyCount > 1))
+        {
+            DateTime stopTime = DateTime.Now;
+            TimeSpan totalTime = stopTime - startTime;
+            Console.WriteLine();
+            Console.WriteLine($"Overall: {goodAssemblyCount} assemblies {goodTypeCount} types {goodMethodCount} methods in {totalTime.TotalMilliseconds:F2}ms");
+            Console.WriteLine($"         {nonAssemblyCount} non-assemblies {badAssemblyCount} skipped assemblies {badTypeCount} skipped types {badMethodCount} skipped methods");
+        }
+
+        return maxResult;
     }
 
     public int Work(string assemblyName)
@@ -528,7 +643,6 @@ class Worker
             return 103;
         }
 
-        visitor.Init(assemblyName);
         visitor.StartAssembly(assembly);
 
         bool keepGoing = true;
@@ -607,6 +721,9 @@ class Worker
         {
             Console.WriteLine();
             Console.WriteLine($"Failed to instantiate {type.FullName} -- too many type parameters");
+            visitor.UninstantiableType(type);
+            MethodBase[] methods = GetMethods(type);
+            visitor.UninstantiableMethods(methods);
             return results;
         }
 
@@ -636,7 +753,6 @@ class Worker
             {
                 continue;
             }
-
             // Now try and instantiate.
             try
             {
@@ -673,6 +789,9 @@ class Worker
         {
             Console.WriteLine();
             Console.WriteLine($"Failed to instantiate {type.FullName} -- could not find valid type substitutions");
+            visitor.UninstantiableType(type);
+            MethodBase[] methods = GetMethods(type);
+            visitor.UninstantiableMethods(methods);
         }
 
         return results;
@@ -879,7 +998,33 @@ class PrepareMethodinator
         currentDomain.AssemblyResolve += new ResolveEventHandler(ResolveEventHandler);
 
         Worker w = new Worker(v);
-        int result = w.Work(assemblyName);
+        int result = 0;
+        string msg = "a file";
+
+#if NETCOREAPP2_1
+        msg += " or a directory";
+        if (Directory.Exists(assemblyName))
+        {
+            EnumerationOptions options = new EnumerationOptions();
+            options.RecurseSubdirectories = true;
+            IEnumerable<string> exeFiles = Directory.EnumerateFiles(assemblyName, "*.exe", options);
+            IEnumerable<string> dllFiles = Directory.EnumerateFiles(assemblyName, "*.dll", options);
+            IEnumerable<string> allFiles = exeFiles.Concat(dllFiles);
+            result = w.Work(allFiles);
+        }
+        else
+#endif
+
+        if (File.Exists(assemblyName))
+        {
+            result = w.Work(assemblyName);
+        }
+        else
+        {
+            Console.WriteLine($"ERROR: {assemblyName} is not {msg}");
+            result = 101;
+        }
+
         return result;
     }
 }
