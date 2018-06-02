@@ -77,6 +77,8 @@ class CounterBase : Visitor
     public override void StartAssembly(Assembly assembly)
     {
         base.StartAssembly(assembly);
+        typeCount = 0;
+        methodCount = 0;
     }
 
     public override void FinishType(Type type)
@@ -132,6 +134,7 @@ abstract class PrepareBase : CounterBase
     public override void StartAssembly(Assembly assembly)
     {
         base.StartAssembly(assembly);
+        methodsPrepared = 0;
     }
 
     public override void FinishAssembly(Assembly assembly)
@@ -728,7 +731,7 @@ class Worker
 
 class PrepareMethodinator
 {
-    private static Assembly MyResolveEventHandler(object sender, ResolveEventArgs args)
+    private static Assembly ResolveEventHandler(object sender, ResolveEventArgs args)
     {
         string pmiPath = Environment.GetEnvironmentVariable("PMIPATH");
         if (pmiPath == null)
@@ -867,6 +870,13 @@ class PrepareMethodinator
                 Console.WriteLine("ERROR: Unknown command {0}", command);
                 return Usage();
         }
+
+        // We want to handle specifying a "load path" where assemblies can be found.
+        // The environment variable PMIPATH is a semicolon-separated list of paths. If the
+        // Assembly can't be found by the usual mechanisms, our Assembly ResolveEventHandler
+        // will be called, and we'll probe on the PMIPATH list.
+        AppDomain currentDomain = AppDomain.CurrentDomain;
+        currentDomain.AssemblyResolve += new ResolveEventHandler(ResolveEventHandler);
 
         Worker w = new Worker(v);
         int result = w.Work(assemblyName);
