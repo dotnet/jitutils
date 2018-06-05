@@ -16,7 +16,7 @@ function usage
     echo "    -h              : Show this message."
     echo "    -f              : Install default framework directory in <script_root>/fx."
     echo "    -p              : Publish utilities."
-    echo "    -t <TARGET>     : Target framework. Default is netcoreapp2.0."
+    echo "    -t <TARGET>     : Target framework. Default is netcoreapp2.1."
     echo ""
 }
 

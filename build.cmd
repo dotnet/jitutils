@@ -55,7 +55,7 @@ goto :argLoop
 :build
 
 REM Declare the list of projects
-set projects=jit-diff jit-dasm jit-analyze jit-format cijobs pmi
+set projects=jit-diff jit-dasm jit-analyze jit-format cijobs pmi jit-dasm-pmi
 
 REM Build each project
 for %%p in (%projects%) do (
@@ -89,6 +89,6 @@ echo      -b ^<BUILD TYPE^>   : Build type, can be Debug or Release.
 echo      -h                : Show this message.
 echo      -f                : Publish default framework directory in ^<script_root^>\fx.
 echo      -p                : Publish utilities.
-echo      -t ^<TARGET^>       : Target framework. Default is netcoreapp2.0.
+echo      -t ^<TARGET^>       : Target framework. Default is netcoreapp2.1.
 echo. 
 exit /b 1

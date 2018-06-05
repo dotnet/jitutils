@@ -349,11 +349,16 @@ class PrepareAll : PrepareBase
             }
             else
             {
-                Console.Write($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
+                Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
+                Console.Write($"Completed method {type.FullName}::{method.Name}");
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
                     Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
+                }
+                else
+                {
+                    Console.WriteLine();
                 }
             }
         }
@@ -399,11 +404,16 @@ class PrepareOne : PrepareBase
             }
             else
             {
-                Console.Write($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
+                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
+                Console.WriteLine($"Completed method {type.FullName}::{method.Name}");
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
                     Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
+                }
+                else
+                {
+                    Console.WriteLine();
                 }
             }
         }

@@ -21,7 +21,7 @@ namespace ManagedCodeGen
 {
     using DasmWorkTask = Task<(DasmWorkKind kind, int errorCount)>;
 
-    enum DasmWorkKind
+    public enum DasmWorkKind
     {
         Base,
         Diff
@@ -37,7 +37,7 @@ namespace ManagedCodeGen
             public bool Success => ((BaseErrors == 0) && (DiffErrors == 0) && !CaughtException);
         }
 
-        public class DiffTool
+        public abstract class DiffTool
         {
             private class DasmWorkItem
             {
@@ -49,22 +49,45 @@ namespace ManagedCodeGen
                 }
             }
 
-            private Config m_config;
-            private List<DasmWorkTask> DasmWorkTasks = new List<DasmWorkTask>();
+            protected Config m_config;
+            protected List<DasmWorkTask> DasmWorkTasks = new List<DasmWorkTask>();
+            protected string m_name;
+            protected string m_commandName;
+            public String Name => m_name;
+            public string CommandName => m_commandName;
 
-            public DiffTool(Config config)
+            protected DiffTool(Config config)
             {
                 m_config = config;
+            }
+
+            protected static DiffTool NewDiffTool(Config config)
+            {
+                DiffTool result = null;
+
+                switch (config.DoCommand)
+                {
+                    case Commands.Diff:
+                        result = new CrossgenDiffTool(config);
+                        break;
+                    case Commands.PmiDiff:
+                        result = new PmiDiffTool(config);
+                        break;
+                    default:
+                        Console.WriteLine($"Unexpected command for diff: {config.DoCommand}");
+                        break;
+
+                }
+                return result;
             }
 
             // Returns a count of the number of failures.
             private int RunDasmTool(DasmWorkItem item)
             {
                 int dasmFailures = 0;
-
-                string command = s_asmTool + " " + String.Join(" ", item.DasmArgs);
+                string command = CommandName + " " + String.Join(" ", item.DasmArgs);
                 Console.WriteLine("Dasm command: {0}", command);
-                CommandResult result = Utility.TryCommand(s_asmTool, item.DasmArgs);
+                CommandResult result = Utility.TryCommand(s_asmToolJit, item.DasmArgs);
                 if (result.ExitCode != 0)
                 {
                     Console.Error.WriteLine("Dasm command \"{0}\" returned with {1} failures", command, result.ExitCode);
@@ -91,7 +114,7 @@ namespace ManagedCodeGen
                 }
             }
 
-            private void StartDasmWorkOne(DasmWorkKind kind, List<string> commandArgs, string tagBaseDiff, string clrPath, AssemblyInfo assemblyInfo)
+            protected void StartDasmWorkOne(DasmWorkKind kind, List<string> commandArgs, string tagBaseDiff, string clrPath, AssemblyInfo assemblyInfo)
             {
                 List<string> args = ConstructArgs(commandArgs, clrPath);
 
@@ -104,7 +127,7 @@ namespace ManagedCodeGen
                 StartDasmWork(kind, args);
             }
 
-            private void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
+            protected virtual void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
                 foreach (var assemblyInfo in assemblyWorkList)
                 {
@@ -119,49 +142,7 @@ namespace ManagedCodeGen
                 }
             }
 
-            private List<string> ConstructArgs(List<string> commandArgs, string clrPath)
-            {
-                List<string> dasmArgs = commandArgs.ToList();
-                dasmArgs.Add("--crossgen");
-                if (m_config.HasCrossgenExe)
-                {
-                    dasmArgs.Add(m_config.CrossgenExe);
-                }
-                else
-                {
-                    var crossgenPath = Path.Combine(m_config.CoreRoot, GetCrossgenExecutableName(m_config.PlatformMoniker));
-                    if (!File.Exists(crossgenPath))
-                    {
-                        Console.Error.WriteLine("crossgen not found at {0}", crossgenPath);
-                        return null;
-                    }
-
-                    dasmArgs.Add(crossgenPath);
-                }
-
-                string jitName;
-                if (m_config.AltJit != null)
-                {
-                    jitName = m_config.AltJit;
-                }
-                else
-                {
-                    jitName = GetJitLibraryName(m_config.PlatformMoniker);
-                }
-
-                var jitPath = Path.Combine(clrPath, jitName);
-                if (!File.Exists(jitPath))
-                {
-                    Console.Error.WriteLine("JIT not found at {0}", jitPath);
-                    return null;
-                }
-
-                dasmArgs.Add("--jit");
-                dasmArgs.Add(jitPath);
-
-                return dasmArgs;
-            }
-
+            protected abstract List<string> ConstructArgs(List<string> commandArgs, string clrPath);
             private DasmResult RunDasmTool(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
                 StartDasmWorkBaseDiff(commandArgs, assemblyWorkList);
@@ -203,7 +184,8 @@ namespace ManagedCodeGen
             // Returns 0 on success, 1 on failure.
             public static int DiffCommand(Config config)
             {
-                string diffString = "";
+                DiffTool diffTool = NewDiffTool(config);
+                string diffString = $"{diffTool.Name} Diffs for ";
 
                 if (config.CoreLib)
                 {
@@ -227,8 +209,8 @@ namespace ManagedCodeGen
 
                 Console.WriteLine("Beginning diff of {0}", diffString);
 
-                // Create subjob that runs jit-dasm, which should be in path, with the 
-                // relevent coreclr assemblies/paths.
+                // Create subjob that runs jit-dasm or jit-dasm-pmi (which should be in path)
+                // with the relevent coreclr assemblies/paths.
 
                 List<string> commandArgs = new List<string>();
 
@@ -253,7 +235,7 @@ namespace ManagedCodeGen
 
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
 
-                DiffTool diffTool = new DiffTool(config);
+
                 DasmResult dasmResult = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
 
                 // Analyze completed run.
@@ -388,6 +370,126 @@ namespace ManagedCodeGen
                 }
 
                 return assemblyInfoList;
+            }
+        }
+
+        public class CrossgenDiffTool : DiffTool
+        {
+            public CrossgenDiffTool(Config config) : base(config)
+            {
+                m_name = "Crossgen";
+                m_commandName = s_asmToolPrejit;
+            }
+            protected override List<string> ConstructArgs(List<string> commandArgs, string clrPath)
+            {
+                List<string> dasmArgs = commandArgs.ToList();
+                dasmArgs.Add("--crossgen");
+                if (m_config.HasCrossgenExe)
+                {
+                    dasmArgs.Add(m_config.CrossgenExe);
+                }
+                else
+                {
+                    var crossgenPath = Path.Combine(m_config.CoreRoot, GetCrossgenExecutableName(m_config.PlatformMoniker));
+                    if (!File.Exists(crossgenPath))
+                    {
+                        Console.Error.WriteLine("crossgen not found at {0}", crossgenPath);
+                        return null;
+                    }
+
+                    dasmArgs.Add(crossgenPath);
+                }
+
+                string jitName;
+                if (m_config.AltJit != null)
+                {
+                    jitName = m_config.AltJit;
+                }
+                else
+                {
+                    jitName = GetJitLibraryName(m_config.PlatformMoniker);
+                }
+
+                var jitPath = Path.Combine(clrPath, jitName);
+                if (!File.Exists(jitPath))
+                {
+                    Console.Error.WriteLine("JIT not found at {0}", jitPath);
+                    return null;
+                }
+
+                dasmArgs.Add("--jit");
+                dasmArgs.Add(jitPath);
+
+                return dasmArgs;
+            }
+        }
+
+        public class PmiDiffTool : DiffTool
+        {
+            public PmiDiffTool(Config config) : base(config)
+            {
+                m_name = "PMI";
+                m_commandName = s_asmToolJit;
+            }
+
+            protected override List<string> ConstructArgs(List<string> commandArgs, string clrPath)
+            {
+                List<string> dasmArgs = commandArgs.ToList();
+                dasmArgs.Add("--corerun");
+                string corerunPath = Path.Combine(m_config.CoreRoot, GetCorerunExecutableName(m_config.PlatformMoniker));
+                if (!File.Exists(corerunPath))
+                {
+                    Console.Error.WriteLine("corerun not found at {0}", corerunPath);
+                    return null;
+                }
+
+                dasmArgs.Add(corerunPath);
+
+                string jitName;
+                if (m_config.AltJit != null)
+                {
+                    jitName = m_config.AltJit;
+                }
+                else
+                {
+                    jitName = GetJitLibraryName(m_config.PlatformMoniker);
+                }
+
+                var jitPath = Path.Combine(clrPath, jitName);
+                if (!File.Exists(jitPath))
+                {
+                    Console.Error.WriteLine("JIT not found at {0}", jitPath);
+                    return null;
+                }
+
+                dasmArgs.Add("--jit");
+                dasmArgs.Add(jitPath);
+
+                return dasmArgs;
+            }
+
+            // Because pmi modifies the test overlay, we can't run base and diff tasks in an interleaved manner.
+
+            protected override void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
+            {
+                foreach (var assemblyInfo in assemblyWorkList)
+                {
+                    if (m_config.DoBaseCompiles)
+                    {
+                        StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
+                    }
+                }
+
+                var taskArray = DasmWorkTasks.ToArray();
+                Task.WaitAll(taskArray);
+
+                foreach (var assemblyInfo in assemblyWorkList)
+                {
+                    if (m_config.DoDiffCompiles)
+                    {
+                        StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
+                    }
+                }
             }
         }
     }

@@ -37,10 +37,12 @@ namespace ManagedCodeGen
             Install,
             Uninstall,
             Diff,
+            PmiDiff,
             List
         }
 
-        private static string s_asmTool = "jit-dasm";
+        private static string s_asmToolPrejit = "jit-dasm";
+        private static string s_asmToolJit = "jit-dasm-pmi";
         private static string s_analysisTool = "jit-analyze";
         private static string s_configFileName = "config.json";
         private static string s_configFileRootKey = "asmdiff";
@@ -71,6 +73,21 @@ namespace ManagedCodeGen
                 case "Linux":
                 case "OSX":
                     return "crossgen";
+                default:
+                    Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
+                    return null;
+            }
+        }
+
+        private static string GetCorerunExecutableName(string platformMoniker)
+        {
+            switch (platformMoniker)
+            {
+                case "Windows":
+                    return "corerun.exe";
+                case "Linux":
+                case "OSX":
+                    return "corerun";
                 default:
                     Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
                     return null;
@@ -140,11 +157,12 @@ namespace ManagedCodeGen
                 _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
                 {
                     // Diff command section.
-                    syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff.");
+                    syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diffs via crossgen.");
+                    syntax.DefineCommand("pmidiff", ref _command, Commands.PmiDiff, "Run asm diffs via pmi.");
                     var baseOption = syntax.DefineOption("b|base", ref _basePath, false,
-                        "The base compiler directory or tag. Will use crossgen or clrjit from this directory.");
+                        "The base compiler directory or tag. Will use crossgen, corerun, or clrjit from this directory.");
                     var diffOption = syntax.DefineOption("d|diff", ref _diffPath, false,
-                        "The diff compiler directory or tag. Will use crossgen or clrjit from this directory.");
+                        "The diff compiler directory or tag. Will use crossgen, corerun, or clrjit from this directory.");
                     syntax.DefineOption("crossgen", ref _crossgenExe,
                         "The crossgen compiler exe. When this is specified, will use clrjit from the --base and " +
                         "--diff directories with this crossgen.");
@@ -195,7 +213,7 @@ namespace ManagedCodeGen
 
                 Validate();
 
-                if (_command == Commands.Diff)
+                if (_command == Commands.Diff || _command == Commands.PmiDiff)
                 {
                     // Do additional initialization relevant for just the "diff" command.
 
@@ -267,6 +285,7 @@ namespace ManagedCodeGen
                 switch (_command)
                 {
                     case Commands.Diff:
+                    case Commands.PmiDiff:
                         break;
                     case Commands.Install:
                     case Commands.Uninstall:
@@ -623,6 +642,7 @@ namespace ManagedCodeGen
                 switch (_command)
                 {
                     case Commands.Diff:
+                    case Commands.PmiDiff:
                         ValidateDiff();
                         break;
                     case Commands.Install:
@@ -1324,6 +1344,7 @@ namespace ManagedCodeGen
             switch (config.DoCommand)
             {
                 case Commands.Diff:
+                case Commands.PmiDiff:
                     {
                         ret = DiffTool.DiffCommand(config);
                     }
