@@ -5,8 +5,7 @@
 ## tools in <script_root>/bin.
 ## 
 ## If frameworks (-f) are requested the script will create a scratch empty 'app'
-## publish that contains the default frameworks.  See ./src/packages/project.json
-## for specific version numbers.
+## publish that contains the default frameworks.
 
 function usage
 {
@@ -24,7 +23,7 @@ function usage
 # defaults
 buildType="Release"
 publish=false
-tfm=netcoreapp2.0
+tfm=netcoreapp2.1
 workingDir="$PWD"
 cd "`dirname \"$0\"`"
 scriptDir="$PWD"
@@ -57,7 +56,7 @@ while getopts "hpfbt:" opt; do
 done
 
 # declare the array of projects   
-declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs)
+declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs pmi)
 
 # for each project either build or publish
 for proj in "${projects[@]}"

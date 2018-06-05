@@ -5,7 +5,7 @@ REM Build and optionally publish sub projects
 REM
 REM This script will by default build release versions of the tools.
 REM If publish (-p) is requested it will create standalone versions of the
-REM tools in <root>/src/<project>/<buildType>/netcoreapp1.0/<platform>/Publish/.
+REM tools in <root>/src/<project>/<buildType>/netcoreapp2.1/<platform>/Publish/.
 REM These tools can be installed via the install script (install.{sh|cmd}) in
 REM this directory.
 
@@ -15,7 +15,7 @@ set fxInstallDir=%scriptDir%fx
 set buildType=Release
 set publish=false
 set fx=false
-set tfm=netcoreapp2.0
+set tfm=netcoreapp2.1
 
 for /f "usebackq tokens=1,2" %%a in (`dotnet --info`) do (
     if "%%a"=="RID:" set platform=%%b
@@ -55,7 +55,7 @@ goto :argLoop
 :build
 
 REM Declare the list of projects
-set projects=jit-diff jit-dasm jit-analyze jit-format cijobs
+set projects=jit-diff jit-dasm jit-analyze jit-format cijobs pmi
 
 REM Build each project
 for %%p in (%projects%) do (
