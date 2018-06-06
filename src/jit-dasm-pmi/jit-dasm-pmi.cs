@@ -40,6 +40,7 @@ namespace ManagedCodeGen
         private IReadOnlyList<string> _methods = Array.Empty<string>();
         private IReadOnlyList<string> _platformPaths = Array.Empty<string>();
         private bool _dumpGCInfo = false;
+        private bool _noCopyJit = false;
         private bool _verbose = false;
 
         public Config(string[] args)
@@ -53,14 +54,17 @@ namespace ManagedCodeGen
                 syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
                 syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
+                syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
+                syntax.DefineOptionList("p|platform", ref _platformPaths, "Path to platform assemblies");
+
                 var waitArg = syntax.DefineOption("w|wait", ref _wait, "Wait for debugger to attach.");
                 waitArg.IsHidden = true;
 
-                syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
-                syntax.DefineOptionList("p|platform", ref _platformPaths, "Path to platform assemblies");
-                var methodsArg = syntax.DefineOptionList("m|methods", ref _methods,
-                    "List of methods to disasm.");
+                var methodsArg = syntax.DefineOptionList("m|methods", ref _methods, "List of methods to disasm.");
                 methodsArg.IsHidden = true;
+
+                var noCopyArg = syntax.DefineOption("nocopy", ref _noCopyJit, "Correct jit has already been copied into the corerun directory");
+                noCopyArg.IsHidden = true;
 
                 // Warning!! - Parameters must occur after options to preserve parsing semantics.
 
@@ -135,6 +139,7 @@ namespace ManagedCodeGen
         public bool UseFileName { get { return (_fileName != null); } }
         public bool DumpGCInfo { get { return _dumpGCInfo; } }
         public bool DoVerboseOutput { get { return _verbose; } }
+        public bool CopyJit {  get { return !_noCopyJit; } }
         public string CorerunExecutable { get { return _corerunExe; } }
         public string JitPath { get { return _jitPath; } }
         public string AltJit { get { return _altjit; } }
@@ -379,31 +384,37 @@ namespace ManagedCodeGen
 
                 try
                 {
-                    if (this.verbose)
+                    if (_config.CopyJit)
                     {
-                        Console.WriteLine($"!!! Copying off real jit !!!\n {realJitPath} ==> {tempJitPath}");
+                        if (this.verbose)
+                        {
+                            Console.WriteLine($"Copying default jit: {realJitPath} ==> {tempJitPath}");
+                        }
+                        File.Copy(realJitPath, tempJitPath, true);
+                        if (this.verbose)
+                        {
+                            Console.WriteLine($"Copying in the test jit: {_jitPath} ==> {realJitPath}");
+                        }
+                        // May need chmod +x for non-windows ??
+                        File.Copy(_jitPath, realJitPath, true);
                     }
-                    File.Copy(realJitPath, tempJitPath, true);
-                    if (this.verbose)
-                    {
-                        Console.WriteLine($"!!! Swapping in the test jit !!!\n {_jitPath} ==> {realJitPath}");
-                    }
-                    File.Copy(_jitPath, realJitPath, true);
-                    // May need chmod +x for non-windows ??
-                    GenerateAsmInner();
+
+                    GenerateAsmInternal();
                 }
                 finally
                 {
-                    if (this.verbose)
+                    if (_config.CopyJit)
                     {
-                        Console.WriteLine($"!!! Restoring real jit !!! {tempJitPath} ==> {realJitPath}");
+                        if (this.verbose)
+                        {
+                            Console.WriteLine($"Restoring default jit: {tempJitPath} ==> {realJitPath}");
+                        }
+                        File.Copy(tempJitPath, realJitPath, true);
                     }
-                    File.Copy(tempJitPath, realJitPath, true);
                 }
             }
-            void GenerateAsmInner()
+            void GenerateAsmInternal()
             {
-                // Copy the desired jit into the corerun test overlay...?
                 // Build a command per assembly to generate the asm output.
                 foreach (var assembly in _assemblyInfoList)
                 {

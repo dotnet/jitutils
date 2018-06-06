@@ -426,68 +426,136 @@ namespace ManagedCodeGen
 
         public class PmiDiffTool : DiffTool
         {
+            string m_corerunPath;
+            string m_defaultJitName;
+            string m_testJitName;
+
             public PmiDiffTool(Config config) : base(config)
             {
                 m_name = "PMI";
                 m_commandName = s_asmToolJit;
+                m_corerunPath = Path.Combine(m_config.CoreRoot, GetCorerunExecutableName(m_config.PlatformMoniker));
+                m_defaultJitName = GetJitLibraryName(m_config.PlatformMoniker);
+                if (m_config.AltJit != null)
+                {
+                    m_testJitName = m_config.AltJit;
+                }
+                else
+                {
+                    m_testJitName = m_defaultJitName;
+                }
             }
 
             protected override List<string> ConstructArgs(List<string> commandArgs, string clrPath)
             {
                 List<string> dasmArgs = commandArgs.ToList();
                 dasmArgs.Add("--corerun");
-                string corerunPath = Path.Combine(m_config.CoreRoot, GetCorerunExecutableName(m_config.PlatformMoniker));
-                if (!File.Exists(corerunPath))
+
+                if (!File.Exists(m_corerunPath))
                 {
-                    Console.Error.WriteLine("corerun not found at {0}", corerunPath);
+                    Console.Error.WriteLine($"corerun not found at {m_corerunPath}");
                     return null;
                 }
 
-                dasmArgs.Add(corerunPath);
+                dasmArgs.Add(m_corerunPath);
 
-                string jitName;
-                if (m_config.AltJit != null)
-                {
-                    jitName = m_config.AltJit;
-                }
-                else
-                {
-                    jitName = GetJitLibraryName(m_config.PlatformMoniker);
-                }
-
-                var jitPath = Path.Combine(clrPath, jitName);
+                var jitPath = Path.Combine(clrPath, m_testJitName);
                 if (!File.Exists(jitPath))
                 {
-                    Console.Error.WriteLine("JIT not found at {0}", jitPath);
+                    Console.Error.WriteLine($"JIT not found at {jitPath}");
                     return null;
                 }
 
                 dasmArgs.Add("--jit");
                 dasmArgs.Add(jitPath);
 
+                // jit-diffs will handle installing the right jit
+                dasmArgs.Add("--nocopy");
+
                 return dasmArgs;
+            }
+
+            void InstallBaseJit()
+            {
+                string realJitPath = Path.Combine(m_config.CoreRoot, m_defaultJitName);
+                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_defaultJitName);
+                string testJitPath = Path.Combine(m_config.BasePath, m_testJitName);
+                if (m_config.Verbose)
+                {
+                    Console.WriteLine($"Copying default jit: {realJitPath} ==> {tempJitPath}");
+                }
+                File.Copy(realJitPath, tempJitPath, true);
+                if (m_config.Verbose)
+                {
+                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {realJitPath}");
+                }
+                File.Copy(testJitPath, realJitPath, true);
+            }
+
+            void InstallDiffJit()
+            {
+                string realJitPath = Path.Combine(m_config.CoreRoot, m_defaultJitName);
+                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_defaultJitName);
+                string testJitPath = Path.Combine(m_config.DiffPath, m_testJitName);
+                if (m_config.Verbose)
+                {
+                    Console.WriteLine($"Copying default jit: {realJitPath} ==> {tempJitPath}");
+                }
+                File.Copy(realJitPath, tempJitPath, true);
+                if (m_config.Verbose)
+                {
+                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {realJitPath}");
+                }
+                File.Copy(testJitPath, realJitPath, true);
+            }
+
+            void RestoreDefaultJit()
+            {
+                string realJitPath = Path.Combine(m_config.CoreRoot, m_defaultJitName);
+                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_defaultJitName);
+                if (m_config.Verbose)
+                {
+                    Console.WriteLine($"Restoring default jit: {tempJitPath} ==> {realJitPath}");
+                }
+                File.Copy(tempJitPath, realJitPath, true);
             }
 
             // Because pmi modifies the test overlay, we can't run base and diff tasks in an interleaved manner.
 
             protected override void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
-                foreach (var assemblyInfo in assemblyWorkList)
+                if (m_config.DoBaseCompiles)
                 {
-                    if (m_config.DoBaseCompiles)
+                    try
                     {
-                        StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
+                        InstallBaseJit();
+                        foreach (var assemblyInfo in assemblyWorkList)
+                        {
+                            StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
+                        }
+                    }
+                    finally
+                    {
+                        RestoreDefaultJit();
                     }
                 }
 
                 var taskArray = DasmWorkTasks.ToArray();
                 Task.WaitAll(taskArray);
 
-                foreach (var assemblyInfo in assemblyWorkList)
+                if (m_config.DoDiffCompiles)
                 {
-                    if (m_config.DoDiffCompiles)
+                    try
                     {
-                        StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
+                        InstallDiffJit();
+                        foreach (var assemblyInfo in assemblyWorkList)
+                        {
+                            StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
+                        }
+                    }
+                    finally
+                    {
+                        RestoreDefaultJit();
                     }
                 }
             }

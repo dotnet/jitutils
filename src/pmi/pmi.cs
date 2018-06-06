@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.ms
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -298,16 +298,6 @@ abstract class PrepareBase : CounterBase
 
         return elapsedFunc;
     }
-
-    private void WriteAndFlushNextMethodToPrepMarker()
-    {
-        int nextMethodToPrep = (methodCount + 1);
-
-        using (var writer = new StreamWriter(File.Create("NextMethodToPrep.marker")))
-        {
-            writer.Write($"{nextMethodToPrep}");
-        }
-    }
 }
 
 // Invoke the jit on all methods starting from an initial method.
@@ -316,6 +306,7 @@ class PrepareAll : PrepareBase
 {
     string pmiFullLogFileName;
     string pmiPartialLogFileName;
+    string markerFileName;
 
     public PrepareAll(int f = 0) : base(f)
     {
@@ -325,9 +316,9 @@ class PrepareAll : PrepareBase
     {
         base.StartAssembly(assembly);
         Console.WriteLine($"Prepall for {assemblyName}");
-        string baseName = Path.GetFileNameWithoutExtension(assemblyName);
-        pmiFullLogFileName = $"{baseName}.pmi";
-        pmiPartialLogFileName = $"{baseName}.pmiPartial";
+        pmiFullLogFileName = $"{assemblyName}.pmi";
+        pmiPartialLogFileName = $"{assemblyName}.pmiPartial";
+        markerFileName = $"NextMethodToPrep-{assemblyName}.marker";
     }
 
     public override void AttemptMethod(Type type, MethodBase method)
@@ -364,13 +355,21 @@ class PrepareAll : PrepareBase
         }
     }
 
+    public override void FinishAssembly(Assembly assembly)
+    {
+        base.FinishAssembly(assembly);
+        if (File.Exists(markerFileName))
+        {
+            File.Delete(markerFileName);
+        }
+    }
+
     private void WriteAndFlushNextMethodToPrepMarker()
     {
         int nextMethodToPrep = (methodCount + 1);
-
-        using (var writer = new StreamWriter(File.Create("NextMethodToPrep.marker")))
+        using (var writer = new StreamWriter(File.Create(markerFileName)))
         {
-            writer.Write("{0}", nextMethodToPrep);
+            writer.Write($"{nextMethodToPrep}");
         }
     }
 }
