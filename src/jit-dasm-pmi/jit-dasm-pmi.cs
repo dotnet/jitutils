@@ -433,7 +433,7 @@ namespace ManagedCodeGen
 
                     Assembly thisAssembly = typeof(DisasmEnginePmi).Assembly;
                     string binDir = Path.GetDirectoryName(thisAssembly.Location);
-                    List<string> commandArgs = new List<string>() { Path.Combine(binDir, "pmi.dll"), "PREPALL", fullPathAssembly };
+                    List<string> commandArgs = new List<string>() { Path.Combine(binDir, "pmi.dll"), "PREPALL-QUIET", fullPathAssembly };
                     Command generateCmd = null;
                     
                     try 
