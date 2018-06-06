@@ -195,10 +195,18 @@ abstract class PrepareBase : CounterBase
         base.FinishAssembly(assembly);
 
         TimeSpan elapsed = ElapsedTime();
-        Console.WriteLine(
+        Console.Write(
             $"Completed assembly {assemblyName} - #types: {typeCount}, #methods: {methodsPrepared}, " +
-            $"skipped types: {uninstantiableTypeCount}, skipped methods: {uninstantiableMethodCount}, " +
-            $"elapsed ms: {elapsed.TotalMilliseconds:F2}");
+            $"skipped types: {uninstantiableTypeCount}, skipped methods: {uninstantiableMethodCount}");
+
+        if (_verbose)
+        {
+            Console.WriteLine($", elapsed ms: {elapsed.TotalMilliseconds:F2}");
+        }
+        else
+        {
+            Console.WriteLine("");
+        }
     }
 
     public override void StartType(Type type)
