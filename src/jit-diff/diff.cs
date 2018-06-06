@@ -86,7 +86,10 @@ namespace ManagedCodeGen
             {
                 int dasmFailures = 0;
                 string command = CommandName + " " + String.Join(" ", item.DasmArgs);
-                Console.WriteLine("Dasm command: {0}", command);
+                if (m_config.Verbose)
+                {
+                    Console.WriteLine("Dasm command: {0}", command);
+                }
                 CommandResult result = Utility.TryCommand(s_asmToolJit, item.DasmArgs);
                 if (result.ExitCode != 0)
                 {
@@ -207,7 +210,7 @@ namespace ManagedCodeGen
                     diffString += "assemblies in " + config.TestRoot;
                 }
 
-                Console.WriteLine("Beginning diff of {0}", diffString);
+                Console.WriteLine($"Beginning {diffString}");
 
                 // Create subjob that runs jit-dasm or jit-dasm-pmi (which should be in path)
                 // with the relevent coreclr assemblies/paths.
@@ -233,10 +236,10 @@ namespace ManagedCodeGen
                     commandArgs.Add(config.AltJit);
                 }
 
+                DateTime startTime = DateTime.Now;
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
-
-
                 DasmResult dasmResult = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
+                Console.WriteLine($"Completed {diffString} in {(DateTime.Now - startTime).TotalSeconds:F2}s");
 
                 // Analyze completed run.
 
@@ -250,10 +253,16 @@ namespace ManagedCodeGen
                     analysisArgs.Add(Path.Combine(config.OutputPath, "diff"));
                     analysisArgs.Add("--recursive");
 
-                    Console.WriteLine("Analyze command: {0} {1}",
-                        s_analysisTool, String.Join(" ", analysisArgs));
+                    if (config.Verbose)
+                    {
+                        Console.WriteLine("Analyze command: {0} {1}",
+                            s_analysisTool, String.Join(" ", analysisArgs));
+                    }
 
+                    Console.WriteLine("Analyzing diffs...");
+                    startTime = DateTime.Now;
                     CommandResult analyzeResult = Utility.TryCommand(s_analysisTool, analysisArgs);
+                    Console.WriteLine($"Completed analysis in {(DateTime.Now - startTime).TotalSeconds:F2}s");
                 }
 
                 // Report any failures to generate asm at the very end (again). This is so
@@ -533,15 +542,15 @@ namespace ManagedCodeGen
                         {
                             StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
                         }
+
+                        var taskArray = DasmWorkTasks.ToArray();
+                        Task.WaitAll(taskArray);
                     }
                     finally
                     {
                         RestoreDefaultJit();
                     }
                 }
-
-                var taskArray = DasmWorkTasks.ToArray();
-                Task.WaitAll(taskArray);
 
                 if (m_config.DoDiffCompiles)
                 {
@@ -552,6 +561,9 @@ namespace ManagedCodeGen
                         {
                             StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
                         }
+
+                        var taskArray = DasmWorkTasks.ToArray();
+                        Task.WaitAll(taskArray);
                     }
                     finally
                     {

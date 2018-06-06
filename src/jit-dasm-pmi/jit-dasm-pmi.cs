@@ -418,7 +418,10 @@ namespace ManagedCodeGen
                 // Build a command per assembly to generate the asm output.
                 foreach (var assembly in _assemblyInfoList)
                 {
-                    Console.WriteLine("assembly name: " + assembly.Name);
+                    if (_config.DoVerboseOutput)
+                    {
+                        Console.WriteLine("assembly name: " + assembly.Name);
+                    }
                     string fullPathAssembly = Path.Combine(assembly.Path, assembly.Name);
 
                     if (!File.Exists(fullPathAssembly))
