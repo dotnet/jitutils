@@ -341,7 +341,19 @@ class PrepareAll : PrepareBase
 
     public override void AttemptMethod(Type type, MethodBase method)
     {
-        WriteAndFlushNextMethodToPrepMarker();
+        // For now only emit marker files if not in verbose mode.
+        //
+        // When may PMIs are invoked by jit-diff / jit-dasm-pmi we
+        // have trouble with file name contention as the names we
+        // pick are not unique enough. But the names also need to be
+        // predictable by DRIVEALL.
+        //
+        // So as a hack we rely on the fact that DRIVEALL always invokes
+        // PMI in verbose mode, and jit-dasm-pmi in quiet mode.
+        if (_verbose)
+        {
+            WriteAndFlushNextMethodToPrepMarker();
+        }
 
         if (methodCount >= firstMethod)
         {
