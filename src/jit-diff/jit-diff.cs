@@ -143,6 +143,7 @@ namespace ManagedCodeGen
             private string _rid = null;
             private string _platformName = null;
             private string _branchName = null;
+            private bool _pmi = false;
 
             private JObject _jObj;
             private bool _configFileLoaded = false;
@@ -158,7 +159,7 @@ namespace ManagedCodeGen
                 {
                     // Diff command section.
                     syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diffs via crossgen.");
-                    syntax.DefineCommand("pmidiff", ref _command, Commands.PmiDiff, "Run asm diffs via pmi.");
+
                     var baseOption = syntax.DefineOption("b|base", ref _basePath, false,
                         "The base compiler directory or tag. Will use crossgen, corerun, or clrjit from this directory.");
                     var diffOption = syntax.DefineOption("d|diff", ref _diffPath, false,
@@ -183,6 +184,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("arch", ref _arch, "Architecture to diff (x86, x64).");
                     syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
                     syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
+                    var pmiOption = syntax.DefineOption("pmi", ref _pmi, "Run asm diffs via pmi.");
 
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
@@ -203,6 +205,11 @@ namespace ManagedCodeGen
 
                     _baseSpecified = baseOption.IsSpecified;
                     _diffSpecified = diffOption.IsSpecified;
+
+                    if (pmiOption.IsSpecified)
+                    {
+                        _command = Commands.PmiDiff;
+                    }
                 });
 
                 SetRID();

@@ -90,7 +90,7 @@ namespace ManagedCodeGen
                 {
                     Console.WriteLine("Dasm command: {0}", command);
                 }
-                CommandResult result = Utility.TryCommand(s_asmToolJit, item.DasmArgs);
+                CommandResult result = Utility.TryCommand(CommandName, item.DasmArgs);
                 if (result.ExitCode != 0)
                 {
                     Console.Error.WriteLine("Dasm command \"{0}\" returned with {1} failures", command, result.ExitCode);
