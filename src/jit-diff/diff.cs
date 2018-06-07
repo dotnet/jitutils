@@ -189,25 +189,36 @@ namespace ManagedCodeGen
             {
                 DiffTool diffTool = NewDiffTool(config);
                 string diffString = $"{diffTool.Name} Diffs for ";
+                bool needPrefix = false;
 
                 if (config.CoreLib)
                 {
                     diffString += "System.Private.CoreLib.dll";
+                    needPrefix = true;
                 }
                 else if (config.DoFrameworks)
                 {
                     diffString += "System.Private.CoreLib.dll, framework assemblies";
+                    needPrefix = true;
                 }
 
                 if (config.Benchmarks)
                 {
-                    if (!String.IsNullOrEmpty(diffString)) diffString += ", ";
+                    if (needPrefix) diffString += ", ";
                     diffString += "benchstones and benchmarks game in " + config.TestRoot;
+                    needPrefix = true;
                 }
                 else if (config.DoTestTree)
                 {
-                    if (!String.IsNullOrEmpty(diffString)) diffString += ", ";
+                    if (needPrefix) diffString += ", ";
                     diffString += "assemblies in " + config.TestRoot;
+                    needPrefix = true;
+                }
+
+                if (config.AssemblyName != null)
+                {
+                    if (needPrefix) diffString += ", ";
+                    diffString += Path.GetFileName(config.AssemblyName);
                 }
 
                 Console.WriteLine($"Beginning {diffString}");
@@ -285,6 +296,24 @@ namespace ManagedCodeGen
             public static List<AssemblyInfo> GenerateAssemblyWorklist(Config config)
             {
                 List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
+
+                if (config.AssemblyName != null)
+                {
+                    if (!File.Exists(config.AssemblyName))
+                    {
+                        Console.Error.WriteLine($"Warning: can't find specified assembly {config.AssemblyName}");
+                    }
+                    else
+                    {
+                        AssemblyInfo info = new AssemblyInfo
+                        {
+                            Path = config.AssemblyName,
+                            OutputPath = ""
+                        };
+
+                        assemblyInfoList.Add(info);
+                    }
+                }
 
                 // CoreLib and the frameworks add specific files, not directories.
                 // These files will all be put in the same output directory. This
