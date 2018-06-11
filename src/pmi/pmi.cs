@@ -176,10 +176,12 @@ abstract class PrepareBase : CounterBase
     protected int firstMethod;
     protected int methodsPrepared;
     protected DateTime startType;
+    protected bool _verbose;
 
-    public PrepareBase(int f = 0)
+    public PrepareBase(int f = 0, bool verbose = false)
     {
         firstMethod = f;
+        _verbose = verbose;
     }
 
     public override void StartAssembly(Assembly assembly)
@@ -193,23 +195,37 @@ abstract class PrepareBase : CounterBase
         base.FinishAssembly(assembly);
 
         TimeSpan elapsed = ElapsedTime();
-        Console.WriteLine(
+        Console.Write(
             $"Completed assembly {assemblyName} - #types: {typeCount}, #methods: {methodsPrepared}, " +
-            $"skipped types: {uninstantiableTypeCount}, skipped methods: {uninstantiableMethodCount}, " +
-            $"elapsed ms: {elapsed.TotalMilliseconds:F2}");
+            $"skipped types: {uninstantiableTypeCount}, skipped methods: {uninstantiableMethodCount}");
+
+        if (_verbose)
+        {
+            Console.WriteLine($", elapsed ms: {elapsed.TotalMilliseconds:F2}");
+        }
+        else
+        {
+            Console.WriteLine("");
+        }
     }
 
     public override void StartType(Type type)
     {
         base.StartType(type);
-        Console.WriteLine($"Start type {type.FullName}");
+        if (_verbose)
+        {
+            Console.WriteLine($"Start type {type.FullName}");
+        }
         startType = DateTime.Now;
     }
 
     public override void FinishType(Type type)
     {
-        TimeSpan elapsedType = DateTime.Now - startType;
-        Console.WriteLine($"Completed type {type.FullName}, elapsed ms: {elapsedType.TotalMilliseconds:F2}");
+        if (_verbose)
+        {
+            TimeSpan elapsedType = DateTime.Now - startType;
+            Console.WriteLine($"Completed type {type.FullName}, elapsed ms: {elapsedType.TotalMilliseconds:F2}");
+        }
         base.FinishType(type);
     }
 
@@ -298,16 +314,6 @@ abstract class PrepareBase : CounterBase
 
         return elapsedFunc;
     }
-
-    private void WriteAndFlushNextMethodToPrepMarker()
-    {
-        int nextMethodToPrep = (methodCount + 1);
-
-        using (var writer = new StreamWriter(File.Create("NextMethodToPrep.marker")))
-        {
-            writer.Write($"{nextMethodToPrep}");
-        }
-    }
 }
 
 // Invoke the jit on all methods starting from an initial method.
@@ -316,23 +322,38 @@ class PrepareAll : PrepareBase
 {
     string pmiFullLogFileName;
     string pmiPartialLogFileName;
-
-    public PrepareAll(int f = 0) : base(f)
+    string markerFileName;
+    public PrepareAll(int firstMethod, bool verbose) : base(firstMethod, verbose)
     {
     }
 
     public override void StartAssembly(Assembly assembly)
     {
         base.StartAssembly(assembly);
-        Console.WriteLine($"Prepall for {assemblyName}");
-        string baseName = Path.GetFileNameWithoutExtension(assemblyName);
-        pmiFullLogFileName = $"{baseName}.pmi";
-        pmiPartialLogFileName = $"{baseName}.pmiPartial";
+        if (_verbose)
+        {
+            Console.WriteLine($"Prepall for {assemblyName}");
+        }
+        pmiFullLogFileName = $"{assemblyName}.pmi";
+        pmiPartialLogFileName = $"{assemblyName}.pmiPartial";
+        markerFileName = $"NextMethodToPrep-{assemblyName}.marker";
     }
 
     public override void AttemptMethod(Type type, MethodBase method)
     {
-        WriteAndFlushNextMethodToPrepMarker();
+        // For now only emit marker files if not in verbose mode.
+        //
+        // When may PMIs are invoked by jit-diff / jit-dasm-pmi we
+        // have trouble with file name contention as the names we
+        // pick are not unique enough. But the names also need to be
+        // predictable by DRIVEALL.
+        //
+        // So as a hack we rely on the fact that DRIVEALL always invokes
+        // PMI in verbose mode, and jit-dasm-pmi in quiet mode.
+        if (_verbose)
+        {
+            WriteAndFlushNextMethodToPrepMarker();
+        }
 
         if (methodCount >= firstMethod)
         {
@@ -340,32 +361,59 @@ class PrepareAll : PrepareBase
 
             if (method.IsAbstract)
             {
-                Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (abstract)");
+                if (_verbose)
+                {
+                    Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (abstract)");
+                }
             }
             else if (method.ContainsGenericParameters)
             {
-                Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}  - skipping (generic parameters)");
+                if (_verbose)
+                {
+                    Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}  - skipping (generic parameters)");
+                }
                 UninstantiableMethod(method);
             }
             else
             {
-                Console.Write($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
-                TimeSpan elapsedFunc = PrepareMethod(type, method);
-                if (elapsedFunc != TimeSpan.MinValue)
+                if (_verbose)
                 {
-                    Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
+                    Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
+                }
+
+                TimeSpan elapsedFunc = PrepareMethod(type, method);
+
+                if (_verbose)
+                {
+                    Console.Write($"Completed method {type.FullName}::{method.Name}");
+                    if (elapsedFunc != TimeSpan.MinValue)
+                    {
+                        Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
+                    }
+                    else
+                    {
+                        Console.WriteLine();
+                    }
                 }
             }
+        }
+    }
+
+    public override void FinishAssembly(Assembly assembly)
+    {
+        base.FinishAssembly(assembly);
+        if (File.Exists(markerFileName))
+        {
+            File.Delete(markerFileName);
         }
     }
 
     private void WriteAndFlushNextMethodToPrepMarker()
     {
         int nextMethodToPrep = (methodCount + 1);
-
-        using (var writer = new StreamWriter(File.Create("NextMethodToPrep.marker")))
+        using (var writer = new StreamWriter(File.Create(markerFileName)))
         {
-            writer.Write("{0}", nextMethodToPrep);
+            writer.Write($"{nextMethodToPrep}");
         }
     }
 }
@@ -373,7 +421,7 @@ class PrepareAll : PrepareBase
 // Invoke the jit on exactly one method.
 class PrepareOne : PrepareBase
 {
-    public PrepareOne(int firstMethod) : base(firstMethod)
+    public PrepareOne(int firstMethod, bool verbose) : base(firstMethod, verbose)
     {
     }
 
@@ -399,11 +447,16 @@ class PrepareOne : PrepareBase
             }
             else
             {
-                Console.Write($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
+                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
+                Console.WriteLine($"Completed method {type.FullName}::{method.Name}");
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
                     Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
+                }
+                else
+                {
+                    Console.WriteLine();
                 }
             }
         }
@@ -905,7 +958,8 @@ class PrepareMethodinator
             + "      The same as PrepAll, but is more robust. While PrepAll will stop at the first JIT assert, DriveAll will\r\n"
             + "      continue by skipping that method.\r\n"
             + "\r\n"
-            + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies."
+            + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\r\n"
+            + "Use PrepAll-Quiet and PrepOne-Quiet if less verbose output is desired"
         );
 
         return 101;
@@ -952,6 +1006,8 @@ class PrepareMethodinator
 
             case "PREPALL":
             case "PREPONE":
+            case "PREPALL-QUIET":
+            case "PREPONE-QUIET":
 
                 if (args.Length < 3)
                 {
@@ -975,13 +1031,13 @@ class PrepareMethodinator
                     }
                 }
 
-                if (command == "PREPALL")
+                if ((command == "PREPALL") || (command == "PREPALL-QUIET"))
                 {
-                    v = new PrepareAll(methodToPrep);
+                    v = new PrepareAll(methodToPrep, command == "PREPALL");
                 }
                 else
                 {
-                    v = new PrepareOne(methodToPrep);
+                    v = new PrepareOne(methodToPrep, command == "PREPONE");
                 }
                 break;
 

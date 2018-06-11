@@ -37,10 +37,12 @@ namespace ManagedCodeGen
             Install,
             Uninstall,
             Diff,
+            PmiDiff,
             List
         }
 
-        private static string s_asmTool = "jit-dasm";
+        private static string s_asmToolPrejit = "jit-dasm";
+        private static string s_asmToolJit = "jit-dasm-pmi";
         private static string s_analysisTool = "jit-analyze";
         private static string s_configFileName = "config.json";
         private static string s_configFileRootKey = "asmdiff";
@@ -71,6 +73,21 @@ namespace ManagedCodeGen
                 case "Linux":
                 case "OSX":
                     return "crossgen";
+                default:
+                    Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
+                    return null;
+            }
+        }
+
+        private static string GetCorerunExecutableName(string platformMoniker)
+        {
+            switch (platformMoniker)
+            {
+                case "Windows":
+                    return "corerun.exe";
+                case "Linux":
+                case "OSX":
+                    return "corerun";
                 default:
                     Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
                     return null;
@@ -126,6 +143,8 @@ namespace ManagedCodeGen
             private string _rid = null;
             private string _platformName = null;
             private string _branchName = null;
+            private bool _pmi = false;
+            private string _assemblyName = null;
 
             private JObject _jObj;
             private bool _configFileLoaded = false;
@@ -140,11 +159,12 @@ namespace ManagedCodeGen
                 _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
                 {
                     // Diff command section.
-                    syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diff.");
+                    syntax.DefineCommand("diff", ref _command, Commands.Diff, "Run asm diffs via crossgen.");
+
                     var baseOption = syntax.DefineOption("b|base", ref _basePath, false,
-                        "The base compiler directory or tag. Will use crossgen or clrjit from this directory.");
+                        "The base compiler directory or tag. Will use crossgen, corerun, or clrjit from this directory.");
                     var diffOption = syntax.DefineOption("d|diff", ref _diffPath, false,
-                        "The diff compiler directory or tag. Will use crossgen or clrjit from this directory.");
+                        "The diff compiler directory or tag. Will use crossgen, corerun, or clrjit from this directory.");
                     syntax.DefineOption("crossgen", ref _crossgenExe,
                         "The crossgen compiler exe. When this is specified, will use clrjit from the --base and " +
                         "--diff directories with this crossgen.");
@@ -165,6 +185,8 @@ namespace ManagedCodeGen
                     syntax.DefineOption("arch", ref _arch, "Architecture to diff (x86, x64).");
                     syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
                     syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
+                    var pmiOption = syntax.DefineOption("pmi", ref _pmi, "Run asm diffs via pmi.");
+                    syntax.DefineOption("assembly", ref _assemblyName, "Run asm diffs on a particular assembly");
 
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
@@ -179,12 +201,17 @@ namespace ManagedCodeGen
                     syntax.DefineOption("b|branch", ref _branchName, "Name of branch.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
 
-                    // Uninstall command section.
+                    // Uninstall command section.s
                     syntax.DefineCommand("uninstall", ref _command, Commands.Uninstall, "Uninstall tool from " + s_configFileName + ".");
                     syntax.DefineOption("t|tag", ref _tag, "Name of tool tag in config file.");
 
                     _baseSpecified = baseOption.IsSpecified;
                     _diffSpecified = diffOption.IsSpecified;
+
+                    if (pmiOption.IsSpecified)
+                    {
+                        _command = Commands.PmiDiff;
+                    }
                 });
 
                 SetRID();
@@ -195,7 +222,7 @@ namespace ManagedCodeGen
 
                 Validate();
 
-                if (_command == Commands.Diff)
+                if (_command == Commands.Diff || _command == Commands.PmiDiff)
                 {
                     // Do additional initialization relevant for just the "diff" command.
 
@@ -267,6 +294,7 @@ namespace ManagedCodeGen
                 switch (_command)
                 {
                     case Commands.Diff:
+                    case Commands.PmiDiff:
                         break;
                     case Commands.Install:
                     case Commands.Uninstall:
@@ -530,9 +558,10 @@ namespace ManagedCodeGen
                     }
                 }
 
-                if (!_corelib && !_frameworks && !_benchmarks && !_tests)
+                if (!_corelib && !_frameworks && !_benchmarks && !_tests && (_assemblyName == null))
                 {
                     // Setting --corelib as the default
+                    Console.WriteLine("No assemblies specified; defaulting to corelib");
                     _corelib = true;
                 }
 
@@ -623,6 +652,7 @@ namespace ManagedCodeGen
                 switch (_command)
                 {
                     case Commands.Diff:
+                    case Commands.PmiDiff:
                         ValidateDiff();
                         break;
                     case Commands.Install:
@@ -1156,6 +1186,8 @@ namespace ManagedCodeGen
             public string Number { get { return _number; } }
             public string BranchName { get { return _branchName; } }
             public string AltJit { get { return _altjit; } }
+
+            public string AssemblyName => _assemblyName;
         }
 
         private static string[] s_testDirectories =
@@ -1324,6 +1356,7 @@ namespace ManagedCodeGen
             switch (config.DoCommand)
             {
                 case Commands.Diff:
+                case Commands.PmiDiff:
                     {
                         ret = DiffTool.DiffCommand(config);
                     }

@@ -19,14 +19,15 @@ namespace PMIDriver
 {
     class PMIDriver
     {
-        const string PMI_FILE_MARKER = "NextMethodToPrep.marker";
-        const string PREVIOUS_PMI_FILE_MARKER = "PreviousNextMethodToPrep.marker";
-
         const int PREPALL_TIMEOUT = 1800000; //30 minutes
         const int PREPALL_MAX_RETRY_COUNT = 5;
 
         public static int Drive(string assemblyName)
         {
+            string baseName = Path.GetFileNameWithoutExtension(assemblyName);
+            string PMI_FILE_MARKER = $"NextMethodToPrep-{baseName}.marker";
+            string PREVIOUS_PMI_FILE_MARKER = $"PreviousNextMethodToPrep-{baseName}.marker";
+
             if (File.Exists(PMI_FILE_MARKER))
             {
                 File.Delete(PMI_FILE_MARKER);

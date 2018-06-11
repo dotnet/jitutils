@@ -16,7 +16,7 @@ function usage
     echo "    -h              : Show this message."
     echo "    -f              : Install default framework directory in <script_root>/fx."
     echo "    -p              : Publish utilities."
-    echo "    -t <TARGET>     : Target framework. Default is netcoreapp2.0."
+    echo "    -t <TARGET>     : Target framework. Default is netcoreapp2.1."
     echo ""
 }
 
@@ -56,7 +56,7 @@ while getopts "hpfbt:" opt; do
 done
 
 # declare the array of projects   
-declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs pmi)
+declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs pmi jit-dasm-pmi)
 
 # for each project either build or publish
 for proj in "${projects[@]}"
