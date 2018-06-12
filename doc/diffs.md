@@ -84,7 +84,7 @@ method in the assembly, setting these options:
 * `COMPlus_JitEHDump`
 * `COMPlus_JitDiffableDasm`
 * `COMPlus_JitDisasmAssemblies`
-* optionally, `COMPlus_NgenGCDump`
+* optionally, `COMPlus_JitGCDump`
 
 ## What can jit-diff produce asm diffs for?
 
