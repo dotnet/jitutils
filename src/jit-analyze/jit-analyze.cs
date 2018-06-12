@@ -346,13 +346,19 @@ namespace ManagedCodeGen
 
             if (config.Reconcile)
             {
-                var reconciledBytesBase = fileDeltaList.Sum(x => x.reconciledBytesBase);
-                var reconciledBytesDiff = fileDeltaList.Sum(x => x.reconciledBytesDiff);
+                // See if base or diff had any unique methods
                 var uniqueToBase = fileDeltaList.Sum(x => x.reconciledCountBase);
                 var uniqueToDiff = fileDeltaList.Sum(x => x.reconciledCountDiff);
-                Console.WriteLine("\nTotal byte diff includes {0} bytes from reconciling methods", reconciledBytesDiff - reconciledBytesBase);
-                Console.WriteLine("\tBase had {0,4} unique methods, {1,8} unique bytes", uniqueToBase, reconciledBytesBase);
-                Console.WriteLine("\tDiff had {0,4} unique methods, {1,8} unique bytes", uniqueToDiff, reconciledBytesDiff);
+
+                // Only dump reconciliation stats if there was at least one unique
+                if (uniqueToBase + uniqueToDiff > 0)
+                {
+                    var reconciledBytesBase = fileDeltaList.Sum(x => x.reconciledBytesBase);
+                    var reconciledBytesDiff = fileDeltaList.Sum(x => x.reconciledBytesDiff);
+                    Console.WriteLine("\nTotal byte diff includes {0} bytes from reconciling methods", reconciledBytesDiff - reconciledBytesBase);
+                    Console.WriteLine("\tBase had {0,4} unique methods, {1,8} unique bytes", uniqueToBase, reconciledBytesBase);
+                    Console.WriteLine("\tDiff had {0,4} unique methods, {1,8} unique bytes", uniqueToDiff, reconciledBytesDiff);
+                }
             }
 
             int requestedCount = config.Count;
