@@ -79,9 +79,9 @@ and a "diff" JIT, and comparing the results.
 
 Passing the `--pmi` option to `jit-diffs` will instead use reflection to jit each
 method in the assembly, setting these options:
-* `COMPlus_Disasm`
-* `COMPlus_UnwindDump`
-* `COMPlus_EHDump`
+* `COMPlus_JitDisasm`
+* `COMPlus_JitUnwindDump`
+* `COMPlus_JitEHDump`
 * `COMPlus_JitDiffableDasm`
 * `COMPlus_JitDisasmAssemblies`
 * optionally, `COMPlus_NgenGCDump`
@@ -260,9 +260,10 @@ The "jit-diff uninstall" command has this help message:
 ## Examples of generating diffs
 
 The tool needs to know:
-* Which base and diff JIT and crossgen to use.
+* Which base and diff JIT and crossgen or corerun to use.
 * Which assemblies to generate dasm for.
 * Where to put the generated dasm.
+* Whether or not you want diffs for prejitted code (default) or jitted code (via `--pmi`)
 
 These can all be specified explicitly. For example:
 
@@ -309,8 +310,9 @@ the diffs, e.g.:
 
 ## Simplified jit-diff usage: defaults
 
-As seen above, specifying all required information can be quite verbose. jit-diff can automatically determine
-most of the arguments using computed defaults. The above diff can be accomplished using simply:
+As seen above, specifying all required information can be quite verbose. jit-diff
+can automatically determine most of the arguments using computed defaults. The
+above diff can be accomplished using simply:
 ```
     c:\coreclr> jit-diff diff --diff --base --base_root e:\coreclr2
 ```
@@ -349,7 +351,7 @@ With a `--base_root` default in the config.json file, you can simply run:
 ```
 to generate diffs using all the defaults.
 
-If you only want to generate as from the diff compiler, omit the `--base` argument, e.g.:
+If you only want to generate asm from the diff compiler, omit the `--base` argument, e.g.:
 ```
     c:\coreclr> jit-diff diff --diff
 ```
@@ -363,6 +365,28 @@ instead of x64 diffs. They are not otherwise required.
 * `--diff_root`
 * `--arch`
 * `--build`
+
+## Simplified jit-diff usage with PMI
+
+The various simplified jit-diff invocations above can also be used to invoke diffs
+for jitted code by adding `--pmi` as an additional argument. For example:
+
+Analyze difference in jit codegen for methods in corelib:
+```
+    c:\coreclr> jit-diff diff --pmi --diff --base --base_root e:\coreclr2
+```
+
+Or, disassemble the jitted code for all the methods in `mytest.exe`:
+```
+    c:\coreclr> jit-diff diff --pmi --diff --assembly mytest.exe
+```
+
+Note this latter run should produce similar disassembly as running `mytest.exe` via
+corerun (with appropriate COMPlus flags set) for the methods that are executed
+during the run. But `jit-diff diff -pmi` will attempt to show code generated for
+all methods, executed or not. And it also works on libraries which are not
+directly executable on their own. So PMI offers a potentially faster and more
+comprehensive view of jit codegen.
 
 ## Using tags
 
@@ -535,34 +559,3 @@ diffing.  Note: The mscorlib.dll is removed, as this assembly should be updated 
 the selected base runtime that is under test, for consistency. To add particular packages 
 to the set you diff, add their dependencies to the project.json in this project and 
 they will be pulled in and published in the standalone directory './fx'.
-
-## pmi
-
-`pmi` is a low-level tool for running the jit across methods in an assembly.
-It can be used as a component to create diffs or to simply test whether the jit
-encounters any internal issues when jitting methods.
-```
-$pmi --help
-
-Usage:
-
-  pmi Count PATH_TO_ASSEMBLY
-      Count the number of types and methods in an assembly.
-
-  pmi PrepOne PATH_TO_ASSEMBLY INDEX_OF_TARGET_METHOD
-      JIT a single method, specified by a method number.
-
-  pmi PrepAll PATH_TO_ASSEMBLY [INDEX_OF_FIRST_METHOD_TO_PROCESS]
-      JIT all the methods in an assembly. If INDEX_OF_FIRST_METHOD_TO_PROCESS
-      is specified, it is the first method compiled, followed by all subsequent
-      methods.
-
-  pmi DriveAll PATH_TO_ASSEMBLY
-      The same as PrepAll, but is more robust. While PrepAll will stop at the
-      first JIT assert, DriveAll will continue by skipping that method.
-
-Environment variable PMIPATH is a semicolon-separated list of paths used to find
-dependent assemblies.
-
-Use PrepAll-Quiet and PrepOne-Quiet if less verbose output is desired.
-```

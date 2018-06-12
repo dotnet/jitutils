@@ -11,10 +11,10 @@ or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any addi
 
 Current tools include:
 
-1. [Assembly diffs](doc/diffs.md): jit-diff, jit-dasm, jit-dasm-pmi, jit-analyze, pmi.
+1. [Assembly diffs](doc/diffs.md): jit-diff, jit-dasm, jit-dasm-pmi, jit-analyze.
 2. [CI jobs information](doc/cijobs.md): cijobs.
 3. [JIT source code formatting](doc/formatting.md): jit-format.
-
+4. [General tools](doc/tools.md): pmi
 ## Getting started
 
 1. Clone the jitutils repo:
