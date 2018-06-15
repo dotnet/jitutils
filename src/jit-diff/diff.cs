@@ -515,8 +515,8 @@ namespace ManagedCodeGen
 
             void InstallBaseJit()
             {
-                string realJitPath = Path.Combine(m_config.CoreRoot, m_defaultJitName);
-                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_defaultJitName);
+                string realJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
+                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
                 string testJitPath = Path.Combine(m_config.BasePath, m_testJitName);
                 if (m_config.Verbose)
                 {
@@ -532,8 +532,8 @@ namespace ManagedCodeGen
 
             void InstallDiffJit()
             {
-                string realJitPath = Path.Combine(m_config.CoreRoot, m_defaultJitName);
-                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_defaultJitName);
+                string realJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
+                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
                 string testJitPath = Path.Combine(m_config.DiffPath, m_testJitName);
                 if (m_config.Verbose)
                 {
@@ -549,8 +549,8 @@ namespace ManagedCodeGen
 
             void RestoreDefaultJit()
             {
-                string realJitPath = Path.Combine(m_config.CoreRoot, m_defaultJitName);
-                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_defaultJitName);
+                string realJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
+                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
                 if (m_config.Verbose)
                 {
                     Console.WriteLine($"Restoring default jit: {tempJitPath} ==> {realJitPath}");
