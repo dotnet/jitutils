@@ -515,47 +515,56 @@ namespace ManagedCodeGen
 
             void InstallBaseJit()
             {
-                string realJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
+                string existingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
+                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
                 string testJitPath = Path.Combine(m_config.BasePath, m_testJitName);
+                if (File.Exists(existingJitPath))
+                {
+                    if (m_config.Verbose)
+                    {
+                        Console.WriteLine($"Copying exsting jit: {existingJitPath} ==> {backupJitPath}");
+                    }
+                    File.Copy(existingJitPath, backupJitPath, true);
+                }
                 if (m_config.Verbose)
                 {
-                    Console.WriteLine($"Copying default jit: {realJitPath} ==> {tempJitPath}");
+                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {existingJitPath}");
                 }
-                File.Copy(realJitPath, tempJitPath, true);
-                if (m_config.Verbose)
-                {
-                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {realJitPath}");
-                }
-                File.Copy(testJitPath, realJitPath, true);
+                File.Copy(testJitPath, existingJitPath, true);
             }
 
             void InstallDiffJit()
             {
-                string realJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
+                string exitingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
+                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
                 string testJitPath = Path.Combine(m_config.DiffPath, m_testJitName);
+                if (File.Exists(exitingJitPath))
+                {
+                    if (m_config.Verbose)
+                    {
+                        Console.WriteLine($"Copying existing jit: {exitingJitPath} ==> {backupJitPath}");
+                    }
+                    File.Copy(exitingJitPath, backupJitPath, true);
+                }
                 if (m_config.Verbose)
                 {
-                    Console.WriteLine($"Copying default jit: {realJitPath} ==> {tempJitPath}");
+                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {exitingJitPath}");
                 }
-                File.Copy(realJitPath, tempJitPath, true);
-                if (m_config.Verbose)
-                {
-                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {realJitPath}");
-                }
-                File.Copy(testJitPath, realJitPath, true);
+                File.Copy(testJitPath, exitingJitPath, true);
             }
 
             void RestoreDefaultJit()
             {
-                string realJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string tempJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
-                if (m_config.Verbose)
+                string existingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
+                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
+                if (File.Exists(backupJitPath))
                 {
-                    Console.WriteLine($"Restoring default jit: {tempJitPath} ==> {realJitPath}");
+                    if (m_config.Verbose)
+                    {
+                        Console.WriteLine($"Restoring exsiting jit: {backupJitPath} ==> {existingJitPath}");
+                    }
+                    File.Copy(backupJitPath, existingJitPath, true);
                 }
-                File.Copy(tempJitPath, realJitPath, true);
             }
 
             // Because pmi modifies the test overlay, we can't run base and diff tasks in an interleaved manner.
