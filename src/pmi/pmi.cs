@@ -52,9 +52,8 @@ class Visitor
     {
     }
 
-    public virtual void UninstantiableType(Type t)
+    public virtual void UninstantiableType(Type type, string reason)
     {
-
     }
 
     public virtual void StartType(Type type)
@@ -118,9 +117,9 @@ class CounterBase : Visitor
         typeCount++;
     }
 
-    public override void UninstantiableType(Type t)
+    public override void UninstantiableType(Type type, string reason)
     {
-        base.UninstantiableType(t);
+        base.UninstantiableType(type, reason);
         uninstantiableTypeCount++;
     }
 
@@ -177,11 +176,13 @@ abstract class PrepareBase : CounterBase
     protected int methodsPrepared;
     protected DateTime startType;
     protected bool _verbose;
+    protected bool _time;
 
-    public PrepareBase(int f = 0, bool verbose = false)
+    public PrepareBase(int f, bool verbose, bool time)
     {
         firstMethod = f;
         _verbose = verbose;
+        _time = time;
     }
 
     public override void StartAssembly(Assembly assembly)
@@ -199,9 +200,9 @@ abstract class PrepareBase : CounterBase
             $"Completed assembly {assemblyName} - #types: {typeCount}, #methods: {methodsPrepared}, " +
             $"skipped types: {uninstantiableTypeCount}, skipped methods: {uninstantiableMethodCount}");
 
-        if (_verbose)
+        if (_time || _verbose)
         {
-            Console.WriteLine($", elapsed ms: {elapsed.TotalMilliseconds:F2}");
+            Console.WriteLine($", time: {elapsed.TotalMilliseconds:F2}ms");
         }
         else
         {
@@ -227,6 +228,15 @@ abstract class PrepareBase : CounterBase
             Console.WriteLine($"Completed type {type.FullName}, elapsed ms: {elapsedType.TotalMilliseconds:F2}");
         }
         base.FinishType(type);
+    }
+
+    public override void UninstantiableType(Type type, string reason)
+    {
+        if (_verbose)
+        {
+            Console.WriteLine($"Unable to instantiate {type.FullName}: {reason}");
+        }
+        base.UninstantiableType(type, reason);
     }
 
     public override void StartMethod(Type type, MethodBase method)
@@ -323,7 +333,7 @@ class PrepareAll : PrepareBase
     string pmiFullLogFileName;
     string pmiPartialLogFileName;
     string markerFileName;
-    public PrepareAll(int firstMethod, bool verbose) : base(firstMethod, verbose)
+    public PrepareAll(int firstMethod, bool verbose, bool time) : base(firstMethod, verbose, time)
     {
     }
 
@@ -421,7 +431,7 @@ class PrepareAll : PrepareBase
 // Invoke the jit on exactly one method.
 class PrepareOne : PrepareBase
 {
-    public PrepareOne(int firstMethod, bool verbose) : base(firstMethod, verbose)
+    public PrepareOne(int firstMethod, bool verbose, bool time) : base(firstMethod, verbose, time)
     {
     }
 
@@ -772,9 +782,7 @@ class Worker
         // Only handle the very simplest cases for now
         if (genericArguments.Length > 2)
         {
-            Console.WriteLine();
-            Console.WriteLine($"Failed to instantiate {type.FullName} -- too many type parameters");
-            visitor.UninstantiableType(type);
+            visitor.UninstantiableType(type, "too many type parameters");
             MethodBase[] methods = GetMethods(type);
             visitor.UninstantiableMethods(methods);
             return results;
@@ -826,10 +834,8 @@ class Worker
                     results.Add(newType);
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Console.WriteLine();
-                Console.WriteLine($"TypeInstantationException {type.FullName} - {e.Message}");
             }
 
             if (instantiationCount >= instantiationLimit)
@@ -840,9 +846,7 @@ class Worker
 
         if (instantiationCount == 0)
         {
-            Console.WriteLine();
-            Console.WriteLine($"Failed to instantiate {type.FullName} -- could not find valid type substitutions");
-            visitor.UninstantiableType(type);
+            visitor.UninstantiableType(type, "could not find valid substitution");
             MethodBase[] methods = GetMethods(type);
             visitor.UninstantiableMethods(methods);
         }
@@ -959,7 +963,10 @@ class PrepareMethodinator
             + "      continue by skipping that method.\r\n"
             + "\r\n"
             + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\r\n"
-            + "Use PrepAll-Quiet and PrepOne-Quiet if less verbose output is desired"
+            + "\r\n"
+            + "For Prepall and Prepone, optional suffixes will change output behavior:\r\n"
+            + "   -Quiet will suppress in-progress messages for type and method exploration\r\n"
+            + "   -Time will always show elapsed times, even in -Quiet mode"
         );
 
         return 101;
@@ -981,7 +988,9 @@ class PrepareMethodinator
 
         Visitor v = null;
 
-        switch (command)
+        int dashIndex = command.IndexOf('-');
+        string rootCommand = dashIndex < 0 ? command : command.Substring(0, dashIndex);
+        switch (rootCommand)
         {
             case "DRIVEALL":
             case "COUNT":
@@ -1006,9 +1015,6 @@ class PrepareMethodinator
 
             case "PREPALL":
             case "PREPONE":
-            case "PREPALL-QUIET":
-            case "PREPONE-QUIET":
-
                 if (args.Length < 3)
                 {
                     methodToPrep = 0;
@@ -1031,13 +1037,17 @@ class PrepareMethodinator
                     }
                 }
 
-                if ((command == "PREPALL") || (command == "PREPALL-QUIET"))
+                bool all = command.IndexOf("ALL") > 0;
+                bool verbose = !(command.IndexOf("QUIET") > 0);
+                bool time = verbose || command.IndexOf("TIME") > 0;
+
+                if (all)
                 {
-                    v = new PrepareAll(methodToPrep, command == "PREPALL");
+                    v = new PrepareAll(methodToPrep, verbose, time);
                 }
                 else
                 {
-                    v = new PrepareOne(methodToPrep, command == "PREPONE");
+                    v = new PrepareOne(methodToPrep, verbose, time);
                 }
                 break;
 
