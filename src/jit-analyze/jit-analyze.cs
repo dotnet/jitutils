@@ -148,7 +148,8 @@ namespace ManagedCodeGen
 
         public class FileDelta
         {
-            public string path;
+            public string basePath;
+            public string diffPath;
             public int baseBytes;
             public int diffBytes;
             public int deltaBytes;
@@ -160,6 +161,7 @@ namespace ManagedCodeGen
             public IEnumerable<MethodInfo> methodsOnlyInBase;
             public IEnumerable<MethodInfo> methodsOnlyInDiff;
             public IEnumerable<MethodDelta> methodDeltaList;
+
             // Adjust lists to include empty methods in diff|base for methods that appear only in base|diff.
             // Also adjust delta to take these methods into account.
             public void Reconcile()
@@ -217,10 +219,9 @@ namespace ManagedCodeGen
             // otherwise just extract.
             SearchOption searchOption = (recursive) ?
                 SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            FileAttributes attr = File.GetAttributes(path);
             string fullRootPath = Path.GetFullPath(path);
 
-            if ((attr & FileAttributes.Directory) == FileAttributes.Directory)
+            if (Directory.Exists(fullRootPath))
             {
                 return Directory.EnumerateFiles(fullRootPath, "*.dasm", searchOption)
                          .Select(p => new FileInfo
@@ -233,7 +234,9 @@ namespace ManagedCodeGen
             {
                 // In the single file case just create a list with a single
                 // to satisfy the interface.
-                return new List<FileInfo> { new FileInfo {
+                return new List<FileInfo>
+                { new FileInfo
+                    {
                         path = Path.GetFileName(path),
                         methodList = ExtractMethodInfo(path)
                     }
@@ -305,7 +308,8 @@ namespace ManagedCodeGen
 
                 FileDelta f = new FileDelta
                 {
-                    path = b.path,
+                    basePath = b.path,
+                    diffPath = d.path,
                     baseBytes = jointList.Sum(x => x.baseBytes),
                     diffBytes = jointList.Sum(x => x.diffBytes),
                     deltaBytes = jointList.Sum(x => x.deltaBytes),
@@ -331,13 +335,13 @@ namespace ManagedCodeGen
         //     Top 5 diffs by size across all files
         //
         //
-        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config)
+        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
         {
             var totalDiffBytes = fileDeltaList.Sum(x => x.deltaBytes);
             var totalBaseBytes = fileDeltaList.Sum(x => x.baseBytes);
 
             Console.WriteLine("\nSummary:\n(Note: Lower is better)\n");
-            Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDiffBytes, (double) totalDiffBytes/totalBaseBytes);
+            Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDiffBytes, (double)totalDiffBytes / totalBaseBytes);
 
             if (totalDiffBytes != 0)
             {
@@ -378,11 +382,10 @@ namespace ManagedCodeGen
                 Console.WriteLine("\nTop file regressions by size (bytes):");
                 foreach (var fileDelta in sortedFileRegressions.GetRange(0, Math.Min(fileRegressionCount, requestedCount)))
                 {
-                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.path,
+                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
                         fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
                 }
             }
-
 
             if (fileImprovementCount > 0)
             {
@@ -390,7 +393,7 @@ namespace ManagedCodeGen
 
                 foreach (var fileDelta in sortedFileImprovements.GetRange(0, Math.Min(fileImprovementCount, requestedCount)))
                 {
-                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.path,
+                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
                         fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
                 }
             }
@@ -401,7 +404,7 @@ namespace ManagedCodeGen
             var methodDeltaList = fileDeltaList
                                         .SelectMany(fd => fd.methodDeltaList, (fd, md) => new
                                         {
-                                            path = fd.path,
+                                            path = fd.basePath,
                                             name = md.name,
                                             deltaBytes = md.deltaBytes,
                                             baseBytes = md.baseBytes,
@@ -471,6 +474,17 @@ namespace ManagedCodeGen
             Console.WriteLine("\n{0} total methods with size differences ({1} improved, {2} regressed), {3} unchanged.",
                 sortedMethodCount, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
 
+            // Show files with text diffs but not size diffs.
+            // TODO: resolve diffs to particular methods in the files.
+            var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaBytes == 0))
+                .OrderByDescending(x => diffCounts[x.basePath]);
+
+            Console.WriteLine("\n{0} files had text diffs but not size diffs.", zeroDiffFilesWithDiffs.Count());
+            foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+            {
+                Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+            }
+
             return Math.Abs(totalDiffBytes);
         }
 
@@ -514,7 +528,7 @@ namespace ManagedCodeGen
 
                 if ((onlyInBaseCount > 0) || (onlyInDiffCount > 0))
                 {
-                    Console.WriteLine("Mismatched methods in {0}", delta.path);
+                    Console.WriteLine("Mismatched methods in {0}", delta.basePath);
                     if (onlyInBaseCount > 0)
                     {
                         Console.WriteLine("Base:");
@@ -578,7 +592,7 @@ namespace ManagedCodeGen
                         foreach (var method in file.methodDeltaList)
                         {
                             // Method names often contain commas, so use tabs as field separators
-                            outputStreamWriter.WriteLine(schema, file.path, method.name, method.diffBytes,
+                            outputStreamWriter.WriteLine(schema, file.basePath, method.name, method.diffBytes,
                                 method.baseBytes, method.deltaBytes);
                         }
                     }
@@ -591,7 +605,7 @@ namespace ManagedCodeGen
             public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
         }
 
-        public static bool DiffInText(string diffPath, string basePath)
+        public static Dictionary<string, int> DiffInText(string diffPath, string basePath)
         {
             // run get diff command to see if we have textual diffs.
             // (use git diff since it's already a dependency and cross platform)
@@ -599,12 +613,12 @@ namespace ManagedCodeGen
             commandArgs.Add("diff");
             commandArgs.Add("--no-index");
             commandArgs.Add("--exit-code");
-            commandArgs.Add("--name-only");
+            commandArgs.Add("--numstat");
             commandArgs.Add(diffPath);
             commandArgs.Add(basePath);
             Command diffCmd = null;
 
-            try 
+            try
             {
                 diffCmd = Command.Create(new ScriptResolverPolicyWrapper(), @"git", commandArgs);
             }
@@ -618,16 +632,49 @@ namespace ManagedCodeGen
             diffCmd.CaptureStdErr();
 
             CommandResult result = diffCmd.Execute();
+            Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>();
 
             if (result.ExitCode != 0)
             {
-                // TODO - there's some issue with capturing stdout.  Just leave this commented out for now.
-                // Console.WriteLine("here {0}", result.StdOut);
-                // var lines = result.StdOut.Split(new [] {Environment.NewLine}, StringSplitOptions.None).ToList();
-                Console.WriteLine("Found files with textual diffs.");
-                return true;
+                // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
+                //
+                // diff --numstat output shows added/deleted lines
+                //   added removed base-path => diff-path
+                var rawLines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+                string fullDiffPath = Path.GetFullPath(diffPath);
+
+                foreach (var line in rawLines)
+                {
+                    var fields = line.Split(new[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (fields.Length != 5)
+                    {
+                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : {fields.Length} fields");
+                        continue;
+                    }
+
+                    // store diff-relative path
+                    string fullBaseFilePath = Path.GetFullPath(fields[2]);
+                    if (!File.Exists(fullBaseFilePath))
+                    {
+                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : '{fullBaseFilePath}' does not exist");
+                        continue;
+                    }
+
+                    string baseFilePath = fullBaseFilePath.Substring(fullDiffPath.Length + 1);
+
+                    // Sometimes .dasm is parsed as binary and we don't get numbers, just dashes
+                    int addCount = 0;
+                    int delCount = 0;
+                    Int32.TryParse(fields[0], out addCount);
+                    Int32.TryParse(fields[1], out delCount);
+                    Console.WriteLine($"adding [{baseFilePath}] => {addCount + delCount}");
+                    fileToTextDiffCount[baseFilePath] = addCount + delCount;
+                }
+
+                Console.WriteLine($"Found {fileToTextDiffCount.Count()} files with textual diffs.");
             }
-            return false;
+
+            return fileToTextDiffCount;
         }
 
         public static int Main(string[] args)
@@ -635,8 +682,10 @@ namespace ManagedCodeGen
             // Parse incoming arguments
             Config config = new Config(args);
 
+            Dictionary<string, int> diffCounts = DiffInText(config.DiffPath, config.BasePath);
+
             // Early out if no textual diffs found.
-            if (!DiffInText(config.DiffPath, config.BasePath))
+            if (diffCounts == null)
             {
                 Console.WriteLine("No diffs found.");
                 return 0;
@@ -647,7 +696,7 @@ namespace ManagedCodeGen
                 // Extract method info from base and diff directory or file.
                 var baseList = ExtractFileInfo(config.BasePath, config.Recursive);
                 var diffList = ExtractFileInfo(config.DiffPath, config.Recursive);
-            
+
                 // Compare the method info for each file and generate a list of
                 // non-zero deltas.  The lists that include files in one but not
                 // the other are used as the comparator function only compares where it 
@@ -672,8 +721,8 @@ namespace ManagedCodeGen
                     GenerateJson(compareList, config.JsonFileName);
                 }
 
-                return Summarize(compareList, config);
-            
+                return Summarize(compareList, config, diffCounts);
+
             }
             catch (System.IO.DirectoryNotFoundException e)
             {
