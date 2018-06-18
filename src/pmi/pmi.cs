@@ -202,8 +202,7 @@ abstract class PrepareBase : CounterBase
 
         if (_time || _verbose)
         {
-            string prefix = _time && !_verbose ? "" : ", ";
-            Console.WriteLine($"{prefix}Time: {elapsed.TotalMilliseconds:F2}ms");
+            Console.WriteLine($", time: {elapsed.TotalMilliseconds:F2}ms");
         }
         else
         {
