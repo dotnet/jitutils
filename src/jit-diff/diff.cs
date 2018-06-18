@@ -522,7 +522,7 @@ namespace ManagedCodeGen
                 {
                     if (m_config.Verbose)
                     {
-                        Console.WriteLine($"Copying exsting jit: {existingJitPath} ==> {backupJitPath}");
+                        Console.WriteLine($"Saving off existing jit: {existingJitPath} ==> {backupJitPath}");
                     }
                     File.Copy(existingJitPath, backupJitPath, true);
                 }
@@ -542,7 +542,7 @@ namespace ManagedCodeGen
                 {
                     if (m_config.Verbose)
                     {
-                        Console.WriteLine($"Copying existing jit: {exitingJitPath} ==> {backupJitPath}");
+                        Console.WriteLine($"Saving off existing jit: {exitingJitPath} ==> {backupJitPath}");
                     }
                     File.Copy(exitingJitPath, backupJitPath, true);
                 }
