@@ -945,6 +945,13 @@ class PrepareMethodinator
     {
         string exeName = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName; // get the current full path name of PMI.exe
         exeName = System.IO.Path.GetFileName(exeName); // strip off the path; just use the EXE name.
+        // Augment if we're using core executables that require an explicit host.
+        // (note user may have actually launched via pmi.bat -- not clear how to tell that just yet).
+        if (exeName.IndexOf("dotnet") == 0 || exeName.IndexOf("corerun") == 0)
+        {
+            exeName += " pmi.dll";
+        }
+
         Console.WriteLine(
             "Usage:\r\n"
             + "\r\n"

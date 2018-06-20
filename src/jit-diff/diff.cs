@@ -263,6 +263,10 @@ namespace ManagedCodeGen
                     analysisArgs.Add("--diff");
                     analysisArgs.Add(Path.Combine(config.OutputPath, "diff"));
                     analysisArgs.Add("--recursive");
+                    analysisArgs.Add("--note");
+
+                    string jitName = config.AltJit ?? "default jit";
+                    analysisArgs.Add($"{diffString} for {config.Arch} {jitName}");
 
                     if (config.Verbose)
                     {

@@ -29,6 +29,7 @@ namespace ManagedCodeGen
             private string _json;
             private string _tsv;
             private bool _noreconcile = false;
+            private string _note;
 
             public Config(string[] args)
             {
@@ -44,6 +45,8 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
+                    syntax.DefineOption("note", ref _note,
+                        "Descriptive note to add to summary output");
                     syntax.DefineOption("noreconcile", ref _noreconcile,
                         "Do not reconcile unique methods in base/diff");
                     syntax.DefineOption("json", ref _json,
@@ -80,6 +83,7 @@ namespace ManagedCodeGen
             public bool DoGenerateJson { get { return _json != null; } }
             public bool DoGenerateTSV { get { return _tsv != null; } }
             public bool Reconcile { get { return !_noreconcile; } }
+            public string Note { get { return _note; } }
         }
 
         public class FileInfo
@@ -340,7 +344,12 @@ namespace ManagedCodeGen
             var totalDiffBytes = fileDeltaList.Sum(x => x.deltaBytes);
             var totalBaseBytes = fileDeltaList.Sum(x => x.baseBytes);
 
-            Console.WriteLine("\nSummary:\n(Note: Lower is better)\n");
+            if (config.Note != null)
+            {
+                Console.WriteLine($"\n{config.Note}");
+            }
+
+            Console.WriteLine("\nSummary:\n(Lower is better)\n");
             Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDiffBytes, (double)totalDiffBytes / totalBaseBytes);
 
             if (totalDiffBytes != 0)
@@ -479,10 +488,14 @@ namespace ManagedCodeGen
             var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaBytes == 0))
                 .OrderByDescending(x => diffCounts[x.basePath]);
 
-            Console.WriteLine("\n{0} files had text diffs but not size diffs.", zeroDiffFilesWithDiffs.Count());
-            foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+            int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
+            if (zeroDiffFilesWithDiffCount > 0)
             {
-                Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                Console.WriteLine("\n{0} files had text diffs but not size diffs.", zeroDiffFilesWithDiffCount);
+                foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+                {
+                    Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                }
             }
 
             return Math.Abs(totalDiffBytes);
@@ -667,7 +680,6 @@ namespace ManagedCodeGen
                     int delCount = 0;
                     Int32.TryParse(fields[0], out addCount);
                     Int32.TryParse(fields[1], out delCount);
-                    Console.WriteLine($"adding [{baseFilePath}] => {addCount + delCount}");
                     fileToTextDiffCount[baseFilePath] = addCount + delCount;
                 }
 

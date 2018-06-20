@@ -401,6 +401,11 @@ namespace ManagedCodeGen
 
                     GenerateAsmInternal();
                 }
+                catch(Exception e)
+                {
+                    Console.WriteLine($"JIT DASM PMI failed: {e.Message}");
+                    _errorCount++;
+                }
                 finally
                 {
                     if (_config.CopyJit)
