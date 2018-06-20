@@ -445,13 +445,20 @@ namespace ManagedCodeGen
                             {
                                 _basePath = tryBasePath;
                                 needBasePath = false;
-                                Console.WriteLine("Using --base={0}", _basePath);
+                                Console.WriteLine($"Using --base={_basePath}");
                             }
+
                             if (tryDiffPath != null)
                             {
                                 _diffPath = tryDiffPath;
                                 needDiffPath = false;
-                                Console.WriteLine("Using --diff={0}", _diffPath);
+                                Console.WriteLine($"Using --diff={_diffPath}");
+                            }
+
+                            if (_arch == null)
+                            {
+                                _arch = arch;
+                                Console.WriteLine($"Using --arch={_arch}");
                             }
                             break;
                         }
@@ -1194,7 +1201,7 @@ namespace ManagedCodeGen
             public string Number { get { return _number; } }
             public string BranchName { get { return _branchName; } }
             public string AltJit { get { return _altjit; } }
-
+            public string Arch {  get { return _arch;  } }
             public string AssemblyName => _assemblyName;
         }
 
