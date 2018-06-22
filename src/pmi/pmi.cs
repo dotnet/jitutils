@@ -609,15 +609,10 @@ class Worker
         }
         catch (ReflectionTypeLoadException e)
         {
-
             Console.WriteLine($"ReflectionTypeLoadException {assemblyName}");
             Exception[] ea = e.LoaderExceptions;
             foreach (Exception e2 in ea)
             {
-                string[] ts = e2.ToString().Split('\'');
-                string temp = ts[1];
-                ts = temp.Split(',');
-                temp = ts[0];
                 Console.WriteLine($"ReflectionTypeLoadException {assemblyName}   ex: {e2.Message}");
             }
 
