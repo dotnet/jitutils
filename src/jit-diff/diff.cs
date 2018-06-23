@@ -3,19 +3,12 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-//using System.Diagnostics;
 using System.CommandLine;
 using System.IO;
 using System.Collections.Generic;
-//using System.Text.RegularExpressions;
 using System.Linq;
 using Microsoft.DotNet.Cli.Utils;
-//using Microsoft.DotNet.Tools.Common;
-//using Newtonsoft.Json;
-//using Newtonsoft.Json.Linq;
-//using System.Collections.Concurrent;
 using System.Threading.Tasks;
-//using System.Runtime.InteropServices;
 
 namespace ManagedCodeGen
 {
@@ -25,6 +18,58 @@ namespace ManagedCodeGen
     {
         Base,
         Diff
+    }
+
+    public class ProgressBar
+    {
+        static readonly int progressInterval = 100;  // update time in ms
+        static char[] figit = new char[] { '-', '/', '|', '\\' };
+        readonly DateTime m_start;
+
+        public ProgressBar()
+        {
+            m_start = DateTime.Now;
+        }
+
+        public void AwaitTasksAndShowProgress(List<AssemblyInfo> assemblyWorkList, jitdiff.Config config,
+            List<DasmWorkTask> tasks, bool isFinalAwait)
+        {
+            var taskArray = tasks.ToArray();
+
+            // If output is redirected, just wait -- don't show any updates
+            if (Console.IsOutputRedirected)
+            {
+                Task.WaitAll(taskArray);
+                return;
+            }
+
+            // Wake up every so often and update the task bar.
+            int assemblyCount = assemblyWorkList.Count();
+            int totalBaseTasks = config.DoBaseCompiles ? assemblyCount : 0;
+            int totalDiffTasks = config.DoDiffCompiles ? assemblyCount : 0;
+            bool done = false;
+            int count = 0;
+
+            while (!done)
+            {
+                done = Task.WaitAll(taskArray, progressInterval);
+                TimeSpan elapsed = DateTime.Now - m_start;
+                IEnumerable<DasmWorkTask> completedTasks = taskArray.Where(x => x.IsCompleted);
+                int completedBaseTasks = completedTasks.Count(x => x.Result.kind == DasmWorkKind.Base);
+                int completedDiffTasks = completedTasks.Count(x => x.Result.kind == DasmWorkKind.Diff);
+                Console.CursorLeft = 0;
+                Console.Write(
+                    $"{figit[count++ % figit.Length]} " +
+                    $"Finished {completedBaseTasks}/{totalBaseTasks} Base " +
+                    $"{completedDiffTasks}/{totalDiffTasks} Diff " +
+                    $"[{((double)elapsed.TotalMilliseconds / 1000.0):F1} sec]");
+            }
+
+            if (isFinalAwait)
+            {
+                Console.WriteLine();
+            }
+        }
     }
 
     public partial class jitdiff
@@ -48,7 +93,6 @@ namespace ManagedCodeGen
                     DasmArgs = dasmArgs;
                 }
             }
-
             protected Config m_config;
             protected List<DasmWorkTask> DasmWorkTasks = new List<DasmWorkTask>();
             protected string m_name;
@@ -59,6 +103,7 @@ namespace ManagedCodeGen
             protected DiffTool(Config config)
             {
                 m_config = config;
+
             }
 
             protected static DiffTool NewDiffTool(Config config)
@@ -117,7 +162,8 @@ namespace ManagedCodeGen
                 }
             }
 
-            protected void StartDasmWorkOne(DasmWorkKind kind, List<string> commandArgs, string tagBaseDiff, string clrPath, AssemblyInfo assemblyInfo)
+            protected void StartDasmWorkOne(DasmWorkKind kind, List<string> commandArgs, string tagBaseDiff,
+                string clrPath, AssemblyInfo assemblyInfo)
             {
                 List<string> args = ConstructArgs(commandArgs, clrPath);
 
@@ -143,36 +189,39 @@ namespace ManagedCodeGen
                         StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
                     }
                 }
+
+                var progress = new ProgressBar();
+                progress.AwaitTasksAndShowProgress(assemblyWorkList, m_config, DasmWorkTasks, true);
             }
 
             protected abstract List<string> ConstructArgs(List<string> commandArgs, string clrPath);
             private DasmResult RunDasmTool(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
-                StartDasmWorkBaseDiff(commandArgs, assemblyWorkList);
-
                 DasmResult result = new DasmResult();
+                DasmWorkTask[] taskArray = new DasmWorkTask[0];
 
                 try
                 {
-                    var taskArray = DasmWorkTasks.ToArray();
+                    StartDasmWorkBaseDiff(commandArgs, assemblyWorkList);
+                    taskArray = DasmWorkTasks.ToArray();
                     Task.WaitAll(taskArray);
-
-                    foreach (var t in taskArray)
-                    {
-                        if (t.Result.kind == DasmWorkKind.Base)
-                        {
-                            result.BaseErrors += t.Result.errorCount;
-                        }
-                        else
-                        {
-                            result.DiffErrors += t.Result.errorCount;
-                        }
-                    }
                 }
                 catch (AggregateException ex)
                 {
                     Console.Error.WriteLine("Dasm task failed with {0}", ex.Message);
                     result.CaughtException = true;
+                }
+
+                foreach (var t in taskArray)
+                {
+                    if (t.Result.kind == DasmWorkKind.Base)
+                    {
+                        result.BaseErrors += t.Result.errorCount;
+                    }
+                    else
+                    {
+                        result.DiffErrors += t.Result.errorCount;
+                    }
                 }
 
                 if (!result.Success)
@@ -575,6 +624,8 @@ namespace ManagedCodeGen
 
             protected override void StartDasmWorkBaseDiff(List<string> commandArgs, List<AssemblyInfo> assemblyWorkList)
             {
+                var progressBar = new ProgressBar();
+
                 if (m_config.DoBaseCompiles)
                 {
                     try
@@ -585,8 +636,7 @@ namespace ManagedCodeGen
                             StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
                         }
 
-                        var taskArray = DasmWorkTasks.ToArray();
-                        Task.WaitAll(taskArray);
+                        progressBar.AwaitTasksAndShowProgress(assemblyWorkList, m_config, DasmWorkTasks, m_config.DoDiffCompiles);
                     }
                     finally
                     {
@@ -604,8 +654,7 @@ namespace ManagedCodeGen
                             StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
                         }
 
-                        var taskArray = DasmWorkTasks.ToArray();
-                        Task.WaitAll(taskArray);
+                        progressBar.AwaitTasksAndShowProgress(assemblyWorkList, m_config, DasmWorkTasks, true);
                     }
                     finally
                     {

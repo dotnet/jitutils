@@ -139,7 +139,7 @@ namespace ManagedCodeGen
         public bool UseFileName { get { return (_fileName != null); } }
         public bool DumpGCInfo { get { return _dumpGCInfo; } }
         public bool DoVerboseOutput { get { return _verbose; } }
-        public bool CopyJit {  get { return !_noCopyJit; } }
+        public bool CopyJit { get { return !_noCopyJit; } }
         public string CorerunExecutable { get { return _corerunExe; } }
         public string JitPath { get { return _jitPath; } }
         public string AltJit { get { return _altjit; } }
@@ -179,14 +179,14 @@ namespace ManagedCodeGen
             // Builds assemblyInfoList on jitdasm
 
             List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
-            
+
             // The disasm engine encapsulates a particular set of diffs.  An engine is
             // produced with a given code generator and assembly list, which then produces
             // a set of disasm outputs.
 
             DisasmEnginePmi corerunDisasm = new DisasmEnginePmi(config.CorerunExecutable, config, config.RootPath, assemblyWorkList);
             corerunDisasm.GenerateAsm();
-            
+
             if (corerunDisasm.ErrorCount > 0)
             {
                 Console.Error.WriteLine("{0} errors compiling set.", corerunDisasm.ErrorCount);
@@ -401,7 +401,7 @@ namespace ManagedCodeGen
 
                     GenerateAsmInternal();
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     Console.WriteLine($"JIT DASM PMI failed: {e.Message}");
                     _errorCount++;
@@ -440,8 +440,8 @@ namespace ManagedCodeGen
                     string binDir = Path.GetDirectoryName(thisAssembly.Location);
                     List<string> commandArgs = new List<string>() { Path.Combine(binDir, "pmi.dll"), "PREPALL-QUIET", fullPathAssembly };
                     Command generateCmd = null;
-                    
-                    try 
+
+                    try
                     {
                         generateCmd = Command.Create(new ScriptResolverPolicyWrapper(), _executablePath, commandArgs);
                     }
@@ -483,6 +483,14 @@ namespace ManagedCodeGen
                         generateCmd.EnvironmentVariable("COMPlus_AltJit", "*");
                         generateCmd.EnvironmentVariable("COMPlus_AltJitName", _altjit);
 
+                        // If this looks like a cross-targeting altjit, fix the SIMD size.
+                        // Here's one place where rationalized jit naming would be nice.
+                        if (_altjit.IndexOf("nonjit") > 0)
+                        {
+                            Console.WriteLine("Setting SIMD Length to 16");
+                            generateCmd.EnvironmentVariable("COMPlus_SIMD16ByteOnly", "1");
+                        }
+
                         if (this.verbose)
                         {
                             Console.WriteLine("Setting AltJit for {0}", _altjit);
@@ -522,7 +530,7 @@ namespace ManagedCodeGen
                         if (result.ExitCode != 0)
                         {
                             _errorCount++;
-                            
+
                             if (result.ExitCode == -2146234344)
                             {
                                 Console.Error.WriteLine("{0} is not a managed assembly", fullPathAssembly);
@@ -543,14 +551,14 @@ namespace ManagedCodeGen
                                 {
                                     // Change file to *.err.
                                     string errorPath = Path.ChangeExtension(path, ".err");
-                                    
+
                                     // If this is a rerun to the same output, overwrite with current
                                     // error output.
                                     if (File.Exists(errorPath))
                                     {
                                         File.Delete(errorPath);
                                     }
-                                    
+
                                     File.Move(path, errorPath);
                                 }
                             }
