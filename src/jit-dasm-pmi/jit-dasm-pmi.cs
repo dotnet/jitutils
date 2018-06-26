@@ -487,7 +487,11 @@ namespace ManagedCodeGen
                         // Here's one place where rationalized jit naming would be nice.
                         if (_altjit.IndexOf("nonjit") > 0)
                         {
-                            Console.WriteLine("Setting SIMD Length to 16");
+                            if (this.verbose)
+                            {
+                                Console.WriteLine("Setting SIMD Length to 16");
+                            }
+
                             generateCmd.EnvironmentVariable("COMPlus_SIMD16ByteOnly", "1");
                         }
 

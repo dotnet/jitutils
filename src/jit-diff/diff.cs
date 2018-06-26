@@ -636,7 +636,7 @@ namespace ManagedCodeGen
                             StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
                         }
 
-                        progressBar.AwaitTasksAndShowProgress(assemblyWorkList, m_config, DasmWorkTasks, m_config.DoDiffCompiles);
+                        progressBar.AwaitTasksAndShowProgress(assemblyWorkList, m_config, DasmWorkTasks, !m_config.DoDiffCompiles);
                     }
                     finally
                     {
