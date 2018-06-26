@@ -44,9 +44,13 @@ namespace ManagedCodeGen
             }
 
             // Wake up every so often and update the task bar.
+            // In verbose mode, only output when there is a change in the number of completed tasks, since
+            // there is lots of other output already.
             int assemblyCount = assemblyWorkList.Count();
             int totalBaseTasks = config.DoBaseCompiles ? assemblyCount : 0;
             int totalDiffTasks = config.DoDiffCompiles ? assemblyCount : 0;
+            int previousCompletedBaseTasks = -1;
+            int previousCompletedDiffTasks = -1;
             bool done = false;
             int count = 0;
 
@@ -57,12 +61,23 @@ namespace ManagedCodeGen
                 IEnumerable<DasmWorkTask> completedTasks = taskArray.Where(x => x.IsCompleted);
                 int completedBaseTasks = completedTasks.Count(x => x.Result.kind == DasmWorkKind.Base);
                 int completedDiffTasks = completedTasks.Count(x => x.Result.kind == DasmWorkKind.Diff);
-                Console.CursorLeft = 0;
-                Console.Write(
-                    $"{figit[count++ % figit.Length]} " +
-                    $"Finished {completedBaseTasks}/{totalBaseTasks} Base " +
-                    $"{completedDiffTasks}/{totalDiffTasks} Diff " +
-                    $"[{((double)elapsed.TotalMilliseconds / 1000.0):F1} sec]");
+                if (!config.Verbose || (completedBaseTasks != previousCompletedBaseTasks) || (completedDiffTasks != previousCompletedDiffTasks))
+                {
+                    Console.CursorLeft = 0;
+                    Console.Write(
+                        $"{figit[count++ % figit.Length]} " +
+                        $"Finished {completedBaseTasks}/{totalBaseTasks} Base " +
+                        $"{completedDiffTasks}/{totalDiffTasks} Diff " +
+                        $"[{((double)elapsed.TotalMilliseconds / 1000.0):F1} sec]");
+
+                    if (config.Verbose)
+                    {
+                        Console.WriteLine();
+                    }
+
+                    previousCompletedBaseTasks = completedBaseTasks;
+                    previousCompletedDiffTasks = completedDiffTasks;
+                }
             }
 
             if (isFinalAwait)
@@ -300,6 +315,7 @@ namespace ManagedCodeGen
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
                 DasmResult dasmResult = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
                 Console.WriteLine($"Completed {diffString} in {(DateTime.Now - startTime).TotalSeconds:F2}s");
+                Console.WriteLine($"Diffs (if any) can be viewed by comparing: {Path.Combine(config.OutputPath, "base")} {Path.Combine(config.OutputPath, "diff")}");
 
                 // Analyze completed run.
 
