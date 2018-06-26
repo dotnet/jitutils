@@ -429,6 +429,17 @@ namespace ManagedCodeGen
 
                     Command generateCmd = null;
 
+                    // Add environment variables to the environment of the command we are going to execute, and
+                    // display them to the user in verbose mode.
+                    void AddEnvironmentVariable(string varName, string varValue)
+                    {
+                        generateCmd.EnvironmentVariable(varName, varValue);
+                        if (this.verbose)
+                        {
+                            Console.WriteLine("Setting: {0}={1}", varName, varValue);
+                        }
+                    }
+
                     try 
                     {
                         generateCmd = Command.Create(new ScriptResolverPolicyWrapper(), _executablePath, commandArgs);
@@ -445,35 +456,26 @@ namespace ManagedCodeGen
                         if (envVar.IndexOf("COMPlus_") == 0)
                         {
                             string value = Environment.GetEnvironmentVariable(envVar);
-                            if (this.verbose)
-                            {
-                                Console.WriteLine("Incorporating ambient setting: {0}={1}", envVar, value);
-                            }
-                            generateCmd.EnvironmentVariable(envVar, value);
+                            AddEnvironmentVariable(envVar, value);
                         }
                     }
 
                     // Set up environment do disasm.
-                    generateCmd.EnvironmentVariable("COMPlus_NgenDisasm", "*");
-                    generateCmd.EnvironmentVariable("COMPlus_NgenUnwindDump", "*");
-                    generateCmd.EnvironmentVariable("COMPlus_NgenEHDump", "*");
-                    generateCmd.EnvironmentVariable("COMPlus_JitDiffableDasm", "1");
+                    AddEnvironmentVariable("COMPlus_NgenDisasm", "*");
+                    AddEnvironmentVariable("COMPlus_NgenUnwindDump", "*");
+                    AddEnvironmentVariable("COMPlus_NgenEHDump", "*");
+                    AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
 
                     if (this.doGCDump)
                     {
-                        generateCmd.EnvironmentVariable("COMPlus_NgenGCDump", "*");
+                        AddEnvironmentVariable("COMPlus_NgenGCDump", "*");
                     }
 
                     if (this._altjit != null)
                     {
-                        generateCmd.EnvironmentVariable("COMPlus_AltJit", "*");
-                        generateCmd.EnvironmentVariable("COMPlus_AltJitNgen", "*");
-                        generateCmd.EnvironmentVariable("COMPlus_AltJitName", _altjit);
-
-                        if (this.verbose)
-                        {
-                            Console.WriteLine("Setting AltJit for {0}", _altjit);
-                        }
+                        AddEnvironmentVariable("COMPlus_AltJit", "*");
+                        AddEnvironmentVariable("COMPlus_AltJitNgen", "*");
+                        AddEnvironmentVariable("COMPlus_AltJitName", _altjit);
                     }
 
                     if (this.verbose)

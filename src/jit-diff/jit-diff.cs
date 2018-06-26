@@ -332,7 +332,7 @@ namespace ManagedCodeGen
                     _outputPath = Utility.CombinePath(_diffRoot, s_defaultDiffDirectoryPath);
                     PathUtility.EnsureDirectoryExists(_outputPath);
 
-                    Console.WriteLine("Using --output={0}", _outputPath);
+                    Console.WriteLine("Using --output {0}", _outputPath);
                 }
 
                 if (needCoreRoot || needCrossgen || needBasePath || needDiffPath || needTestTree)
@@ -445,20 +445,20 @@ namespace ManagedCodeGen
                             {
                                 _basePath = tryBasePath;
                                 needBasePath = false;
-                                Console.WriteLine($"Using --base={_basePath}");
+                                Console.WriteLine($"Using --base {_basePath}");
                             }
 
                             if (tryDiffPath != null)
                             {
                                 _diffPath = tryDiffPath;
                                 needDiffPath = false;
-                                Console.WriteLine($"Using --diff={_diffPath}");
+                                Console.WriteLine($"Using --diff {_diffPath}");
                             }
 
                             if (_arch == null)
                             {
                                 _arch = arch;
-                                Console.WriteLine($"Using --arch={_arch}");
+                                Console.WriteLine($"Using --arch {_arch}");
                             }
                             break;
                         }
@@ -512,19 +512,19 @@ namespace ManagedCodeGen
                             {
                                 _platformPath = tryPlatformPath;
                                 needCoreRoot = false;
-                                Console.WriteLine("Using --core_root={0}", _platformPath);
+                                Console.WriteLine("Using --core_root {0}", _platformPath);
                             }
                             if (tryCrossgen != null)
                             {
                                 _crossgenExe = tryCrossgen;
                                 needCrossgen = false;
-                                Console.WriteLine("Using --crossgen={0}", _crossgenExe);
+                                Console.WriteLine("Using --crossgen {0}", _crossgenExe);
                             }
                             if (tryTestPath != null)
                             {
                                 _testPath = tryTestPath;
                                 needTestTree = false;
-                                Console.WriteLine("Using --test_root={0}", _testPath);
+                                Console.WriteLine("Using --test_root {0}", _testPath);
                             }
 
                             if (build != "Release")
@@ -575,16 +575,46 @@ namespace ManagedCodeGen
                 if (Verbose)
                 {
                     Console.WriteLine("After setting defaults:");
-                    Console.WriteLine("--base_root: {0}", _baseRoot);
-                    Console.WriteLine("--diff_root: {0}", _diffRoot);
-                    Console.WriteLine("--core_root: {0}", _platformPath);
-                    Console.WriteLine("--crossgen: {0}", _crossgenExe);
-                    Console.WriteLine("--arch: {0}", _arch);
-                    Console.WriteLine("--build: {0}", _build);
-                    Console.WriteLine("--output: {0}", _outputPath);
-                    Console.WriteLine("--base: {0}", _basePath);
-                    Console.WriteLine("--diff: {0}", _diffPath);
-                    Console.WriteLine("--test_root: {0}", _testPath);
+                    if (_baseRoot != null)
+                    {
+                        Console.WriteLine("--base_root {0}", _baseRoot);
+                    }
+                    if (_diffRoot != null)
+                    {
+                        Console.WriteLine("--diff_root {0}", _diffRoot);
+                    }
+                    if (_platformPath != null)
+                    {
+                        Console.WriteLine("--core_root {0}", _platformPath);
+                    }
+                    if (_crossgenExe != null)
+                    {
+                        Console.WriteLine("--crossgen {0}", _crossgenExe);
+                    }
+                    if (_arch != null)
+                    {
+                        Console.WriteLine("--arch {0}", _arch);
+                    }
+                    if (_build != null)
+                    {
+                        Console.WriteLine("--build {0}", _build);
+                    }
+                    if (_outputPath != null)
+                    {
+                        Console.WriteLine("--output {0}", _outputPath);
+                    }
+                    if (_basePath != null)
+                    {
+                        Console.WriteLine("--base {0}", _basePath);
+                    }
+                    if (_diffPath != null)
+                    {
+                        Console.WriteLine("--diff {0}", _diffPath);
+                    }
+                    if (_testPath != null)
+                    {
+                        Console.WriteLine("--test_root {0}", _testPath);
+                    }
                 }
             }
 

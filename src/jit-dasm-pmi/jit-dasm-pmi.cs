@@ -441,7 +441,18 @@ namespace ManagedCodeGen
                     List<string> commandArgs = new List<string>() { Path.Combine(binDir, "pmi.dll"), "PREPALL-QUIET", fullPathAssembly };
                     Command generateCmd = null;
 
-                    try
+                    // Add environment variables to the environment of the command we are going to execute, and
+                    // display them to the user in verbose mode.
+                    void AddEnvironmentVariable(string varName, string varValue)
+                    {
+                        generateCmd.EnvironmentVariable(varName, varValue);
+                        if (this.verbose)
+                        {
+                            Console.WriteLine("Setting: {0}={1}", varName, varValue);
+                        }
+                    }
+                    
+                    try 
                     {
                         generateCmd = Command.Create(new ScriptResolverPolicyWrapper(), _executablePath, commandArgs);
                     }
@@ -458,51 +469,37 @@ namespace ManagedCodeGen
                         if (envVar.IndexOf("COMPlus_") == 0)
                         {
                             string value = Environment.GetEnvironmentVariable(envVar);
-                            if (this.verbose)
-                            {
-                                Console.WriteLine("Incorporating ambient setting: {0}={1}", envVar, value);
-                            }
-                            generateCmd.EnvironmentVariable(envVar, value);
+                            AddEnvironmentVariable(envVar, value);
                         }
                     }
 
                     // Set up environment do PMI based disasm.
-                    generateCmd.EnvironmentVariable("COMPlus_JitDisasm", "*");
-                    generateCmd.EnvironmentVariable("COMPlus_JitDisasmAssemblies", Path.GetFileNameWithoutExtension(assembly.Name));
-                    generateCmd.EnvironmentVariable("COMPlus_JitUnwindDump", "*");
-                    generateCmd.EnvironmentVariable("COMPlus_JitEHDump", "*");
-                    generateCmd.EnvironmentVariable("COMPlus_JitDiffableDasm", "1");
+                    AddEnvironmentVariable("COMPlus_JitDisasm", "*");
+                    AddEnvironmentVariable("COMPlus_JitDisasmAssemblies", Path.GetFileNameWithoutExtension(assembly.Name));
+                    AddEnvironmentVariable("COMPlus_JitUnwindDump", "*");
+                    AddEnvironmentVariable("COMPlus_JitEHDump", "*");
+                    AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
 
                     if (this.doGCDump)
                     {
-                        generateCmd.EnvironmentVariable("COMPlus_JitGCDump", "*");
+                        AddEnvironmentVariable("COMPlus_JitGCDump", "*");
                     }
 
                     if (this._altjit != null)
                     {
-                        generateCmd.EnvironmentVariable("COMPlus_AltJit", "*");
-                        generateCmd.EnvironmentVariable("COMPlus_AltJitName", _altjit);
+                        AddEnvironmentVariable("COMPlus_AltJit", "*");
+                        AddEnvironmentVariable("COMPlus_AltJitName", _altjit);
 
                         // If this looks like a cross-targeting altjit, fix the SIMD size.
                         // Here's one place where rationalized jit naming would be nice.
                         if (_altjit.IndexOf("nonjit") > 0)
                         {
-                            if (this.verbose)
-                            {
-                                Console.WriteLine("Setting SIMD Length to 16");
-                            }
-
-                            generateCmd.EnvironmentVariable("COMPlus_SIMD16ByteOnly", "1");
-                        }
-
-                        if (this.verbose)
-                        {
-                            Console.WriteLine("Setting AltJit for {0}", _altjit);
+                            AddEnvironmentVariable("COMPlus_SIMD16ByteOnly", "1");
                         }
                     }
 
                     // Set up PMI path...
-                    generateCmd.EnvironmentVariable("PMIPATH", Path.GetDirectoryName(assembly.Name));
+                    AddEnvironmentVariable("PMIPATH", Path.GetDirectoryName(assembly.Name));
 
                     if (this.verbose)
                     {
