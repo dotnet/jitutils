@@ -145,6 +145,7 @@ namespace ManagedCodeGen
             private string _branchName = null;
             private bool _pmi = false;
             private string _assemblyName = null;
+            private bool _tsv;
 
             private JObject _jObj;
             private bool _configFileLoaded = false;
@@ -187,7 +188,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
                     var pmiOption = syntax.DefineOption("pmi", ref _pmi, "Run asm diffs via pmi.");
                     syntax.DefineOption("assembly", ref _assemblyName, "Run asm diffs on a particular assembly");
-
+                    syntax.DefineOption("tsv", ref _tsv, "Dump analysis data to diffs.tsv in output directory.");
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
                         "List defaults and available tools in " + s_configFileName + ".");
@@ -1233,6 +1234,7 @@ namespace ManagedCodeGen
             public string AltJit { get { return _altjit; } }
             public string Arch {  get { return _arch;  } }
             public string AssemblyName => _assemblyName;
+            public bool tsv {  get { return _tsv;  } }
         }
 
         private static string[] s_testDirectories =
@@ -1247,9 +1249,22 @@ namespace ManagedCodeGen
 
         private static string[] s_benchmarkDirectories =
         {
-            "BenchI",
-            "BenchF",
-            "BenchmarksGame"
+            "BenchmarksGame",
+            "Benchstones",
+            "Burgers",
+            "Bytemark",
+            "Devirtualization",
+            "FractalPerf",
+            "Inlining",
+            "Layout",
+            "Linq",
+            "Math",
+            "Roslyn",
+            "SciMark",
+            "Serialization",
+            "SIMD",
+            "Span",
+            "V8"
         };
 
         private static string[] s_CoreLibAssembly =
