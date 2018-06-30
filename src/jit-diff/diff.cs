@@ -333,6 +333,12 @@ namespace ManagedCodeGen
                     string jitName = config.AltJit ?? "default jit";
                     analysisArgs.Add($"{diffString} for {config.Arch} {jitName}");
 
+                    if (config.tsv)
+                    {
+                        analysisArgs.Add("--tsv");
+                        analysisArgs.Add(Path.Combine(config.OutputPath, "diffs.tsv"));
+                    }
+
                     if (config.Verbose)
                     {
                         Console.WriteLine("Analyze command: {0} {1}",
