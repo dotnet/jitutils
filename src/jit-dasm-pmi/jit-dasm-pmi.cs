@@ -42,6 +42,7 @@ namespace ManagedCodeGen
         private bool _dumpGCInfo = false;
         private bool _noCopyJit = false;
         private bool _verbose = false;
+        private bool _tiering = false;
 
         public Config(string[] args)
         {
@@ -54,6 +55,7 @@ namespace ManagedCodeGen
                 syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
                 syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
+                syntax.DefineOption("t|tiering", ref _tiering, "Enable tiered jitting");
                 syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
                 syntax.DefineOptionList("p|platform", ref _platformPaths, "Path to platform assemblies");
 
@@ -147,6 +149,7 @@ namespace ManagedCodeGen
         public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
         public string FileName { get { return _fileName; } }
         public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
+        public bool Tiering => _tiering;
     }
 
     public class AssemblyInfo
@@ -479,6 +482,9 @@ namespace ManagedCodeGen
                     AddEnvironmentVariable("COMPlus_JitUnwindDump", "*");
                     AddEnvironmentVariable("COMPlus_JitEHDump", "*");
                     AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
+                    
+                    // We likely don't want tiering enabled, but allow it, if user asks for it.
+                    AddEnvironmentVariable("COMPlus_TieredCompilation", _config.Tiering ? "1" : "0");
 
                     if (this.doGCDump)
                     {
