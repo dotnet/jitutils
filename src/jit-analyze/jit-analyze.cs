@@ -434,7 +434,7 @@ namespace ManagedCodeGen
 
             if (methodRegressionCount > 0)
             {
-                Console.WriteLine("\nTop method regessions by size (bytes):");
+                Console.WriteLine("\nTop method regressions by size (bytes):");
 
                 foreach (var method in sortedMethodRegressions.GetRange(0, Math.Min(methodRegressionCount, requestedCount)))
                 {
