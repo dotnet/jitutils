@@ -482,6 +482,8 @@ namespace ManagedCodeGen
                     AddEnvironmentVariable("COMPlus_JitUnwindDump", "*");
                     AddEnvironmentVariable("COMPlus_JitEHDump", "*");
                     AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
+                    AddEnvironmentVariable("COMPlus_ReadyToRun", "0");
+                    AddEnvironmentVariable("COMPlus_ZapDisable", "1");
                     
                     // We likely don't want tiering enabled, but allow it, if user asks for it.
                     AddEnvironmentVariable("COMPlus_TieredCompilation", _config.Tiering ? "1" : "0");
