@@ -809,42 +809,49 @@ class Worker
 
         foreach (Type firstType in typesToTry)
         {
-            try
+            if (!AreConstraintsSatisfied(firstType, genericArguments[0]))
             {
-                if (!AreConstraintsSatisfied(firstType, genericArguments[0]))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                Type newType = null;
+            Type newType = null;
 
-                if (genericArguments.Length == 1)
+            if (genericArguments.Length == 1)
+            {
+                try
                 {
                     newType = type.MakeGenericType(firstType);
                 }
-                else if (genericArguments.Length == 2)
+                catch (Exception)
                 {
-                    foreach (Type secondType in typesToTry)
-                    {
-                        if (!AreConstraintsSatisfied(secondType, genericArguments[1]))
-                        {
-                            continue;
-                        }
 
-                        newType = type.MakeGenericType(firstType, secondType);
-                    }
-                }
-
-                // If we can instantiate, prepare the methods.
-                if (newType != null)
-                {
-                    instantiationCount++;
-                    results.Add(newType);
                 }
             }
-            catch (Exception)
+            else if (genericArguments.Length == 2)
             {
+                foreach (Type secondType in typesToTry)
+                {
+                    if (!AreConstraintsSatisfied(secondType, genericArguments[1]))
+                    {
+                        continue;
+                    }
 
+                    try
+                    {
+                        newType = type.MakeGenericType(firstType, secondType);
+                    }
+                    catch (Exception)
+                    {
+
+                    }
+                }
+            }
+
+            // If we can instantiate, prepare the methods.
+            if (newType != null)
+            {
+                instantiationCount++;
+                results.Add(newType);
             }
 
             if (instantiationCount >= instantiationLimit)
@@ -894,42 +901,48 @@ class Worker
 
         foreach (Type firstType in typesToTry)
         {
-            try
+            if (!AreConstraintsSatisfied(firstType, genericArguments[0]))
             {
-                if (!AreConstraintsSatisfied(firstType, genericArguments[0]))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                MethodBase newMethod = null;
+            MethodBase newMethod = null;
 
-                if (genericArguments.Length == 1)
+            if (genericArguments.Length == 1)
+            {
+                try
                 {
                     newMethod = methodInfo.MakeGenericMethod(firstType);
                 }
-                else if (genericArguments.Length == 2)
+                catch (Exception)
                 {
-                    foreach (Type secondType in typesToTry)
-                    {
-                        if (!AreConstraintsSatisfied(secondType, genericArguments[1]))
-                        {
-                            continue;
-                        }
 
-                        newMethod = methodInfo.MakeGenericMethod(firstType, secondType);
-                    }
-                }
-
-                // If we can instantiate, prepare the methods.
-                if (newMethod != null)
-                {
-                    instantiationCount++;
-                    results.Add(newMethod);
                 }
             }
-            catch (Exception)
+            else if (genericArguments.Length == 2)
             {
+                foreach (Type secondType in typesToTry)
+                {
+                    if (!AreConstraintsSatisfied(secondType, genericArguments[1]))
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        newMethod = methodInfo.MakeGenericMethod(firstType, secondType);
+                    }
+                    catch (Exception)
+                    {
 
+                    }
+                }
+            }
+
+            // If we can instantiate, prepare the methods.
+            if (newMethod != null)
+            {
+                instantiationCount++;
+                results.Add(newMethod);
             }
         }
 
