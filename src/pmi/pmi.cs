@@ -754,11 +754,28 @@ class Worker
         bool keepGoing = true;
         foreach (MethodBase methodBase in GetMethods(type))
         {
-            visitor.StartMethod(type, methodBase);
-            keepGoing = visitor.FinishMethod(type, methodBase);
-            if (!keepGoing)
+            if (methodBase.IsGenericMethod)
             {
-                break;
+                List<MethodBase> instanceMethods = GetInstances(type, methodBase);
+
+                foreach(MethodBase instanceMethod in instanceMethods)
+                {
+                    visitor.StartMethod(type, instanceMethod);
+                    keepGoing = visitor.FinishMethod(type, instanceMethod);
+                    if (!keepGoing)
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                visitor.StartMethod(type, methodBase);
+                keepGoing = visitor.FinishMethod(type, methodBase);
+                if (!keepGoing)
+                {
+                    break;
+                }
             }
         }
 
@@ -792,26 +809,13 @@ class Worker
 
         foreach (Type firstType in typesToTry)
         {
-            bool areConstraintsSatisfied = AreConstraintsSatisfied(firstType, genericArguments[0]);
-
-            Type secondType = null;
-
-            if (genericArguments.Length == 2)
-            {
-                foreach (Type secondTypeX in typesToTry)
-                {
-                    areConstraintsSatisfied &= AreConstraintsSatisfied(secondTypeX, genericArguments[1]);
-                    secondType = secondTypeX;
-                }
-            }
-
-            if (!areConstraintsSatisfied)
-            {
-                continue;
-            }
-            // Now try and instantiate.
             try
             {
+                if (!AreConstraintsSatisfied(firstType, genericArguments[0]))
+                {
+                    continue;
+                }
+
                 Type newType = null;
 
                 if (genericArguments.Length == 1)
@@ -820,12 +824,21 @@ class Worker
                 }
                 else if (genericArguments.Length == 2)
                 {
-                    newType = type.MakeGenericType(firstType, secondType);
+                    foreach (Type secondType in typesToTry)
+                    {
+                        if (!AreConstraintsSatisfied(secondType, genericArguments[1]))
+                        {
+                            continue;
+                        }
+
+                        newType = type.MakeGenericType(firstType, secondType);
+                    }
                 }
 
                 // If we can instantiate, prepare the methods.
                 if (newType != null)
                 {
+                    instantiationCount++;
                     results.Add(newType);
                 }
             }
@@ -845,6 +858,84 @@ class Worker
             visitor.UninstantiableType(type, "could not find valid substitution");
             MethodBase[] methods = GetMethods(type);
             visitor.UninstantiableMethods(methods);
+        }
+
+        return results;
+    }
+
+    private List<MethodBase> GetInstances(Type type, MethodBase method)
+    {
+        List<MethodBase> results = new List<MethodBase>();
+
+        // Get the args for this generic
+        Type[] genericArguments = method.GetGenericArguments();
+
+        // Only handle the very simplest cases for now
+        if (genericArguments.Length > 2)
+        {
+            visitor.UninstantiableMethod(method);
+            return results;
+        }
+
+        MethodInfo methodInfo = method as MethodInfo;
+
+        if (methodInfo == null)
+        {
+            visitor.UninstantiableMethod(method);
+            return results;
+        }
+
+        // Types we will use for instantiation attempts.
+        Type[] typesToTry = new Type[] { typeof(object), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
+
+        // To keep things sane, we won't try and instantiate too many copies
+        int instantiationLimit = genericArguments.Length * typesToTry.Length;
+        int instantiationCount = 0;
+
+        foreach (Type firstType in typesToTry)
+        {
+            try
+            {
+                if (!AreConstraintsSatisfied(firstType, genericArguments[0]))
+                {
+                    continue;
+                }
+
+                MethodBase newMethod = null;
+
+                if (genericArguments.Length == 1)
+                {
+                    newMethod = methodInfo.MakeGenericMethod(firstType);
+                }
+                else if (genericArguments.Length == 2)
+                {
+                    foreach (Type secondType in typesToTry)
+                    {
+                        if (!AreConstraintsSatisfied(secondType, genericArguments[1]))
+                        {
+                            continue;
+                        }
+
+                        newMethod = methodInfo.MakeGenericMethod(firstType, secondType);
+                    }
+                }
+
+                // If we can instantiate, prepare the methods.
+                if (newMethod != null)
+                {
+                    instantiationCount++;
+                    results.Add(newMethod);
+                }
+            }
+            catch (Exception)
+            {
+
+            }
+        }
+
+        if (instantiationCount == 0)
+        {
+            visitor.UninstantiableMethod(method);
         }
 
         return results;
