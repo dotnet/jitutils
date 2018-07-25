@@ -784,7 +784,7 @@ class Worker
         }
 
         // Types we will use for instantiation attempts.
-        Type[] typesToTry = new Type[] { typeof(object), typeof(int), typeof(double), typeof(Vector<float>) };
+        Type[] typesToTry = new Type[] { typeof(object), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
 
         // To keep things sane, we won't try and instantiate too many copies
         int instantiationLimit = genericArguments.Length * typesToTry.Length;
@@ -831,6 +831,7 @@ class Worker
             }
             catch (Exception)
             {
+
             }
 
             if (instantiationCount >= instantiationLimit)
@@ -867,6 +868,20 @@ class Worker
                 areConstraintsSatisfied = false;
             }
         }
+        else if ((gpa & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0)
+        {
+            if (!type.IsValueType)
+            {
+                areConstraintsSatisfied = false;
+            }
+        }
+        else if ((gpa & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
+        {
+            if (type.GetConstructor(Type.EmptyTypes) == null)
+            {
+                areConstraintsSatisfied = false;
+            }
+        }
 
         // If all special constaints are satisfied, check type constraints
         if (areConstraintsSatisfied)
@@ -875,23 +890,17 @@ class Worker
 
             foreach (Type c in constraints)
             {
-                if (c.IsClass)
+                // If the constrant is also generic, just bail on checks.
+                // The runtime checks will determine if this constraint is satisfied.
+                if (c.ContainsGenericParameters)
                 {
-                    // Base Type Constraint
-                    if (!type.IsSubclassOf(c)) // variance probably needs other checks
-                    {
-                        areConstraintsSatisfied = false;
-                        break;
-                    }
+                    continue;
                 }
-                else
+
+                if (!c.IsAssignableFrom(type))
                 {
-                    // Interface constraint
-                    if (!type.IsInstanceOfType(c))
-                    {
-                        areConstraintsSatisfied = false;
-                        break;
-                    }
+                    areConstraintsSatisfied = false;
+                    break;
                 }
             }
         }
