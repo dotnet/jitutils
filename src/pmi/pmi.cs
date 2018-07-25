@@ -890,7 +890,7 @@ class Worker
 
             foreach (Type c in constraints)
             {
-                // If the constrant is also generic, just bail on checks.
+                // If the constraint is also generic, just bail on checks.
                 // The runtime checks will determine if this constraint is satisfied.
                 if (c.ContainsGenericParameters)
                 {
