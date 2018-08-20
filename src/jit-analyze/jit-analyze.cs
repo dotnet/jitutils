@@ -232,7 +232,7 @@ namespace ManagedCodeGen
                          {
                              path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
                              methodList = ExtractMethodInfo(p)
-                         });
+                         }).ToList();
             }
             else
             {
@@ -329,7 +329,7 @@ namespace ManagedCodeGen
                 }
 
                 return f;
-            });
+            }).ToList();
         }
 
         // Summarize differences across all the files.
