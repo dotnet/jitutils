@@ -17,7 +17,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jit-format", "src\jit-forma
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "packages", "src\packages\packages.csproj", "{19436C6B-39C9-4A88-8021-3242D098637E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PMI", "src\pmi\PMI.csproj", "{829E459B-EE3D-46A9-AD4D-4F2B03D5188C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pmi", "src\pmi\pmi.csproj", "{829E459B-EE3D-46A9-AD4D-4F2B03D5188C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jit-dasm-pmi", "src\jit-dasm-pmi\jit-dasm-pmi.csproj", "{2C846294-79D4-40EA-8ED3-0F01E033BE32}"
 EndProject
