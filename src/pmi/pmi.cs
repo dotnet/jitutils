@@ -254,6 +254,7 @@ abstract class PrepareBase : CounterBase
         try
         {
             DateTime startFunc = DateTime.Now;
+            GC.WaitForPendingFinalizers();
             System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(method.MethodHandle);
             elapsedFunc = DateTime.Now - startFunc;
         }
