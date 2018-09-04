@@ -135,6 +135,7 @@ namespace ManagedCodeGen
             private bool _benchmarks = false;
             private bool _tests = false;
             private bool _gcinfo = false;
+            private bool _debuginfo = false;
             private bool _verbose = false;
             private string _jobName = null;
             private string _number = null;
@@ -178,6 +179,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("benchmarks", ref _benchmarks, "Diff core benchmarks.");
                     syntax.DefineOption("tests", ref _tests, "Diff all tests.");
                     syntax.DefineOption("gcinfo", ref _gcinfo, "Add GC info to the disasm output.");
+                    syntax.DefineOption("debuginfo", ref _debuginfo, "Add Debug info to the disasm output.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("core_root", ref _platformPath, "Path to test CORE_ROOT.");
                     syntax.DefineOption("test_root", ref _testPath, "Path to test tree. Use with --benchmarks or --tests.");
@@ -1085,6 +1087,10 @@ namespace ManagedCodeGen
                     var gcinfo = ExtractDefault<bool>("gcinfo", out found);
                     _gcinfo = (found) ? gcinfo : _gcinfo;
 
+                    // Set flag from default for debuginfo.
+                    var debuginfo = ExtractDefault<bool>("debuginfo", out found);
+                    _debuginfo = (found) ? debuginfo : _debuginfo;
+
                     // Set flag from default for tag.
                     var tag = ExtractDefault<string>("tag", out found);
                     _tag = (found) ? tag : _tag;
@@ -1167,6 +1173,7 @@ namespace ManagedCodeGen
                     PrintDefault("benchmarks", DefaultType.DT_bool);
                     PrintDefault("tests", DefaultType.DT_bool);
                     PrintDefault("gcinfo", DefaultType.DT_bool);
+                    PrintDefault("debuginfo", DefaultType.DT_bool);
                     PrintDefault("tag", DefaultType.DT_string);
                     PrintDefault("verbose", DefaultType.DT_bool);
 
@@ -1221,6 +1228,7 @@ namespace ManagedCodeGen
             public bool Benchmarks { get { return _benchmarks; } }
             public bool DoTestTree { get { return _tests; } }
             public bool GenerateGCInfo { get { return _gcinfo; } }
+            public bool GenerateDebugInfo { get { return _debuginfo; } }
             public bool Verbose { get { return _verbose; } }
             public bool DoAnalyze { get { return !_noanalyze; } }
             public Commands DoCommand { get { return _command; } }

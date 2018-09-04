@@ -40,6 +40,7 @@ namespace ManagedCodeGen
         private IReadOnlyList<string> _methods = Array.Empty<string>();
         private IReadOnlyList<string> _platformPaths = Array.Empty<string>();
         private bool _dumpGCInfo = false;
+        private bool _dumpDebugInfo = false;
         private bool _noCopyJit = false;
         private bool _verbose = false;
         private bool _tiering = false;
@@ -54,6 +55,7 @@ namespace ManagedCodeGen
                 syntax.DefineOption("o|output", ref _rootPath, "The output path.");
                 syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
                 syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
+                syntax.DefineOption("debuginfo", ref _dumpDebugInfo, "Add Debug info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                 syntax.DefineOption("t|tiering", ref _tiering, "Enable tiered jitting");
                 syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
@@ -140,6 +142,7 @@ namespace ManagedCodeGen
         public bool Recursive { get { return _recursive; } }
         public bool UseFileName { get { return (_fileName != null); } }
         public bool DumpGCInfo { get { return _dumpGCInfo; } }
+        public bool DumpDebugInfo { get { return _dumpDebugInfo; } }
         public bool DoVerboseOutput { get { return _verbose; } }
         public bool CopyJit { get { return !_noCopyJit; } }
         public string CorerunExecutable { get { return _corerunExe; } }
@@ -346,6 +349,7 @@ namespace ManagedCodeGen
             private string _altjit = null;
             private List<AssemblyInfo> _assemblyInfoList;
             public bool doGCDump = false;
+            public bool doDebugDump = false;
             public bool verbose = false;
             private int _errorCount = 0;
 
@@ -370,6 +374,7 @@ namespace ManagedCodeGen
                 _assemblyInfoList = assemblyInfoList;
 
                 this.doGCDump = config.DumpGCInfo;
+                this.doDebugDump = config.DumpDebugInfo;
                 this.verbose = config.DoVerboseOutput;
             }
 
@@ -491,6 +496,11 @@ namespace ManagedCodeGen
                     if (this.doGCDump)
                     {
                         AddEnvironmentVariable("COMPlus_JitGCDump", "*");
+                    }
+
+                    if (this.doDebugDump)
+                    {
+                        AddEnvironmentVariable("COMPlus_JitDebugDump", "*");
                     }
 
                     if (this._altjit != null)
