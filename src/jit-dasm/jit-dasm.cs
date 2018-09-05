@@ -366,7 +366,7 @@ namespace ManagedCodeGen
                 _assemblyInfoList = assemblyInfoList;
 
                 this.doGCDump = config.DumpGCInfo;
-                this.doDebugDump = config.DumpGCInfo;
+                this.doDebugDump = config.DumpDebugInfo;
                 this.verbose = config.DoVerboseOutput;
             }
 
