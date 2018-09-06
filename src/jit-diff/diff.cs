@@ -300,6 +300,11 @@ namespace ManagedCodeGen
                     commandArgs.Add("--gcinfo");
                 }
 
+                if (config.GenerateDebugInfo)
+                {
+                    commandArgs.Add("--debuginfo");
+                }
+
                 if (config.Verbose)
                 {
                     commandArgs.Add("--verbose");
