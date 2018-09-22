@@ -1,4 +1,4 @@
-@echo off
+@if not defined _echo @echo off
 
 REM Bootstrap the jitutils tools:
 REM 1. If this script is run not from within the jitutils directory (e.g., you've downloaded
@@ -6,6 +6,8 @@ REM    a copy of this file directly), then "git clone" the jitutils project firs
 REM    if we can tell we're being run from within an existing "git clone", don't do that.
 REM 2. Build the jitutils tools.
 REM 3. Download (if necessary) clang-format.exe and clang-tidy.exe (used by the jit-format tool).
+
+set returnValue=0
 
 where /q dotnet.exe
 if %errorlevel% NEQ 0 echo Can't find dotnet.exe! Please install this ^(e.g., from https://www.microsoft.com/net/core^) and add dotnet.exe to PATH && goto :EOF
@@ -16,16 +18,16 @@ if %errorlevel% NEQ 0 echo Can't find git.exe! Please add to PATH & goto :EOF
 set __root=%~dp0
 setlocal
 
-REM Are we already in the dotnet/jitutils repo? Or do we need to clone it? We look for build.cmd
-REM in the current directory (which is the directory this script was invoked from).
+REM Are we already in the dotnet/jitutils repo? Or do we need to clone it? We look for
+REM jitutils.sln in the current directory (which is the directory this script was invoked from).
 
-if not exist %__root%build.cmd goto clone_jitutils
+if not exist %__root%jitutils.sln goto clone_jitutils
 
 pushd %__root%
 
-REM Check if build.cmd is in the root of the repo.
-set __tempfile=%TEMP%\gittemp-%RANDOM%.txt
-git rev-parse --show-toplevel >%__tempfile% 2>&1
+REM Check if jitutils.sln is in the root of the repo.
+set "__tempfile=%TEMP%\gittemp-%RANDOM%.txt"
+call git rev-parse --show-toplevel >"%__tempfile%"
 if errorlevel 1 (
     echo Error: git failure:
     type %__tempfile%
@@ -46,7 +48,7 @@ if not %__root%==%gitroot% (
 )
 
 REM Is this actually the jitutils repo?
-git remote -v | findstr /i /c:"/jitutils" >nul
+call git remote -v | findstr /i /c:"/jitutils" >nul
 if errorlevel 1 (
     echo It doesn't looks like we're in the jitutils repo.
     echo Cloning jitutils repo.
@@ -64,7 +66,7 @@ popd
 endlocal
 call :AddToPath %__root%bin
 set __root=
-goto :eof
+goto :exit_script
 
 REM ===================================================================
 :clone_jitutils
@@ -73,7 +75,13 @@ pushd %__root%
 
 :: Clone the jitutils repo
 
-git clone https://github.com/dotnet/jitutils.git
+call git clone https://github.com/dotnet/jitutils.git
+
+if %errorlevel% NEQ 0 (
+    echo Failed to clone jitutils repo from https://github.com/dotnet/jitutils.git
+    set returnValue=1
+    goto :exit_script
+)
 
 pushd .\jitutils
 
@@ -92,15 +100,31 @@ goto :eof
 REM ===================================================================
 :build_jitutils
 
-if not exist .\build.cmd echo Can't find build.cmd.&goto :eof
+if not exist .\build.cmd (
+    echo Can't find build.cmd
+    set returnValue=1
+    goto :exit_script
+)
 
 :: Pull in needed packages.  This works globally (due to jitutils.sln).
 
-dotnet restore
+call dotnet restore
+
+if %errorlevel% NEQ 0 (
+    echo Failed to restore packages for jitutils.sln
+    set returnValue=1
+    goto :exit_script
+)
 
 :: Build and publish all the utilties and frameworks
 
 call .\build.cmd -p -f
+
+if %errorlevel% NEQ 0 (
+    echo Failed to build jitutils
+    set returnValue=1
+    goto :exit_script
+)
 
 :: Check to see if clang-format and clang-tidy are available. Since we're going
 :: to add the 'bin' directory to the path, and they most likely already live there
@@ -122,29 +146,43 @@ GOTO CheckVersion
 
 :: Download clang-format and clang-tidy
 echo Downloading formatting tools
-call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" -OutFile bin\clang-format.exe
-call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" -OutFile bin\clang-tidy.exe
+
+call powershell -NoProfile Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" -OutFile bin\clang-format.exe
+if %errorlevel% NEQ 0 (
+    echo Failed to download clang-format
+    set returnValue=1
+)
+
+call powershell -NoProfile Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" -OutFile bin\clang-tidy.exe
+if %errorlevel% NEQ 0 (
+    echo Failed to download clang-tidy
+    set returnValue=1
+)
 
 GOTO build_done
 
 :CheckVersion
 
-clang-format --version | findstr 3.8 > NUL
+call bin\clang-format --version | findstr 3.8 > NUL
 If %errorlevel% EQU 0 GOTO build_done
 
 echo jit-format requires clang-format and clang-tidy version 3.8.*. Currently installed:
-clang-format --version
-clang-tidy --version
+call bin\clang-format --version
+call bin\clang-tidy --version
 echo Please install version 3.8.* and put the tools on the PATH to use jit-format.
 echo Tools can be found at http://llvm.org/releases/download.html#3.8.0
 
 goto :DownloadTools
 
 :build_done
-goto :eof
+goto :exit_script
 
 REM ===================================================================
 :AddToPath
 set PATH | findstr /i %1 >nul
 if %errorlevel% NEQ 0 set PATH=%PATH%;%1
-goto :eof
+goto :exit_script
+
+REM Exit returning last errorlevel value
+:exit_script
+exit /b returnValue
