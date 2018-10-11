@@ -499,21 +499,23 @@ namespace ManagedCodeGen
                     {
                         // Generate path to the output file
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
-                        var path = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
+                        var dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
+                        var logPath = Path.ChangeExtension(dasmPath, ".log");
 
-                        PathUtility.EnsureParentDirectoryExists(path);
+                        PathUtility.EnsureParentDirectoryExists(dasmPath);
 
-                        // Redirect stdout/stderr to disasm file and run command.
-                        using (var outputStream = System.IO.File.Create(path))
+                        generateCmd.EnvironmentVariable("COMPlus_JitStdOutFile", dasmPath);
+
+                        // Redirect stdout/stderr to log file and run command.
+                        using (var outputStreamWriter = File.CreateText(logPath))
                         {
-                            using (var outputStreamWriter = new StreamWriter(outputStream))
-                            {
-                                // Forward output and error to file.
-                                generateCmd.ForwardStdOut(outputStreamWriter);
-                                generateCmd.ForwardStdErr(outputStreamWriter);
-                                result = generateCmd.Execute();
-                            }
+                            // Forward output and error to file.
+                            generateCmd.ForwardStdOut(outputStreamWriter);
+                            generateCmd.ForwardStdErr(outputStreamWriter);
+                            result = generateCmd.Execute();
                         }
+
+                        bool hasOutput = true;
 
                         if (result.ExitCode != 0)
                         {
@@ -524,32 +526,22 @@ namespace ManagedCodeGen
                                 Console.Error.WriteLine("{0} is not a managed assembly", fullPathAssembly);
 
                                 // Discard output if the assembly is not managed
-                                if (File.Exists(path))
-                                {
-                                    File.Delete(path);
-                                }
+                                File.Delete(dasmPath);
+                                File.Delete(logPath);
+
+                                hasOutput = false;
                             }
                             else
                             {
                                 Console.Error.WriteLine("Error running {0} on {1}", _executablePath, fullPathAssembly);
-
-                                // If the tool still produced a output file rename it to indicate
-                                // the error in the file system.
-                                if (File.Exists(path))
-                                {
-                                    // Change file to *.err.
-                                    string errorPath = Path.ChangeExtension(path, ".err");
-                                    
-                                    // If this is a rerun to the same output, overwrite with current
-                                    // error output.
-                                    if (File.Exists(errorPath))
-                                    {
-                                        File.Delete(errorPath);
-                                    }
-                                    
-                                    File.Move(path, errorPath);
-                                }
                             }
+                        }
+
+                        if (hasOutput && !File.Exists(dasmPath))
+                        {
+                            // Looks like the JIT does not support COMPlus_JitStdOutFile so
+                            // the assembly output must be in the log file.
+                            File.Move(logPath, dasmPath);
                         }
                     }
                     else
