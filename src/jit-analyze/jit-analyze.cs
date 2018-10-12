@@ -627,6 +627,7 @@ namespace ManagedCodeGen
             commandArgs.Add("--no-index");
             commandArgs.Add("--exit-code");
             commandArgs.Add("--numstat");
+            commandArgs.Add("--no-renames");
             commandArgs.Add(diffPath);
             commandArgs.Add(basePath);
             Command diffCmd = null;
