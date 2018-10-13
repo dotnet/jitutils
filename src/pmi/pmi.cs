@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
+using System.Threading;
 
 // This set of classes provides a way to forcibly jit a large number of methods.
 // It can be used as is or included as a component in jit measurement and testing
@@ -1088,6 +1089,29 @@ class PrepareMethodinator
         return 101;
     }
 
+    private static Timer timer;
+    private static int flag = 0;
+
+    private static void DummyTimerCallback(object state)
+    {
+        timer.Change(Timeout.Infinite, Timeout.Infinite);
+        flag = 1;
+    }
+
+    private static void EnsureTimerCallbackIsJitted()
+    {
+        Thread.Sleep(1);
+        timer = new Timer(
+            callback: new TimerCallback(DummyTimerCallback),
+            state: null,
+            dueTime: 10,
+            period: Timeout.Infinite);
+        while (flag == 0) {
+            Thread.Sleep(1);
+        }
+    }
+
+
     // Return values:
     // 0 - success
     // >= 100 - failure
@@ -1097,6 +1121,12 @@ class PrepareMethodinator
         {
             return Usage();
         }
+
+        // Tracing infrastructure unconditionally creates a Timer and uses it for checking
+        // whether tracing has been enabled. Since the Timer callback is called on a worker thread,
+        // we may get corrupted disasm output. To prevent that, force jitting of Timer callback infrastructure
+        // before we PMI any method.
+        EnsureTimerCallbackIsJitted();
 
         string command = args[0].ToUpper();
         string assemblyName = args[1];
