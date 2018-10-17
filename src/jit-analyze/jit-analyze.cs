@@ -335,9 +335,9 @@ namespace ManagedCodeGen
         // Summarize differences across all the files.
         // Output:
         //     Total bytes differences
-        //     Top 5 files by difference size
-        //     Top 5 diffs by size across all files
-        //
+        //     Top files by difference size
+        //     Top diffs by size across all files
+        //     Top diffs by percentage size across all files
         //
         public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
         {
@@ -386,26 +386,21 @@ namespace ManagedCodeGen
             int sortedFileCount = fileImprovementCount + fileRegressionCount;
             int unchangedFileCount = fileDeltaList.Count() - sortedFileCount;
 
-            if (fileRegressionCount > 0)
+            void DisplayFileMetric(string headerText, int metricCount, dynamic list)
             {
-                Console.WriteLine("\nTop file regressions by size (bytes):");
-                foreach (var fileDelta in sortedFileRegressions.GetRange(0, Math.Min(fileRegressionCount, requestedCount)))
+                if (metricCount > 0)
                 {
-                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
-                        fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
+                    Console.WriteLine(headerText);
+                    foreach (var fileDelta in list.GetRange(0, Math.Min(metricCount, requestedCount)))
+                    {
+                        Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
+                            fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
+                    }
                 }
             }
 
-            if (fileImprovementCount > 0)
-            {
-                Console.WriteLine("\nTop file improvements by size (bytes):");
-
-                foreach (var fileDelta in sortedFileImprovements.GetRange(0, Math.Min(fileImprovementCount, requestedCount)))
-                {
-                    Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
-                        fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
-                }
-            }
+            DisplayFileMetric("\nTop file regressions by size (bytes):", fileRegressionCount, sortedFileRegressions);
+            DisplayFileMetric("\nTop file improvements by size (bytes):", fileImprovementCount, sortedFileImprovements);
 
             Console.WriteLine("\n{0} total files with size differences ({1} improved, {2} regressed), {3} unchanged.",
                 sortedFileCount, fileImprovementCount, fileRegressionCount, unchangedFileCount);
@@ -432,53 +427,43 @@ namespace ManagedCodeGen
             int sortedMethodCount = methodImprovementCount + methodRegressionCount;
             int unchangedMethodCount = fileDeltaList.Sum(x => x.methodsInBoth) - sortedMethodCount;
 
-            if (methodRegressionCount > 0)
+            var sortedMethodImprovementsByPercentage = methodDeltaList
+                                            .Where(x => x.deltaBytes < 0)
+                                            .OrderBy(d => (double)d.deltaBytes / d.baseBytes).ToList();
+            var sortedMethodRegressionsByPercentage = methodDeltaList
+                                            .Where(x => x.deltaBytes > 0)
+                                            .OrderByDescending(d => (double)d.deltaBytes / d.baseBytes).ToList();
+
+            void DisplayMethodMetric(string headerText, int metricCount, dynamic list)
             {
-                Console.WriteLine("\nTop method regressions by size (bytes):");
-
-                foreach (var method in sortedMethodRegressions.GetRange(0, Math.Min(methodRegressionCount, requestedCount)))
+                if (metricCount > 0)
                 {
-                    Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
-
-                    if (method.baseCount == method.diffCount)
+                    Console.WriteLine(headerText);
+                    foreach (var method in list.GetRange(0, Math.Min(metricCount, requestedCount)))
                     {
-                        if (method.baseCount > 1)
+                        Console.Write("    {2,8} ({3,6:P} of base) : {0} - {1}", method.path, method.name, method.deltaBytes,
+                            (double)method.deltaBytes / method.baseBytes);
+
+                        if (method.baseCount == method.diffCount)
                         {
-                            Console.Write(" ({0} methods)", method.baseCount);
+                            if (method.baseCount > 1)
+                            {
+                                Console.Write(" ({0} methods)", method.baseCount);
+                            }
                         }
+                        else
+                        {
+                            Console.Write(" ({0} base, {1} diff methods)", method.baseCount, method.diffCount);
+                        }
+                        Console.WriteLine();
                     }
-                    else
-                    {
-                        Console.Write(" ({0}/{1} methods)", method.baseCount, method.diffCount);
-                    }
-
-                    Console.WriteLine();
                 }
             }
 
-            if (methodImprovementCount > 0)
-            {
-                Console.WriteLine("\nTop method improvements by size (bytes):");
-
-                foreach (var method in sortedMethodImprovements.GetRange(0, Math.Min(methodImprovementCount, requestedCount)))
-                {
-                    Console.Write("    {2,8} : {0} - {1}", method.path, method.name, method.deltaBytes);
-
-                    if (method.baseCount == method.diffCount)
-                    {
-                        if (method.baseCount > 1)
-                        {
-                            Console.Write(" ({0} methods)", method.baseCount);
-                        }
-                    }
-                    else
-                    {
-                        Console.Write(" ({0}/{1} methods)", method.baseCount, method.diffCount);
-                    }
-
-                    Console.WriteLine();
-                }
-            }
+            DisplayMethodMetric("\nTop method regressions by size (bytes):", methodRegressionCount, sortedMethodRegressions);
+            DisplayMethodMetric("\nTop method improvements by size (bytes):", methodImprovementCount, sortedMethodImprovements);
+            DisplayMethodMetric("\nTop method regressions by size (percentage):", methodRegressionCount, sortedMethodRegressionsByPercentage);
+            DisplayMethodMetric("\nTop method improvements by size (percentage):", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
             Console.WriteLine("\n{0} total methods with size differences ({1} improved, {2} regressed), {3} unchanged.",
                 sortedMethodCount, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
