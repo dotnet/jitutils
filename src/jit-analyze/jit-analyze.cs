@@ -386,12 +386,12 @@ namespace ManagedCodeGen
             int sortedFileCount = fileImprovementCount + fileRegressionCount;
             int unchangedFileCount = fileDeltaList.Count() - sortedFileCount;
 
-            void DisplayFileMetric(string headerText, int metric, dynamic list)
+            void DisplayFileMetric(string headerText, int metricCount, dynamic list)
             {
-                if (metric > 0)
+                if (metricCount > 0)
                 {
                     Console.WriteLine(headerText);
-                    foreach (var fileDelta in list.GetRange(0, Math.Min(metric, requestedCount)))
+                    foreach (var fileDelta in list.GetRange(0, Math.Min(metricCount, requestedCount)))
                     {
                         Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
                             fileDelta.deltaBytes, (double)fileDelta.deltaBytes / fileDelta.baseBytes);
@@ -434,12 +434,12 @@ namespace ManagedCodeGen
                                             .Where(x => x.deltaBytes > 0)
                                             .OrderByDescending(d => (double)d.deltaBytes / d.baseBytes).ToList();
 
-            void DisplayMethodMetric(string headerText, int metric, dynamic list)
+            void DisplayMethodMetric(string headerText, int metricCount, dynamic list)
             {
-                if (metric > 0)
+                if (metricCount > 0)
                 {
                     Console.WriteLine(headerText);
-                    foreach (var method in list.GetRange(0, Math.Min(metric, requestedCount)))
+                    foreach (var method in list.GetRange(0, Math.Min(metricCount, requestedCount)))
                     {
                         Console.Write("    {2,8} ({3,6:P} of base) : {0} - {1}", method.path, method.name, method.deltaBytes,
                             (double)method.deltaBytes / method.baseBytes);
@@ -453,7 +453,7 @@ namespace ManagedCodeGen
                         }
                         else
                         {
-                            Console.Write(" ({0}/{1} methods)", method.baseCount, method.diffCount);
+                            Console.Write(" ({0} base, {1} diff methods)", method.baseCount, method.diffCount);
                         }
                         Console.WriteLine();
                     }
