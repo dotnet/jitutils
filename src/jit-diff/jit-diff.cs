@@ -1317,7 +1317,6 @@ namespace ManagedCodeGen
             "NuGet.Packaging.dll",
             "System.Security.Cryptography.X509Certificates.dll",
             "System.Text.RegularExpressions.dll",
-            "xunit.runner.utility.dotnet.dll",
             "System.Net.Requests.dll",
             "System.Security.Cryptography.Algorithms.dll",
             "System.Runtime.Serialization.Formatters.dll",
