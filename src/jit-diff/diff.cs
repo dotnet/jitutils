@@ -426,22 +426,53 @@ namespace ManagedCodeGen
                 if (config.Benchmarks || config.DoTestTree)
                 {
                     string basepath = config.Benchmarks ? Utility.CombinePath(config.TestRoot, s_benchmarksPath) : config.TestRoot;
-                    foreach (var dir in config.Benchmarks ? s_benchmarkDirectories : s_testDirectories)
+
+                    bool useAllSubdirectories = false;
+                    if (config.DoTestTree)
                     {
-                        string fullPathDir = Path.Combine(basepath, dir);
+                        // Normally, we iterate over a subset of directories within the test tree. This is to avoid
+                        // generating diffs on literally all the tests, which might be excessive.
+                        //
+                        // However, allow the user to specify any directory. If we don't find the normal set of test
+                        // subdirectories, then do *all* subdirectories.
+                        //
+                        // REVIEW: Is our subset of the tests still appropriate? (JIT and Interop directories).
 
-                        if (!Directory.Exists(fullPathDir))
+                        foreach (var dir in s_testDirectories)
                         {
-                            Console.Error.WriteLine("Warning: can't find test directory {0}", fullPathDir);
-                            continue;
+                            string fullPathDir = Path.Combine(basepath, dir);
+                            if (!Directory.Exists(fullPathDir))
+                            {
+                                useAllSubdirectories = true;
+                                break;
+                            }
                         }
+                    }
 
-                        // For the directory case create a stack and recursively find any
-                        // assemblies for compilation.
-                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(basepath, fullPathDir, config);
-
-                        // Add info generated at this directory
+                    if (useAllSubdirectories)
+                    {
+                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(basepath, basepath, config);
                         assemblyInfoList.AddRange(directoryAssemblyInfoList);
+                    }
+                    else
+                    {
+                        foreach (var dir in config.Benchmarks ? s_benchmarkDirectories : s_testDirectories)
+                        {
+                            string fullPathDir = Path.Combine(basepath, dir);
+
+                            if (!Directory.Exists(fullPathDir))
+                            {
+                                Console.Error.WriteLine("Warning: can't find test directory {0}", fullPathDir);
+                                continue;
+                            }
+
+                            // For the directory case create a stack and recursively find any
+                            // assemblies for compilation.
+                            List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(basepath, fullPathDir, config);
+
+                            // Add info generated at this directory
+                            assemblyInfoList.AddRange(directoryAssemblyInfoList);
+                        }
                     }
                 }
 
