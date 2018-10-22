@@ -279,10 +279,11 @@ namespace ManagedCodeGen
                     needPrefix = true;
                 }
 
-                if (config.AssemblyName != null)
+                foreach (string assembly in config.AssemblyList)
                 {
                     if (needPrefix) diffString += ", ";
-                    diffString += Path.GetFileName(config.AssemblyName);
+                    diffString += assembly;
+                    needPrefix = true;
                 }
 
                 Console.WriteLine($"Beginning {diffString}");
@@ -377,21 +378,26 @@ namespace ManagedCodeGen
             {
                 List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
 
-                if (config.AssemblyName != null)
+                foreach (string assembly in config.AssemblyList)
                 {
-                    if (!File.Exists(config.AssemblyName))
+                    if (Directory.Exists(assembly))
                     {
-                        Console.Error.WriteLine($"Warning: can't find specified assembly {config.AssemblyName}");
+                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(assembly, assembly, config);
+                        assemblyInfoList.AddRange(directoryAssemblyInfoList);
                     }
-                    else
+                    else if (File.Exists(assembly))
                     {
                         AssemblyInfo info = new AssemblyInfo
                         {
-                            Path = config.AssemblyName,
+                            Path = assembly,
                             OutputPath = ""
                         };
 
                         assemblyInfoList.Add(info);
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"Warning: can't find specified assembly or directory {assembly}");
                     }
                 }
 
@@ -641,7 +647,7 @@ namespace ManagedCodeGen
                 {
                     if (m_config.Verbose)
                     {
-                        Console.WriteLine($"Restoring exsiting jit: {backupJitPath} ==> {existingJitPath}");
+                        Console.WriteLine($"Restoring existing jit: {backupJitPath} ==> {existingJitPath}");
                     }
                     File.Copy(backupJitPath, existingJitPath, true);
                 }

@@ -145,7 +145,7 @@ namespace ManagedCodeGen
             private string _platformName = null;
             private string _branchName = null;
             private bool _pmi = false;
-            private string _assemblyName = null;
+            private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
             private bool _tsv;
 
             private JObject _jObj;
@@ -189,7 +189,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
                     syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
                     var pmiOption = syntax.DefineOption("pmi", ref _pmi, "Run asm diffs via pmi.");
-                    syntax.DefineOption("assembly", ref _assemblyName, "Run asm diffs on a particular assembly");
+                    syntax.DefineOptionList("assembly", ref _assemblyList, "Run asm diffs on a given set of assemblies. An individual item can be an assembly or a directory tree containing assemblies.");
                     syntax.DefineOption("tsv", ref _tsv, "Dump analysis data to diffs.tsv in output directory.");
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
@@ -568,7 +568,7 @@ namespace ManagedCodeGen
                     }
                 }
 
-                if (!_corelib && !_frameworks && !_benchmarks && !_tests && (_assemblyName == null))
+                if (!_corelib && !_frameworks && !_benchmarks && !_tests && (_assemblyList.Count == 0))
                 {
                     // Setting --corelib as the default
                     Console.WriteLine("No assemblies specified; defaulting to corelib");
@@ -1241,7 +1241,7 @@ namespace ManagedCodeGen
             public string BranchName { get { return _branchName; } }
             public string AltJit { get { return _altjit; } }
             public string Arch {  get { return _arch;  } }
-            public string AssemblyName => _assemblyName;
+            public IReadOnlyList<string> AssemblyList => _assemblyList;
             public bool tsv {  get { return _tsv;  } }
         }
 
