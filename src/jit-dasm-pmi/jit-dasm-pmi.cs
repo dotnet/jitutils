@@ -489,6 +489,9 @@ namespace ManagedCodeGen
                     AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
                     AddEnvironmentVariable("COMPlus_ReadyToRun", "0");
                     AddEnvironmentVariable("COMPlus_ZapDisable", "1");
+                    AddEnvironmentVariable("COMPlus_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
+                    AddEnvironmentVariable("COMPlus_JitNoForceFallback", "1");      // Don't stress noway fallback path.
+                    AddEnvironmentVariable("COMPlus_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
                     
                     // We likely don't want tiering enabled, but allow it, if user asks for it.
                     AddEnvironmentVariable("COMPlus_TieredCompilation", _config.Tiering ? "1" : "0");

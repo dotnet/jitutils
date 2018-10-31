@@ -470,6 +470,9 @@ namespace ManagedCodeGen
                     AddEnvironmentVariable("COMPlus_NgenUnwindDump", "*");
                     AddEnvironmentVariable("COMPlus_NgenEHDump", "*");
                     AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
+                    AddEnvironmentVariable("COMPlus_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
+                    AddEnvironmentVariable("COMPlus_JitNoForceFallback", "1");      // Don't stress noway fallback path.
+                    AddEnvironmentVariable("COMPlus_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
 
                     if (this.doGCDump)
                     {
