@@ -24,9 +24,10 @@ namespace PMIDriver
 
         public static int Drive(string assemblyName)
         {
-            string baseName = Path.GetFileNameWithoutExtension(assemblyName);
-            string PMI_FILE_MARKER = $"NextMethodToPrep-{baseName}.marker";
-            string PREVIOUS_PMI_FILE_MARKER = $"PreviousNextMethodToPrep-{baseName}.marker";
+            string assemblyPath = Path.GetFullPath(assemblyName);
+            string assemblyPathAsFile = Util.MapPathToFileName(assemblyPath);
+            string PMI_FILE_MARKER = $"NextMethodToPrep-{assemblyPathAsFile}.marker";
+            string PREVIOUS_PMI_FILE_MARKER = $"PreviousNextMethodToPrep-{assemblyPathAsFile}.marker";
 
             if (File.Exists(PMI_FILE_MARKER))
             {
