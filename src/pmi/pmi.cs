@@ -9,6 +9,16 @@ using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Threading;
+using System.Text.RegularExpressions;
+
+class Util
+{
+    public static string MapPathToFileName(string path)
+    {
+        // Return all file system path components with underscores.
+        return Regex.Replace(path, @"[:/\\]", "_");
+    }
+}
 
 // This set of classes provides a way to forcibly jit a large number of methods.
 // It can be used as is or included as a component in jit measurement and testing
@@ -32,6 +42,7 @@ class Visitor
 {
     protected DateTime startTime;
     protected string assemblyName;
+    protected string assemblyPath;
 
     public virtual void Start()
     {
@@ -43,10 +54,11 @@ class Visitor
 
     }
 
-    public virtual void StartAssembly(Assembly assembly)
+    public virtual void StartAssembly(Assembly assembly, string _assemblyPath)
     {
         startTime = DateTime.Now;
         assemblyName = assembly.GetName().Name;
+        assemblyPath = _assemblyPath;
     }
 
     public virtual void FinishAssembly(Assembly assembly)
@@ -103,9 +115,9 @@ class CounterBase : Visitor
     public int MethodCount => methodCount;
     public int UninstantiableMethodCount => uninstantiableMethodCount;
 
-    public override void StartAssembly(Assembly assembly)
+    public override void StartAssembly(Assembly assembly, string assemblyPath)
     {
-        base.StartAssembly(assembly);
+        base.StartAssembly(assembly, assemblyPath);
         typeCount = 0;
         methodCount = 0;
         uninstantiableTypeCount = 0;
@@ -147,9 +159,9 @@ class CounterBase : Visitor
 // Counts types and methods
 class Counter : CounterBase
 {
-    public override void StartAssembly(Assembly assembly)
+    public override void StartAssembly(Assembly assembly, string assemblyPath)
     {
-        base.StartAssembly(assembly);
+        base.StartAssembly(assembly, assemblyPath);
         Console.WriteLine($"Computing Count for {assemblyName}");
     }
 
@@ -186,9 +198,9 @@ abstract class PrepareBase : CounterBase
         _time = time;
     }
 
-    public override void StartAssembly(Assembly assembly)
+    public override void StartAssembly(Assembly assembly, string assemblyPath)
     {
-        base.StartAssembly(assembly);
+        base.StartAssembly(assembly, assemblyPath);
         methodsPrepared = 0;
     }
 
@@ -339,33 +351,27 @@ class PrepareAll : PrepareBase
     {
     }
 
-    public override void StartAssembly(Assembly assembly)
+    public override void StartAssembly(Assembly assembly, string assemblyPath)
     {
-        base.StartAssembly(assembly);
+        base.StartAssembly(assembly, assemblyPath);
         if (_verbose)
         {
             Console.WriteLine($"Prepall for {assemblyName}");
         }
-        pmiFullLogFileName = $"{assemblyName}.pmi";
-        pmiPartialLogFileName = $"{assemblyName}.pmiPartial";
-        markerFileName = $"NextMethodToPrep-{assemblyName}.marker";
+        string assemblyPathAsFile = Util.MapPathToFileName(assemblyPath);
+        pmiFullLogFileName = $"{assemblyPathAsFile}.pmi";
+        pmiPartialLogFileName = $"{assemblyPathAsFile}.pmiPartial";
+        markerFileName = $"NextMethodToPrep-{assemblyPathAsFile}.marker";
     }
 
     public override void AttemptMethod(Type type, MethodBase method)
     {
-        // For now only emit marker files if not in verbose mode.
-        //
-        // When may PMIs are invoked by jit-diff / jit-dasm-pmi we
-        // have trouble with file name contention as the names we
-        // pick are not unique enough. But the names also need to be
-        // predictable by DRIVEALL.
-        //
-        // So as a hack we rely on the fact that DRIVEALL always invokes
-        // PMI in verbose mode, and jit-dasm-pmi in quiet mode.
-        if (_verbose)
-        {
-            WriteAndFlushNextMethodToPrepMarker();
-        }
+        // Many concurrent PMIs are invoked by jit-diff / jit-dasm-pmi.
+        // We need to make sure the file names we choose are unique
+        // as well as being predictable by DRIVEALL. We construct a
+        // filename based on the full pathname of the assembly being
+        // used.
+        WriteAndFlushNextMethodToPrepMarker();
 
         if (methodCount >= firstMethod)
         {
@@ -437,9 +443,9 @@ class PrepareOne : PrepareBase
     {
     }
 
-    public override void StartAssembly(Assembly assembly)
+    public override void StartAssembly(Assembly assembly, string assemblyPath)
     {
-        base.StartAssembly(assembly);
+        base.StartAssembly(assembly, assemblyPath);
         Console.WriteLine($"Prepone for {assemblyName} method {firstMethod} ");
     }
 
@@ -689,7 +695,8 @@ class Worker
 
     public int Work(string assemblyName)
     {
-        Assembly assembly = LoadAssembly(Path.GetFullPath(assemblyName));
+        string assemblyPath = Path.GetFullPath(assemblyName);
+        Assembly assembly = LoadAssembly(assemblyPath);
 
         if (assembly == null)
         {
@@ -703,7 +710,7 @@ class Worker
             return 103;
         }
 
-        visitor.StartAssembly(assembly);
+        visitor.StartAssembly(assembly, assemblyPath);
 
         bool keepGoing = true;
 
@@ -1151,7 +1158,7 @@ class PrepareMethodinator
                     return Usage();
                 }
 
-                if (command == "DRIVEALL")
+                if (rootCommand == "DRIVEALL")
                 {
                     return PMIDriver.PMIDriver.Drive(assemblyName);
                 }
