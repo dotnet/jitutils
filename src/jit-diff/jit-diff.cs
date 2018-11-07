@@ -147,6 +147,7 @@ namespace ManagedCodeGen
             private bool _pmi = false;
             private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
             private bool _tsv;
+            private bool _cctors;
 
             private JObject _jObj;
             private bool _configFileLoaded = false;
@@ -189,6 +190,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
                     syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
                     var pmiOption = syntax.DefineOption("pmi", ref _pmi, "Run asm diffs via pmi.");
+                    syntax.DefineOption("cctors", ref _cctors, "With --pmi, jit and run cctors before jitting other methods");
                     syntax.DefineOptionList("assembly", ref _assemblyList, "Run asm diffs on a given set of assemblies. An individual item can be an assembly or a directory tree containing assemblies.");
                     syntax.DefineOption("tsv", ref _tsv, "Dump analysis data to diffs.tsv in output directory.");
                     // List command section.
@@ -1243,6 +1245,7 @@ namespace ManagedCodeGen
             public string Arch {  get { return _arch;  } }
             public IReadOnlyList<string> AssemblyList => _assemblyList;
             public bool tsv {  get { return _tsv;  } }
+            public bool CCtors => _cctors;
         }
 
         private static string[] s_testDirectories =

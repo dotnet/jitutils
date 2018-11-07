@@ -44,6 +44,7 @@ namespace ManagedCodeGen
         private bool _noCopyJit = false;
         private bool _verbose = false;
         private bool _tiering = false;
+        private bool _cctors = false;
 
         public Config(string[] args)
         {
@@ -58,6 +59,7 @@ namespace ManagedCodeGen
                 syntax.DefineOption("debuginfo", ref _dumpDebugInfo, "Add Debug info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                 syntax.DefineOption("t|tiering", ref _tiering, "Enable tiered jitting");
+                syntax.DefineOption("cctors", ref _cctors, "Jit and run cctors before jitting other methods");
                 syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
                 syntax.DefineOptionList("p|platform", ref _platformPaths, "Path to platform assemblies");
 
@@ -153,6 +155,7 @@ namespace ManagedCodeGen
         public string FileName { get { return _fileName; } }
         public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
         public bool Tiering => _tiering;
+        public bool Cctors => _cctors;
     }
 
     public class AssemblyInfo
@@ -446,7 +449,12 @@ namespace ManagedCodeGen
 
                     Assembly thisAssembly = typeof(DisasmEnginePmi).Assembly;
                     string binDir = Path.GetDirectoryName(thisAssembly.Location);
-                    List<string> commandArgs = new List<string>() { Path.Combine(binDir, "pmi.dll"), "DRIVEALL-QUIET", fullPathAssembly };
+                    string command = "DRIVEALL-QUIET";
+                    if (_config.Cctors)
+                    {
+                        command += "-CCTORS";
+                    }
+                    List<string> commandArgs = new List<string>() { Path.Combine(binDir, "pmi.dll"), command, fullPathAssembly };
                     Command generateCmd = null;
 
                     // Add environment variables to the environment of the command we are going to execute, and

@@ -8,8 +8,9 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
-using System.Threading;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 class Util
 {
@@ -508,13 +509,15 @@ class Worker
     int goodAssemblyCount;
     int badAssemblyCount;
     int nonAssemblyCount;
+    bool compileAndInvokeCctorsFirst;
 
-    public Worker(Visitor v)
+    public Worker(Visitor v, bool cctorsFirst)
     {
         visitor = v;
         goodAssemblyCount = 0;
         badAssemblyCount = 0;
         nonAssemblyCount = 0;
+        compileAndInvokeCctorsFirst = cctorsFirst;
     }
 
     private static BindingFlags BindingFlagsForCollectingAllMethodsOrCtors = (
@@ -761,29 +764,59 @@ class Worker
     {
         visitor.StartType(type);
         bool keepGoing = true;
-        foreach (MethodBase methodBase in GetMethods(type))
-        {
-            if (methodBase.IsGenericMethod)
-            {
-                List<MethodBase> instanceMethods = GetInstances(type, methodBase);
+        MethodBase[] methods = GetMethods(type);
+        MethodBase cctor = null;
 
-                foreach(MethodBase instanceMethod in instanceMethods)
+        if (compileAndInvokeCctorsFirst)
+        {
+            cctor = type.TypeInitializer;
+            if (cctor != null)
+            {
+                visitor.StartMethod(type, cctor);
+                keepGoing = visitor.FinishMethod(type, cctor);
+
+                try
                 {
-                    visitor.StartMethod(type, instanceMethod);
-                    keepGoing = visitor.FinishMethod(type, instanceMethod);
+                    RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+                }
+                catch (Exception)
+                {
+                    // just eat any exception
+                }
+            }
+        }
+
+        if (keepGoing)
+        {
+            foreach (MethodBase methodBase in methods)
+            {
+                if (methodBase == cctor)
+                {
+                    continue;
+                }
+
+                if (methodBase.IsGenericMethod)
+                {
+                    List<MethodBase> instanceMethods = GetInstances(type, methodBase);
+
+                    foreach (MethodBase instanceMethod in instanceMethods)
+                    {
+                        visitor.StartMethod(type, instanceMethod);
+                        keepGoing = visitor.FinishMethod(type, instanceMethod);
+                        if (!keepGoing)
+                        {
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    visitor.StartMethod(type, methodBase);
+                    keepGoing = visitor.FinishMethod(type, methodBase);
                     if (!keepGoing)
                     {
                         break;
                     }
-                }
-            }
-            else
-            {
-                visitor.StartMethod(type, methodBase);
-                keepGoing = visitor.FinishMethod(type, methodBase);
-                if (!keepGoing)
-                {
-                    break;
                 }
             }
         }
@@ -1088,7 +1121,8 @@ class PrepareMethodinator
             + "\r\n"
             + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\r\n"
             + "\r\n"
-            + "For Prepall and Prepone, optional suffixes will change output behavior:\r\n"
+            + "Optional suffixes will change behavior:\r\n"
+            + "   -CCtors will jit and run cctors before jitting other methods\r\n"
             + "   -Quiet will suppress in-progress messages for type and method exploration\r\n"
             + "   -Time will always show elapsed times, even in -Quiet mode"
         );
@@ -1113,7 +1147,8 @@ class PrepareMethodinator
             state: null,
             dueTime: 10,
             period: Timeout.Infinite);
-        while (flag == 0) {
+        while (flag == 0)
+        {
             Thread.Sleep(1);
         }
     }
@@ -1128,6 +1163,8 @@ class PrepareMethodinator
         {
             return Usage();
         }
+
+
 
         // Tracing infrastructure unconditionally creates a Timer and uses it for checking
         // whether tracing has been enabled. Since the Timer callback is called on a worker thread,
@@ -1216,7 +1253,9 @@ class PrepareMethodinator
         AppDomain currentDomain = AppDomain.CurrentDomain;
         currentDomain.AssemblyResolve += new ResolveEventHandler(ResolveEventHandler);
 
-        Worker w = new Worker(v);
+        bool runCctors = command.IndexOf("CCTORS") > 0;
+
+        Worker w = new Worker(v, runCctors);
         int result = 0;
         string msg = "a file";
 
