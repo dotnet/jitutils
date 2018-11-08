@@ -317,6 +317,12 @@ namespace ManagedCodeGen
                     commandArgs.Add(config.AltJit);
                 }
 
+                if ((config.DoCommand == Commands.PmiDiff) && config.Cctors)
+                {
+                    commandArgs.Add("--cctors");
+                    diffString += " [invoking .cctors]";
+                }
+
                 DateTime startTime = DateTime.Now;
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
                 DasmResult dasmResult = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
