@@ -1245,7 +1245,7 @@ namespace ManagedCodeGen
             public string Arch {  get { return _arch;  } }
             public IReadOnlyList<string> AssemblyList => _assemblyList;
             public bool tsv {  get { return _tsv;  } }
-            public bool CCtors => _cctors;
+            public bool Cctors => _cctors;
         }
 
         private static string[] s_testDirectories =

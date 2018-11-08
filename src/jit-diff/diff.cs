@@ -317,7 +317,7 @@ namespace ManagedCodeGen
                     commandArgs.Add(config.AltJit);
                 }
 
-                if ((config.DoCommand == Commands.PmiDiff) && config.CCtors)
+                if ((config.DoCommand == Commands.PmiDiff) && config.Cctors)
                 {
                     commandArgs.Add("--cctors");
                     diffString += " [invoking .cctors]";
