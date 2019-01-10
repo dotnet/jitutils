@@ -1,3 +1,3 @@
 #!/bin/bash
 SOURCE=$BASH_SOURCE
-dotnet $SOURCE.dll $@
+dotnet $SOURCE.dll "$@"
