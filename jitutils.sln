@@ -5,21 +5,21 @@ VisualStudioVersion = 15.0.26124.0
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{69D45FDC-948D-464B-BF14-5675F291FC62}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "cijobs", "src\cijobs\cijobs.csproj", "{5B781D3D-308C-4415-8C68-17D557B143B8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "cijobs", "src\cijobs\cijobs.csproj", "{5B781D3D-308C-4415-8C68-17D557B143B8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jit-analyze", "src\jit-analyze\jit-analyze.csproj", "{BE601D81-9650-4755-84F8-F9BA57284C9D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "jit-analyze", "src\jit-analyze\jit-analyze.csproj", "{BE601D81-9650-4755-84F8-F9BA57284C9D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jit-dasm", "src\jit-dasm\jit-dasm.csproj", "{C4C9F6AA-A360-4B27-A8E8-AB55FC383614}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "jit-dasm", "src\jit-dasm\jit-dasm.csproj", "{C4C9F6AA-A360-4B27-A8E8-AB55FC383614}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jit-diff", "src\jit-diff\jit-diff.csproj", "{928320EE-2058-446D-A46E-6C795BBE7C68}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "jit-diff", "src\jit-diff\jit-diff.csproj", "{928320EE-2058-446D-A46E-6C795BBE7C68}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jit-format", "src\jit-format\jit-format.csproj", "{37E93DAF-2993-4DF0-9E82-06817A3B7956}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "jit-format", "src\jit-format\jit-format.csproj", "{37E93DAF-2993-4DF0-9E82-06817A3B7956}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "packages", "src\packages\packages.csproj", "{19436C6B-39C9-4A88-8021-3242D098637E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "packages", "src\packages\packages.csproj", "{19436C6B-39C9-4A88-8021-3242D098637E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pmi", "src\pmi\pmi.csproj", "{829E459B-EE3D-46A9-AD4D-4F2B03D5188C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "pmi", "src\pmi\pmi.csproj", "{829E459B-EE3D-46A9-AD4D-4F2B03D5188C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jit-dasm-pmi", "src\jit-dasm-pmi\jit-dasm-pmi.csproj", "{2C846294-79D4-40EA-8ED3-0F01E033BE32}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "jit-dasm-pmi", "src\jit-dasm-pmi\jit-dasm-pmi.csproj", "{2C846294-79D4-40EA-8ED3-0F01E033BE32}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
