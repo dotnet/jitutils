@@ -16,14 +16,12 @@ function usage
     echo "    -h              : Show this message."
     echo "    -f              : Install default framework directory in <script_root>/fx."
     echo "    -p              : Publish utilities."
-    echo "    -t <TARGET>     : Target framework. Default is netcoreapp2.1."
     echo ""
 }
 
 # defaults
 buildType="Release"
 publish=false
-tfm=netcoreapp2.1
 workingDir="$PWD"
 cd "`dirname \"$0\"`"
 scriptDir="$PWD"
@@ -49,9 +47,6 @@ while getopts "hpfbt:" opt; do
     f)  
         fx=true
         ;;
-    t)
-        tfm=$OPTARG
-        ;;
     esac
 done
 
@@ -62,10 +57,10 @@ declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs pmi jit-das
 for proj in "${projects[@]}"
 do
     if [ "$publish" == true ]; then
-        dotnet publish -c $buildType -f $tfm -o $appInstallDir ./src/$proj
+        dotnet publish -c $buildType -o $appInstallDir ./src/$proj
         cp ./wrapper.sh $appInstallDir/$proj
     else
-        dotnet build -c $buildType -f $tfm ./src/$proj
+        dotnet build -c $buildType ./src/$proj
     fi
 done
 
