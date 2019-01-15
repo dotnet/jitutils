@@ -4,14 +4,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$(NETCoreSdkVersion.StartsWith('3.0'))">
-    <_UseNetCoreApp3>true</_UseNetCoreApp3>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <TargetFramework Condition="$(_UseNetCoreApp3) == true">netcoreapp3.0</TargetFramework>
-    <TargetFramework Condition="$(_UseNetCoreApp3) != true">netcoreapp2.1</TargetFramework>
-  </PropertyGroup>
+  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), target-framework.props))\target-framework.props" />
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="4.5.0" />
