@@ -2,11 +2,15 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net45;netcoreapp2.1;netcoreapp3.0</TargetFrameworks>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <Optimize>false</Optimize>
+  <PropertyGroup Condition="$(NETCoreSdkVersion.StartsWith('3.0'))">
+    <_UseNetCoreApp3>true</_UseNetCoreApp3>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework Condition="$(_UseNetCoreApp3) == true">netcoreapp3.0</TargetFramework>
+    <TargetFramework Condition="$(_UseNetCoreApp3) != true">netcoreapp2.1</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
