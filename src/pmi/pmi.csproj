@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), target-framework.props))\target-framework.props" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(target-framework.props))" />
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="4.5.0" />
