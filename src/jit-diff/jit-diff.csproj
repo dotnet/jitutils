@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), target-framework.props))\target-framework.props" />
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), jit-include.props))\jit-include.props" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(target-framework.props))" />
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(jit-include.props))" />
 
 
   <PropertyGroup>
