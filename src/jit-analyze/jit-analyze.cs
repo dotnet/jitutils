@@ -655,10 +655,23 @@ namespace ManagedCodeGen
 
                 foreach (var line in rawLines)
                 {
-                    var fields = line.Split(new[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (fields.Length != 5)
+                    string manipulatedLine = line;
+
+                    int numFields = 5;
+
+                    Regex unixGitOutputRegex = new Regex(@"\{\w+\s=>\s\w+\}");
+                    if (unixGitOutputRegex.Matches(line).Count > 0)
                     {
-                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : {fields.Length} fields");
+                        string[] splitLine = unixGitOutputRegex.Split(line);
+                        manipulatedLine = String.Join("base", splitLine);
+
+                        numFields = 3;
+                    }
+
+                    var fields = manipulatedLine.Split(new[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (fields.Length != numFields)
+                    {
+                        Console.WriteLine($"Couldn't parse --numstat output '{manipulatedLine}` : {fields.Length} fields");
                         continue;
                     }
 
@@ -666,7 +679,7 @@ namespace ManagedCodeGen
                     string fullBaseFilePath = Path.GetFullPath(fields[2]);
                     if (!File.Exists(fullBaseFilePath))
                     {
-                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : '{fullBaseFilePath}' does not exist");
+                        Console.WriteLine($"Couldn't parse --numstat output '{manipulatedLine}` : '{fullBaseFilePath}' does not exist");
                         continue;
                     }
 
