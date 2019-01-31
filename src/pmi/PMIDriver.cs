@@ -167,7 +167,7 @@ namespace PMIDriver
                 p.StartInfo.RedirectStandardError = true;
 
                 // Fetch our command line. Split off the arguments.
-#if NETCOREAPP2_1
+#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0
                 // For .Net Core the PMI assembly is an argument to dotnet.
                 string newCommandLine = Environment.CommandLine.Replace("DRIVEALL", "PREPALL");
 #else
