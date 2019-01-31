@@ -1164,8 +1164,6 @@ class PrepareMethodinator
             return Usage();
         }
 
-
-
         // Tracing infrastructure unconditionally creates a Timer and uses it for checking
         // whether tracing has been enabled. Since the Timer callback is called on a worker thread,
         // we may get corrupted disasm output. To prevent that, force jitting of Timer callback infrastructure
@@ -1259,7 +1257,7 @@ class PrepareMethodinator
         int result = 0;
         string msg = "a file";
 
-#if NETCOREAPP2_1
+#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0
         msg += " or a directory";
         if (Directory.Exists(assemblyName))
         {
