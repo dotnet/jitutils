@@ -7,7 +7,7 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove(target-framework.props))" />
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" Condition="$(_UseNetCoreApp3) == true" />
+    <PackageReference Include="Microsoft.AspNetCore.App" Condition="$(_UseNetCoreApp3) == true" Version="3.0.0-*" />
   </ItemGroup>
   
 </Project>
