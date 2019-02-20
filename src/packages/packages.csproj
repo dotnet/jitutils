@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,4 +6,8 @@
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove(target-framework.props))" />
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" Condition="$(_UseNetCoreApp3) == true" />
+  </ItemGroup>
+  
 </Project>
