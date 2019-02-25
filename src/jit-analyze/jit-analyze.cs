@@ -30,6 +30,7 @@ namespace ManagedCodeGen
             private string _tsv;
             private bool _noreconcile = false;
             private string _note;
+            private string _filter;
 
             public Config(string[] args)
             {
@@ -53,6 +54,8 @@ namespace ManagedCodeGen
                         "Dump analysis data to specified file in JSON format.");
                     syntax.DefineOption("tsv", ref _tsv,
                         "Dump analysis data to specified file in tab-separated format.");
+                    syntax.DefineOption("filter", ref _filter,
+                        "Only consider assembly files whose names match the filter");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
@@ -84,6 +87,8 @@ namespace ManagedCodeGen
             public bool DoGenerateTSV { get { return _tsv != null; } }
             public bool Reconcile { get { return !_noreconcile; } }
             public string Note { get { return _note; } }
+
+            public string Filter {  get { return _filter; } }
         }
 
         public class FileInfo
@@ -217,7 +222,7 @@ namespace ManagedCodeGen
             public IEnumerable<int> diffOffsets;
         }
 
-        public static IEnumerable<FileInfo> ExtractFileInfo(string path, bool recursive)
+        public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, bool recursive)
         {
             // if path is a directory, enumerate files and extract
             // otherwise just extract.
@@ -227,7 +232,9 @@ namespace ManagedCodeGen
 
             if (Directory.Exists(fullRootPath))
             {
-                return Directory.EnumerateFiles(fullRootPath, "*.dasm", searchOption)
+                string fileNamePattern = filter ?? "*";
+                string searchPattern = fileNamePattern + ".dasm";
+                return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
                          .Select(p => new FileInfo
                          {
                              path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
@@ -349,7 +356,12 @@ namespace ManagedCodeGen
                 Console.WriteLine($"\n{config.Note}");
             }
 
-            Console.WriteLine("\nSummary:\n(Lower is better)\n");
+            Console.Write("\nSummary:");
+            if (config.Filter != null)
+            {
+                Console.Write($" (using filter '{config.Filter}')");
+            }
+            Console.WriteLine("\n(Lower is better)\n");
             Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDiffBytes, (double)totalDiffBytes / totalBaseBytes);
 
             if (totalDiffBytes != 0)
@@ -691,8 +703,8 @@ namespace ManagedCodeGen
             try
             {
                 // Extract method info from base and diff directory or file.
-                var baseList = ExtractFileInfo(config.BasePath, config.Recursive);
-                var diffList = ExtractFileInfo(config.DiffPath, config.Recursive);
+                var baseList = ExtractFileInfo(config.BasePath, config.Filter, config.Recursive);
+                var diffList = ExtractFileInfo(config.DiffPath, config.Filter, config.Recursive);
 
                 // Compare the method info for each file and generate a list of
                 // non-zero deltas.  The lists that include files in one but not
