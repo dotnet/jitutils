@@ -11,6 +11,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
 class Util
 {
@@ -19,6 +20,23 @@ class Util
         // Return all file system path components with underscores.
         return Regex.Replace(path, @"[:/\\]", "_");
     }
+}
+
+class AsyncHelper
+{
+    static async ValueTask<long> V(long i, Task t) { await t; return i; }
+}
+
+class RefAwaiter : ICriticalNotifyCompletion
+{
+    public void OnCompleted(Action a) { }
+    public void UnsafeOnCompleted(Action a) { }
+}
+
+struct StructAwaiter : ICriticalNotifyCompletion
+{
+    public void OnCompleted(Action a) { }
+    public void UnsafeOnCompleted(Action a) { }
 }
 
 // This set of classes provides a way to forcibly jit a large number of methods.
@@ -843,7 +861,7 @@ class Worker
         }
 
         // Types we will use for instantiation attempts.
-        Type[] typesToTry = new Type[] { typeof(object), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
+        Type[] typesToTry = new Type[] { typeof(object), typeof(byte), typeof(short), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
 
         // To keep things sane, we won't try and instantiate too many copies
         int instantiationLimit = genericArguments.Length * typesToTry.Length;
@@ -935,7 +953,7 @@ class Worker
         }
 
         // Types we will use for instantiation attempts.
-        Type[] typesToTry = new Type[] { typeof(object), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
+        Type[] typesToTry = new Type[] { typeof(object), typeof(byte), typeof(short), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
 
         // To keep things sane, we won't try and instantiate too many copies
         int instantiationLimit = genericArguments.Length * typesToTry.Length;
@@ -985,6 +1003,29 @@ class Worker
             {
                 instantiationCount++;
                 results.Add(newMethod);
+            }
+        }
+
+        // Special case a core async method
+        if (type.Name.Contains("AsyncTaskMethodBuilder") && method.Name.Contains("AwaitUnsafeOnCompleted"))
+        {
+            Type[] awaiterTypes = new Type[] { typeof(TaskAwaiter), typeof(ConfiguredTaskAwaitable.ConfiguredTaskAwaiter),
+                typeof(YieldAwaitable.YieldAwaiter), typeof(RefAwaiter), typeof(StructAwaiter) };
+            Type helperType = typeof(AsyncHelper).Assembly.GetType("AsyncHelper+<V>d__0", false);
+            if (helperType != null)
+            {
+                foreach (Type awaiterType in awaiterTypes)
+                {
+                    try
+                    {
+                        MethodInfo newMethod = methodInfo.MakeGenericMethod(awaiterType, helperType);
+                        results.Add(newMethod);
+                        instantiationCount++;
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
             }
         }
 
