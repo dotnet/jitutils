@@ -528,7 +528,7 @@ namespace ManagedCodeGen
                     }
 
                     // Set up PMI path...
-                    AddEnvironmentVariable("PMIPATH", Path.GetDirectoryName(assembly.Name));
+                    AddEnvironmentVariable("PMIPATH", assembly.Path);
 
                     if (this.verbose)
                     {
