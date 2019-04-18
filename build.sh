@@ -71,7 +71,7 @@ if [ "$fx" == true ]; then
     # for subsequent publish to be able to accept --runtime parameter to publish
     # it as standalone.
     dotnet restore --runtime $platform ./src/packages
-    dotnet publish -c $buildType -f $tfm -o $fxInstallDir --runtime $platform ./src/packages
+    dotnet publish -c $buildType -o $fxInstallDir --runtime $platform ./src/packages
 
     # remove package version of mscorlib* - refer to core root version for diff testing.
     rm -f $fxInstallDir/mscorlib*
