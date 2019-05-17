@@ -1,0 +1,24 @@
+parameters:
+  agentOs: ''
+  pool: ''
+
+jobs:
+- job: ${{ parameters.agentOs }}
+  pool: ${{ parameters.pool }}
+  steps:
+  - checkout: self
+    clean: true
+
+  - task: UseDotNet@2
+    displayName: 'Install .NET Core SDK'
+    inputs:
+      packageType: sdk
+      version: 3.0.100-preview5-011568
+      installationPath: $(Agent.ToolsDirectory)/dotnet
+
+  - ${{ if eq(parameters.agentOs, 'Windows_NT') }}:
+    - script: bootstrap.cmd
+      displayName: Build the tools
+  - ${{ if ne(parameters.agentOs, 'Windows_NT') }}:
+    - script: ./bootstrap.sh
+      displayName: Build the tools
