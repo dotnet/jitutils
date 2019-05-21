@@ -1,24 +1,32 @@
 parameters:
-  agentOs: ''
+  name: ''
   pool: ''
+  strategy: ''
 
 jobs:
-- job: ${{ parameters.agentOs }}
+- job: ${{ parameters.name }}
   pool: ${{ parameters.pool }}
+  strategy: ${{ parameters.strategy }}
+
   steps:
   - checkout: self
     clean: true
 
   - task: UseDotNet@2
-    displayName: 'Install .NET Core SDK'
+    displayName: Install .NET Core SDK
     inputs:
       packageType: sdk
-      version: 3.0.100-preview5-011568
+      version: $(SdkVersion)
       installationPath: $(Agent.ToolsDirectory)/dotnet
 
-  - ${{ if eq(parameters.agentOs, 'Windows_NT') }}:
-    - script: bootstrap.cmd
-      displayName: Build the tools
-  - ${{ if ne(parameters.agentOs, 'Windows_NT') }}:
-    - script: ./bootstrap.sh
-      displayName: Build the tools
+  - script: dotnet publish -c Release -r $(RuntimeID) -f $(TargetFramework) -o $(Build.StagingDirectory) --self-contained false
+    displayName: Build the tools
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+  - ${{ if in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI') }}:
+    - task: PublishBuildArtifacts@1
+      displayName: Publish build artifacts
+      inputs:
+        pathtoPublish: $(Build.StagingDirectory)
+        artifactName: jitutils-$(RuntimeID)-$(TargetFramework)

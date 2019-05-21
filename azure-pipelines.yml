@@ -4,21 +4,48 @@ trigger:
 pr:
 - master
 
+variables:
+  TargetFramework: netcoreapp3.0
+  SdkVersion: 3.0.100-preview5-011568
+
 jobs:
 - template: /eng/build.yml
   parameters:
-    agentOs: Windows_NT
+    name: Windows
     pool:
       vmImage: vs2017-win2016
+    strategy:
+      matrix:
+        x64:
+          RuntimeID: win-x64
+        x86:
+          RuntimeID: win-x86
+        arm:
+          RuntimeID: win-arm
+        arm64:
+          RuntimeID: win-arm64
 
 - template: /eng/build.yml
   parameters:
-    agentOs: Linux
+    name: Linux
     pool:
       vmImage: ubuntu-16.04
+    strategy:
+      matrix:
+        x64:
+          RuntimeID: linux-x64
+        arm:
+          RuntimeID: linux-arm
+        arm64:
+          RuntimeID: linux-arm64
 
 - template: /eng/build.yml
   parameters:
-    agentOs: macOS
+    name: macOS
     pool:
       vmImage: macOS-10.13
+    strategy:
+      matrix:
+        x64:
+          RuntimeID: osx-x64
+
