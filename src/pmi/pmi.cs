@@ -9,6 +9,7 @@ using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,6 +45,138 @@ struct StructAwaiter : ICriticalNotifyCompletion
     public void OnCompleted(Action a) { }
     public void UnsafeOnCompleted(Action a) { }
 }
+
+
+// Specialized assembly resolution support
+//
+// We want to handle specifying a "load path" where assemblies can be found.
+// The environment variable PMIPATH is a semicolon-separated list of paths. If the
+// Assembly can't be found by the usual mechanisms, we'll probe on the PMIPATH list.
+//
+// This can be done via an assembly resolve event handler (from the default load
+// context) or via a custom load context.
+//
+// Where possible we use a custom load context because it's more flexible -- 
+// eg allowing two different versions of an assembly to be loaded (except for corelib).
+//
+// The Resolver class contains the common logic; the CustomLoadContext adapts it
+// to the different runtimes.
+//
+public class Resolver
+{
+    public static Assembly ResolveEventHandler(object sender, ResolveEventArgs args)
+    {
+        // What assembly we are searching for...?
+        int idx = args.Name.IndexOf(",");
+        if (idx == -1)
+        {
+            Console.WriteLine($"ResolveEventHandler called with unexpected args: {args}");
+            return null;
+        }
+
+        string assemblyName = args.Name.Substring(0, idx) + ".dll";
+
+        return Resolve(assemblyName, AssemblyLoadContext.Default);
+    }
+
+    public static Assembly Resolve(string assemblyName, AssemblyLoadContext context)
+    {
+        string pmiPath = null;
+
+        if (context is CustomLoadContext)
+        {
+            pmiPath = ((CustomLoadContext)context).PmiPath;
+        }
+        else
+        {
+            pmiPath = Environment.GetEnvironmentVariable("PMIPATH");
+        }
+
+        // Do we have a PMIPATH?
+        if (pmiPath == null)
+        {
+            return null;
+        }
+
+        string[] pmiPaths = pmiPath.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (string path in pmiPaths)
+        {
+            string tmpPath = Path.GetFullPath(Path.Combine(path, assemblyName));
+
+            if (File.Exists(tmpPath))
+            {
+                // Found it!
+                try
+                {
+                    Assembly result = context.LoadFromAssemblyPath(tmpPath);
+                    return result;
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+
+        return null;
+    }
+}
+
+#if NETCOREAPP3_0
+public class CustomLoadContext : AssemblyLoadContext
+{
+    public string PmiPath { get; }
+
+    public CustomLoadContext(string assemblyPath)
+    {
+        string pmiPath = Environment.GetEnvironmentVariable("PMIPATH");
+
+        if (pmiPath != null)
+        {
+            pmiPath += ";";
+        }
+        else
+        {
+            pmiPath = "";
+        }
+
+        // Add in current assembly path and framework path
+        pmiPath += Path.GetDirectoryName(assemblyPath);
+        pmiPath += ";";
+        pmiPath += Path.GetDirectoryName(typeof(object).Assembly.Location);
+
+        PmiPath = pmiPath;
+    }
+
+    public Assembly LoadAssembly(string assemblyPath)
+    {
+        return LoadFromAssemblyPath(assemblyPath);
+    }
+
+    protected override Assembly Load(AssemblyName assemblyName)
+    {
+        return Resolver.Resolve(assemblyName.Name + ".dll", this);
+    }
+}
+#else
+public class CustomLoadContext
+{
+    public CustomLoadContext(string ignored)
+    {
+    }
+
+    // Use .cctor to install the resolve handler
+    static CustomLoadContext()
+    {
+        AppDomain currentDomain = AppDomain.CurrentDomain;
+        currentDomain.AssemblyResolve += new ResolveEventHandler(Resolver.ResolveEventHandler);
+    }
+
+    public Assembly LoadAssembly(string assemblyPath)
+    {
+        return Assembly.LoadFrom(assemblyPath);
+    }
+}
+#endif
 
 // This set of classes provides a way to forcibly jit a large number of methods.
 // It can be used as is or included as a component in jit measurement and testing
@@ -563,9 +696,11 @@ class Worker
         }
         else
         {
+            CustomLoadContext context = new CustomLoadContext(assemblyPath);
+
             try
             {
-                result = Assembly.LoadFrom(assemblyPath);
+                result = context.LoadAssembly(assemblyPath);
                 goodAssemblyCount++;
             }
             catch (ArgumentException)
@@ -579,9 +714,10 @@ class Worker
                 Console.WriteLine(e);
                 nonAssemblyCount++;
             }
-            catch (FileLoadException)
+            catch (FileLoadException f)
             {
                 Console.WriteLine($"Assembly load failure ({assemblyPath}): FileLoadException");
+                Console.WriteLine(f);
                 badAssemblyCount++;
             }
             catch (FileNotFoundException)
@@ -1111,40 +1247,6 @@ class Worker
 
 class PrepareMethodinator
 {
-    private static Assembly ResolveEventHandler(object sender, ResolveEventArgs args)
-    {
-        string pmiPath = Environment.GetEnvironmentVariable("PMIPATH");
-        if (pmiPath == null)
-        {
-            return null;
-        }
-
-        string[] pmiPaths = pmiPath.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (string path in pmiPaths)
-        {
-            // what is the format of this?
-            int idx = args.Name.IndexOf(",");
-            if (idx != -1)
-            {
-                string tmpPath = Path.GetFullPath(Path.Combine(path, args.Name.Substring(0, idx) + ".dll"));
-                if (File.Exists(tmpPath))
-                {
-                    // Found it!
-                    try
-                    {
-                        return Assembly.LoadFrom(tmpPath);
-                    }
-                    catch (Exception)
-                    {
-                        // Well, that didn't work!
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
     private static int Usage()
     {
         string exeName = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName; // get the current full path name of PMI.exe
@@ -1297,13 +1399,6 @@ class PrepareMethodinator
                 Console.WriteLine("ERROR: Unknown command {0}", command);
                 return Usage();
         }
-
-        // We want to handle specifying a "load path" where assemblies can be found.
-        // The environment variable PMIPATH is a semicolon-separated list of paths. If the
-        // Assembly can't be found by the usual mechanisms, our Assembly ResolveEventHandler
-        // will be called, and we'll probe on the PMIPATH list.
-        AppDomain currentDomain = AppDomain.CurrentDomain;
-        currentDomain.AssemblyResolve += new ResolveEventHandler(ResolveEventHandler);
 
         bool runCctors = command.IndexOf("CCTORS") > 0;
 
