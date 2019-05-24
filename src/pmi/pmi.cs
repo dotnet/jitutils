@@ -1328,6 +1328,7 @@ class PrepareMethodinator
         Command countCommand = new Command("COUNT");
         {
             countCommand.Description = "Count the number of types and methods in an assembly.";
+            countCommand.AddAlias("count");
 
             Argument<string> assemblyArgument = new Argument<string>();
             assemblyArgument.Arity = ArgumentArity.ExactlyOne;
@@ -1354,6 +1355,7 @@ class PrepareMethodinator
         Command prepallCommand = new Command("PREPALL");
         {
             prepallCommand.Description = "JIT all the methods in an assembly or all assemblies in a directory tree.";
+            prepallCommand.AddAlias("prepall");
 
             Argument<string> assemblyArgument = new Argument<string>();
             assemblyArgument.Arity = ArgumentArity.ExactlyOne;
@@ -1402,6 +1404,7 @@ class PrepareMethodinator
         Command preponeCommand = new Command("PREPONE");
         {
             preponeCommand.Description = "JIT exactly one method in an assembly.";
+            preponeCommand.AddAlias("prepone");
 
             Argument<string> assemblyArgument = new Argument<string>();
             assemblyArgument.Arity = ArgumentArity.ExactlyOne;
@@ -1436,6 +1439,7 @@ class PrepareMethodinator
         Command driveallCommand = new Command("DRIVEALL");
         {
             driveallCommand.Description = "JIT all the methods in an assembly robustly, skipping methods with asserts.";
+            driveallCommand.AddAlias("driveall");
 
             Argument<string> assemblyArgument = new Argument<string>();
             assemblyArgument.Arity = ArgumentArity.ExactlyOne;
@@ -1443,6 +1447,8 @@ class PrepareMethodinator
             assemblyArgument.Description = "Assembly file to process";
             driveallCommand.AddArgument(assemblyArgument);
 
+            // Thse options are ignored by the handler -- DRIVEALL will grab the command line for child invocations of PREPALL.
+            // But by including them here we validate them early.
             Option cctorOption = new Option("--cctors", "Try and invoke cctors first", new Argument<bool>());
             Option quietOption = new Option("--quiet", "Don't show progress messages", new Argument<bool>());
             Option timeOption = new Option("--time", "Show elapsed time information", new Argument<bool>());
@@ -1450,9 +1456,7 @@ class PrepareMethodinator
             driveallCommand.AddOption(quietOption);
             driveallCommand.AddOption(timeOption);
 
-            // Options are ignored here, as DRIVEALL will grab the command line for child invocations of PREPALL.
-            // By including them here we validate them early.
-            driveallCommand.Handler = CommandHandler.Create<string, bool, bool, bool>((assemblyName, cctors, quiet, time) =>
+            driveallCommand.Handler = CommandHandler.Create<string>((assemblyName) =>
             {
                 if (File.Exists(assemblyName))
                 {
