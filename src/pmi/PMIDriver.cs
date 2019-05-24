@@ -166,16 +166,17 @@ namespace PMIDriver
                 p.StartInfo.RedirectStandardOutput = true;
                 p.StartInfo.RedirectStandardError = true;
 
-                // Fetch our command line. Split off the arguments.
+                // Fetch our command line, and fix up the arguments.
+
+                string newArgs = $"PREPALL --method {pi.methodToPrep}";
 #if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0
                 // For .Net Core the PMI assembly is an argument to dotnet.
-                string newCommandLine = Environment.CommandLine.Replace("DRIVEALL", "PREPALL");
+                string newCommandLine = Environment.CommandLine.Replace("DRIVEALL", newArgs);
 #else
                 // For .Net Framework the OS knows how to bootstrap .Net when
                 // passed the PMI assembly as an executable.
-                string newCommandLine = "PREPALL \"" + pi.assemblyName + "\"";
+                string newCommandLine = newArgs + " \"" + pi.assemblyName + "\"";
 #endif
-                newCommandLine += " " + pi.methodToPrep;
 
                 Process thisProcess = Process.GetCurrentProcess();
                 string driverName = thisProcess.MainModule.FileName;

@@ -7,6 +7,7 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove(target-framework.props))" />
 
   <ItemGroup>
+    <PackageReference Include="System.CommandLine.Experimental" Version="0.2.0-alpha.19272.1" />
     <PackageReference Include="System.Management" Version="4.5.0" />
     <PackageReference Include="System.Numerics.Vectors" Version="4.5.0" />
   </ItemGroup>
