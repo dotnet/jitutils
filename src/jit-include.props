@@ -9,12 +9,12 @@
     <PackageReference Include="System.Net.Primitives" Version="4.3.0" />
     <PackageReference Include="runtime.native.System" Version="4.3.0" />
     <PackageReference Include="System.Security.Principal" Version="4.3.0" />
-    <PackageReference Include="System.CommandLine" Version="0.1.0-e170320-1" />
+    <PackageReference Include="System.CommandLine.Experimental" Version="0.2.0-alpha.19272.1" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' != 'netcoreapp3.0' ">
     <PackageReference Include="Microsoft.DotNet.Cli.Utils" Version="1.0.1" />
-    <PackageReference Include="System.CommandLine" Version="0.1.0-e170320-1" />
+    <PackageReference Include="System.CommandLine.Experimental" Version="0.2.0-alpha.19272.1" />
   </ItemGroup>
 
 </Project>

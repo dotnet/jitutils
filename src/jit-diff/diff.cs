@@ -7,11 +7,11 @@ using System.CommandLine;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.DotNet.Cli.Utils;
 using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
+    using CommandResult = Microsoft.DotNet.Cli.Utils.CommandResult;
     using DasmWorkTask = Task<(DasmWorkKind kind, int errorCount)>;
 
     public enum DasmWorkKind
