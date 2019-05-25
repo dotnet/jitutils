@@ -29,129 +29,94 @@ using System.Runtime.Loader;
 using System.Linq;
 using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Tools.Common;
+using System.CommandLine.Invocation;
+using Process = System.Diagnostics.Process;
+using Command = Microsoft.DotNet.Cli.Utils.Command;
+using CommandResult = Microsoft.DotNet.Cli.Utils.CommandResult;
 
 namespace ManagedCodeGen
 {
     // Define options to be parsed 
     public class Config
     {
-        private ArgumentSyntax _syntaxResult;
-        private string _altjit = null;
-        private string _crossgenExe = null;
-        private string _jitPath = null;
-        private string _rootPath = null;
-        private string _fileName = null;
-        private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
-        private bool _wait = false;
-        private bool _recursive = false;
-        private IReadOnlyList<string> _methods = Array.Empty<string>();
-        private IReadOnlyList<string> _platformPaths = Array.Empty<string>();
-        private bool _dumpGCInfo = false;
-        private bool _dumpDebugInfo = false;
-        private bool _verbose = false;
-
-        public Config(string[] args)
+        void ReportError(string message)
         {
-            _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
-            {
-                syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
-                syntax.DefineOption("c|crossgen", ref _crossgenExe, "The crossgen compiler exe.");
-                syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
-                syntax.DefineOption("o|output", ref _rootPath, "The output path.");
-                syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
-                syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
-                syntax.DefineOption("debuginfo", ref _dumpDebugInfo, "Add Debug info to the disasm output.");
-                syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
-                var waitArg = syntax.DefineOption("w|wait", ref _wait, "Wait for debugger to attach.");
-                waitArg.IsHidden = true;
-
-                syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
-                syntax.DefineOptionList("p|platform", ref _platformPaths, "Path to platform assemblies");
-                var methodsArg = syntax.DefineOptionList("m|methods", ref _methods,
-                    "List of methods to disasm.");
-                methodsArg.IsHidden = true;
-
-                // Warning!! - Parameters must occur after options to preserve parsing semantics.
-
-                syntax.DefineParameterList("assembly", ref _assemblyList, "The list of assemblies or directories to scan for assemblies.");
-            });
-
-            // Run validation code on parsed input to ensure we have a sensible scenario.
-
-            Validate();
+            Console.WriteLine(message);
+            Error = true;
         }
 
         // Validate arguments
         //
         // Pass a single tool as --crossgen. Optionally specify a jit for crossgen to use.
         //
-        private void Validate()
+        public void Validate()
         {
-            if (_crossgenExe == null)
+            if (CrossgenExe == null)
             {
-                _syntaxResult.ReportError("Specify --crossgen.");
+                ReportError("Specify --crossgenExe.");
             }
 
-            if ((_fileName == null) && (_assemblyList.Count == 0))
+            if ((FileName == null) && (AssemblyList.Count == 0))
             {
-                _syntaxResult.ReportError("No input: Specify --file <arg> or list input assemblies.");
+                ReportError("No input: Specify --fileName or list input assemblies.");
             }
 
             // Check that we can find the crossgenExe
-            if (_crossgenExe != null)
+            if (CrossgenExe != null)
             {
-                if (!File.Exists(_crossgenExe))
+                if (!File.Exists(CrossgenExe))
                 {
-                    _syntaxResult.ReportError("Can't find --crossgen tool.");
+                    ReportError("Can't find --crossgen tool.");
                 }
                 else
                 {
                     // Set to full path for command resolution logic.
-                    string fullCrossgenPath = Path.GetFullPath(_crossgenExe);
-                    _crossgenExe = fullCrossgenPath;
+                    string fullCrossgenPath = Path.GetFullPath(CrossgenExe);
+                    CrossgenExe = fullCrossgenPath;
                 }
             }
 
             // Check that we can find the jit library.
-            if (_jitPath != null)
+            if (JitPath != null)
             {
-                if (!File.Exists(_jitPath))
+                if (!File.Exists(JitPath))
                 {
-                    _syntaxResult.ReportError("Can't find --jit library.");
+                    ReportError("Can't find --jit library.");
                 }
                 else
                 {
                     // Set to full path for command resolution logic.
-                    string fullJitPath = Path.GetFullPath(_jitPath);
-                    _jitPath = fullJitPath;
+                    string fullJitPath = Path.GetFullPath(JitPath);
+                    JitPath = fullJitPath;
                 }
             }
 
-            if (_fileName != null)
+            if (FileName != null)
             {
-                if (!File.Exists(_fileName))
+                if (!File.Exists(FileName))
                 {
-                    var message = String.Format("Error reading input file {0}, file not found.", _fileName);
-                    _syntaxResult.ReportError(message);
+                    var message = String.Format("Error reading input file {0}, file not found.", FileName);
+                    ReportError(message);
                 }
             }
         }
 
         public bool HasUserAssemblies { get { return AssemblyList.Count > 0; } }
-        public bool WaitForDebugger { get { return _wait; } }
-        public bool UseJitPath { get { return (_jitPath != null); } }
-        public bool Recursive { get { return _recursive; } }
-        public bool UseFileName { get { return (_fileName != null); } }
-        public bool DumpGCInfo { get { return _dumpGCInfo; } }
-        public bool DumpDebugInfo { get { return _dumpDebugInfo; } }
-        public bool DoVerboseOutput { get { return _verbose; } }
-        public string CrossgenExecutable { get { return _crossgenExe; } }
-        public string JitPath { get { return _jitPath; } }
-        public string AltJit { get { return _altjit; } }
-        public string RootPath { get { return _rootPath; } }
-        public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
-        public string FileName { get { return _fileName; } }
-        public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
+        public bool Wait { get; set; }
+        public bool UseJitPath { get { return (JitPath != null); } }
+        public bool Recursive { get; set; }
+        public bool UseFileName { get { return (FileName != null); } }
+        public bool DumpGCInfo { get; set; }
+        public bool DumpDebugInfo { get; set; }
+        public bool Verbose { get; set; }
+        public string CrossgenExe { get; set; }
+        public string JitPath { get; set; }
+        public string AltJit { get; set; }
+        public string RootPath { get; set; }
+        public IReadOnlyList<string> Platform { get; set; }
+        public string FileName { get; set; }
+        public IReadOnlyList<string> AssemblyList { get; set; }
+        public bool Error { get; set; }
     }
 
     public class AssemblyInfo
@@ -168,49 +133,79 @@ namespace ManagedCodeGen
     {
         public static int Main(string[] args)
         {
-            // Error count will be returned.  Start at 0 - this will be incremented
-            // based on the error counts derived from the DisasmEngine executions.
-            int errorCount = 0;
+            RootCommand rootCommand = new RootCommand();
 
-            // Parse and store comand line options.
-            var config = new Config(args);
+            Option altJitOption = new Option("--altjit", "If set, the name of the altjit to use (e.g., protononjit.dll).", new Argument<string>());
+            Option crossgenExeOption = new Option("--crossgenExe", "The crossgen compiler exe.", new Argument<string>());
+            crossgenExeOption.AddAlias("-c");
+            Option jitPathOption = new Option("--jitPath", "The full path to the jit library.", new Argument<string>());
+            jitPathOption.AddAlias("-j");
+            Option outputOption = new Option("--output", "The output path.", new Argument<string>());
+            outputOption.AddAlias("-o");
+            Option fileNameOption = new Option("--fileName", "Name of file to take list of assemblies from. Both a file and assembly list can be used.", new Argument<string>());
+            fileNameOption.AddAlias("-f");
+            Option gcInfoOption = new Option("--gcinfo", "Add GC info to the disasm output.", new Argument<bool>());
+            Option debugInfoOption = new Option("--debuginfo", "Add Debug info to the disasm output.", new Argument<bool>());
+            Option verboseOption = new Option("--verbose", "Enable verbose output.", new Argument<bool>());
+            verboseOption.AddAlias("-v");
+            Option recursiveOption = new Option("--recursive", "Scan directories recursively", new Argument<bool>());
+            recursiveOption.AddAlias("-r");
+            Option platformOption = new Option("--platform", "Path to platform assemblies", new Argument<string>() { Arity = ArgumentArity.OneOrMore });
+            platformOption.AddAlias("-p");
 
-            // Stop to attach a debugger if desired.
-            if (config.WaitForDebugger)
+            Argument assemblies = new Argument<string>() { Arity = ArgumentArity.OneOrMore };
+            assemblies.Name = "assemblyList";
+
+            rootCommand.AddOption(altJitOption);
+            rootCommand.AddOption(crossgenExeOption);
+            rootCommand.AddOption(jitPathOption);
+            rootCommand.AddOption(outputOption);
+            rootCommand.AddOption(fileNameOption);
+            rootCommand.AddOption(gcInfoOption);
+            rootCommand.AddOption(debugInfoOption);
+            rootCommand.AddOption(verboseOption);
+            rootCommand.AddOption(recursiveOption);
+            rootCommand.AddOption(platformOption);
+
+            rootCommand.AddArgument(assemblies);
+
+            rootCommand.Handler = CommandHandler.Create<Config>((config) =>
             {
-                WaitForDebugger();
-            }
+                config.Validate();
 
-            // Builds assemblyInfoList on jitdasm
+                if (config.Error)
+                {
+                    return -1;
+                }
 
-            List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
-            
-            // The disasm engine encapsulates a particular set of diffs.  An engine is
-            // produced with a given code generator and assembly list, which then produces
-            // a set of disasm outputs.
+                // Builds assemblyInfoList on jitdasm
 
-            DisasmEngine crossgenDisasm = new DisasmEngine(config.CrossgenExecutable, config, config.RootPath, assemblyWorkList);
-            crossgenDisasm.GenerateAsm();
-            
-            if (crossgenDisasm.ErrorCount > 0)
-            {
-                Console.Error.WriteLine("{0} errors compiling set.", crossgenDisasm.ErrorCount);
-                errorCount += crossgenDisasm.ErrorCount;
-            }
+                List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
 
-            return errorCount;
-        }
+                // The disasm engine encapsulates a particular set of diffs.  An engine is
+                // produced with a given code generator and assembly list, which then produces
+                // a set of disasm outputs.
 
-        private static void WaitForDebugger()
-        {
-            Console.WriteLine("Wait for a debugger to attach. Press ENTER to continue");
-            Console.WriteLine($"Process ID: {Process.GetCurrentProcess().Id}");
-            Console.ReadLine();
+                DisasmEngine crossgenDisasm = new DisasmEngine(config.CrossgenExe, config, config.RootPath, assemblyWorkList);
+                crossgenDisasm.GenerateAsm();
+
+                int errorCount = 0;
+
+                if (crossgenDisasm.ErrorCount > 0)
+                {
+                    Console.Error.WriteLine("{0} errors compiling set.", crossgenDisasm.ErrorCount);
+                    errorCount += crossgenDisasm.ErrorCount;
+                }
+
+                return errorCount;
+            });
+
+            return rootCommand.InvokeAsync(args).Result;
         }
 
         public static List<AssemblyInfo> GenerateAssemblyWorklist(Config config)
         {
-            bool verbose = config.DoVerboseOutput;
+            bool verbose = config.Verbose;
             List<string> assemblyList = new List<string>();
             List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
 
@@ -309,7 +304,7 @@ namespace ManagedCodeGen
 
             foreach (var filePath in subFiles)
             {
-                if (config.DoVerboseOutput)
+                if (config.Verbose)
                 {
                     Console.WriteLine("Scanning: {0}", filePath);
                 }
@@ -360,14 +355,14 @@ namespace ManagedCodeGen
                 _config = config;
                 _executablePath = executable;
                 _rootPath = outputPath;
-                _platformPaths = config.PlatformPaths;
+                _platformPaths = config.Platform;
                 _jitPath = config.JitPath;
                 _altjit = config.AltJit;
                 _assemblyInfoList = assemblyInfoList;
 
                 this.doGCDump = config.DumpGCInfo;
                 this.doDebugDump = config.DumpDebugInfo;
-                this.verbose = config.DoVerboseOutput;
+                this.verbose = config.Verbose;
             }
 
             class ScriptResolverPolicyWrapper : ICommandResolverPolicy
@@ -380,7 +375,7 @@ namespace ManagedCodeGen
                 // Build a command per assembly to generate the asm output.
                 foreach (var assembly in _assemblyInfoList)
                 {
-                    if (_config.DoVerboseOutput)
+                    if (_config.Verbose)
                     {
                         Console.WriteLine("assembly name: " + assembly.Name);
                     }
@@ -412,7 +407,7 @@ namespace ManagedCodeGen
                     }
                     
                     // Set platform assembly path if it's defined.
-                    if (_platformPaths.Count > 0)
+                    if ((_platformPaths != null) && (_platformPaths.Count > 0))
                     {
                         commandArgs.Insert(0, "/Platform_Assemblies_Paths");
                         commandArgs.Insert(1, String.Join(" ", _platformPaths));
