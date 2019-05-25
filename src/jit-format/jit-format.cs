@@ -37,6 +37,8 @@ namespace ManagedCodeGen
             private bool _rewriteCompileCommands = false;
             private JObject _jObj;
             private string _jitUtilsRoot = null;
+            private IReadOnlyList<string> _filenames = Array.Empty<string>();
+            private IReadOnlyList<string> _projects = Array.Empty<string>();
 
             void ReportError(string message)
             {
@@ -334,8 +336,16 @@ namespace ManagedCodeGen
             public string OS { get; set; }
             public string Build { get; set; }
             public string CompileCommands { get; set; }
-            public IReadOnlyList<string> Filenames { get; set; }
-            public IReadOnlyList<string> Projects { get; set; }
+            public IReadOnlyList<string> Filenames
+            {
+                get { return _filenames; }
+                set { _filenames = value; }
+            }
+            public IReadOnlyList<string> Projects
+            {
+                get { return _projects.Count == 0 ? new List<string> { "dll" } : _projects; }
+                set { _projects = value; }
+            }
             public string SourceDirectory { get; set; }
             public bool Error { get; set; }
         }
@@ -378,7 +388,7 @@ namespace ManagedCodeGen
             Option projectsOption = new Option("--projects", "List of build projects clang-tidy should consider (e.g. dll, standalone, protojit, etc.). Default: dll", 
                 new Argument<string>() { Arity = ArgumentArity.OneOrMore });
 
-            Argument fileNameList = new Argument<string>() { Arity = ArgumentArity.OneOrMore };
+            Argument fileNameList = new Argument<string>() { Arity = ArgumentArity.ZeroOrMore };
             fileNameList.Name = "filenames";
             fileNameList.Description = "Optional list of files that should be formatted.";
 
