@@ -125,7 +125,7 @@ namespace ManagedCodeGen
             {
                 DiffTool result = null;
 
-                switch (config.DoCommand)
+                switch (config.Command)
                 {
                     case Commands.Diff:
                         result = new CrossgenDiffTool(config);
@@ -134,7 +134,7 @@ namespace ManagedCodeGen
                         result = new PmiDiffTool(config);
                         break;
                     default:
-                        Console.WriteLine($"Unexpected command for diff: {config.DoCommand}");
+                        Console.WriteLine($"Unexpected command for diff: {config.Command}");
                         break;
 
                 }
@@ -182,7 +182,7 @@ namespace ManagedCodeGen
             {
                 List<string> args = ConstructArgs(commandArgs, clrPath);
 
-                string outputPath = Path.Combine(m_config.OutputPath, tagBaseDiff, assemblyInfo.OutputPath);
+                string outputPath = Path.Combine(m_config.Output, tagBaseDiff, assemblyInfo.OutputPath);
                 args.Add("--output");
                 args.Add(outputPath);
 
@@ -197,11 +197,11 @@ namespace ManagedCodeGen
                 {
                     if (m_config.DoBaseCompiles)
                     {
-                        StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
+                        StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.Base, assemblyInfo);
                     }
                     if (m_config.DoDiffCompiles)
                     {
-                        StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
+                        StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.Diff, assemblyInfo);
                     }
                 }
 
@@ -260,7 +260,7 @@ namespace ManagedCodeGen
                     diffString += "System.Private.CoreLib.dll";
                     needPrefix = true;
                 }
-                else if (config.DoFrameworks)
+                else if (config.Frameworks)
                 {
                     diffString += "System.Private.CoreLib.dll, framework assemblies";
                     needPrefix = true;
@@ -269,17 +269,17 @@ namespace ManagedCodeGen
                 if (config.Benchmarks)
                 {
                     if (needPrefix) diffString += ", ";
-                    diffString += "benchstones and benchmarks game in " + config.TestRoot;
+                    diffString += "benchstones and benchmarks game in " + config.Test_Root;
                     needPrefix = true;
                 }
-                else if (config.DoTestTree)
+                else if (config.Tests)
                 {
                     if (needPrefix) diffString += ", ";
-                    diffString += "assemblies in " + config.TestRoot;
+                    diffString += "assemblies in " + config.Test_Root;
                     needPrefix = true;
                 }
 
-                foreach (string assembly in config.AssemblyList)
+                foreach (string assembly in config.Assembly)
                 {
                     if (needPrefix) diffString += ", ";
                     diffString += assembly;
@@ -294,14 +294,14 @@ namespace ManagedCodeGen
                 List<string> commandArgs = new List<string>();
 
                 commandArgs.Add("--platform");
-                commandArgs.Add(config.CoreRoot);
+                commandArgs.Add(config.Core_Root);
 
-                if (config.GenerateGCInfo)
+                if (config.GcInfo)
                 {
                     commandArgs.Add("--gcinfo");
                 }
 
-                if (config.GenerateDebugInfo)
+                if (config.DebugInfo)
                 {
                     commandArgs.Add("--debuginfo");
                 }
@@ -317,7 +317,7 @@ namespace ManagedCodeGen
                     commandArgs.Add(config.AltJit);
                 }
 
-                if ((config.DoCommand == Commands.PmiDiff) && config.Cctors)
+                if ((config.Command == Commands.PmiDiff) && config.Cctors)
                 {
                     commandArgs.Add("--cctors");
                     diffString += " [invoking .cctors]";
@@ -327,7 +327,7 @@ namespace ManagedCodeGen
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
                 DasmResult dasmResult = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
                 Console.WriteLine($"Completed {diffString} in {(DateTime.Now - startTime).TotalSeconds:F2}s");
-                Console.WriteLine($"Diffs (if any) can be viewed by comparing: {Path.Combine(config.OutputPath, "base")} {Path.Combine(config.OutputPath, "diff")}");
+                Console.WriteLine($"Diffs (if any) can be viewed by comparing: {Path.Combine(config.Output, "base")} {Path.Combine(config.Output, "diff")}");
 
                 // Analyze completed run.
 
@@ -336,19 +336,19 @@ namespace ManagedCodeGen
                     List<string> analysisArgs = new List<string>();
 
                     analysisArgs.Add("--base");
-                    analysisArgs.Add(Path.Combine(config.OutputPath, "base"));
+                    analysisArgs.Add(Path.Combine(config.Output, "base"));
                     analysisArgs.Add("--diff");
-                    analysisArgs.Add(Path.Combine(config.OutputPath, "diff"));
+                    analysisArgs.Add(Path.Combine(config.Output, "diff"));
                     analysisArgs.Add("--recursive");
                     analysisArgs.Add("--note");
 
                     string jitName = config.AltJit ?? "default jit";
                     analysisArgs.Add($"{diffString} for {config.Arch} {jitName}");
 
-                    if (config.tsv)
+                    if (config.Tsv)
                     {
                         analysisArgs.Add("--tsv");
-                        analysisArgs.Add(Path.Combine(config.OutputPath, "diffs.tsv"));
+                        analysisArgs.Add(Path.Combine(config.Output, "diffs.tsv"));
                     }
 
                     if (config.Verbose)
@@ -384,7 +384,7 @@ namespace ManagedCodeGen
             {
                 List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
 
-                foreach (string assembly in config.AssemblyList)
+                foreach (string assembly in config.Assembly)
                 {
                     if (Directory.Exists(assembly))
                     {
@@ -411,11 +411,11 @@ namespace ManagedCodeGen
                 // These files will all be put in the same output directory. This
                 // works because they all have unique names, and live in the same
                 // source directory already.
-                if (config.CoreLib || config.DoFrameworks)
+                if (config.CoreLib || config.Frameworks)
                 {
                     foreach (var assembly in config.CoreLib ? s_CoreLibAssembly : s_frameworkAssemblies)
                     {
-                        string fullPathAssembly = Path.Combine(config.CoreRoot, assembly);
+                        string fullPathAssembly = Path.Combine(config.Core_Root, assembly);
 
                         if (!File.Exists(fullPathAssembly))
                         {
@@ -435,9 +435,9 @@ namespace ManagedCodeGen
 
                 // The tests are in a tree hierarchy of directories. We will output these to a tree
                 // structure matching their source tree structure, to avoid name conflicts.
-                if (config.Benchmarks || config.DoTestTree)
+                if (config.Benchmarks || config.Tests)
                 {
-                    string basepath = config.Benchmarks ? Utility.CombinePath(config.TestRoot, s_benchmarksPath) : config.TestRoot;
+                    string basepath = config.Benchmarks ? Utility.CombinePath(config.Test_Root, s_benchmarksPath) : config.Test_Root;
                     foreach (var dir in config.Benchmarks ? s_benchmarkDirectories : s_testDirectories)
                     {
                         string fullPathDir = Path.Combine(basepath, dir);
@@ -516,11 +516,11 @@ namespace ManagedCodeGen
                 dasmArgs.Add("--crossgen");
                 if (m_config.HasCrossgenExe)
                 {
-                    dasmArgs.Add(m_config.CrossgenExe);
+                    dasmArgs.Add(m_config.Crossgen);
                 }
                 else
                 {
-                    var crossgenPath = Path.Combine(m_config.CoreRoot, GetCrossgenExecutableName(m_config.PlatformMoniker));
+                    var crossgenPath = Path.Combine(m_config.Core_Root, GetCrossgenExecutableName(m_config.PlatformMoniker));
                     if (!File.Exists(crossgenPath))
                     {
                         Console.Error.WriteLine("crossgen not found at {0}", crossgenPath);
@@ -564,7 +564,7 @@ namespace ManagedCodeGen
             {
                 m_name = "PMI";
                 m_commandName = s_asmToolJit;
-                m_corerunPath = Path.Combine(m_config.CoreRoot, GetCorerunExecutableName(m_config.PlatformMoniker));
+                m_corerunPath = Path.Combine(m_config.Core_Root, GetCorerunExecutableName(m_config.PlatformMoniker));
                 m_defaultJitName = GetJitLibraryName(m_config.PlatformMoniker);
                 if (m_config.AltJit != null)
                 {
@@ -607,9 +607,9 @@ namespace ManagedCodeGen
 
             void InstallBaseJit()
             {
-                string existingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
-                string testJitPath = Path.Combine(m_config.BasePath, m_testJitName);
+                string existingJitPath = Path.Combine(m_config.Core_Root, m_testJitName);
+                string backupJitPath = Path.Combine(m_config.Core_Root, "backup-" + m_testJitName);
+                string testJitPath = Path.Combine(m_config.Base, m_testJitName);
                 if (File.Exists(existingJitPath))
                 {
                     if (m_config.Verbose)
@@ -627,9 +627,9 @@ namespace ManagedCodeGen
 
             void InstallDiffJit()
             {
-                string exitingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
-                string testJitPath = Path.Combine(m_config.DiffPath, m_testJitName);
+                string exitingJitPath = Path.Combine(m_config.Core_Root, m_testJitName);
+                string backupJitPath = Path.Combine(m_config.Core_Root, "backup-" + m_testJitName);
+                string testJitPath = Path.Combine(m_config.Diff, m_testJitName);
                 if (File.Exists(exitingJitPath))
                 {
                     if (m_config.Verbose)
@@ -647,8 +647,8 @@ namespace ManagedCodeGen
 
             void RestoreDefaultJit()
             {
-                string existingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
+                string existingJitPath = Path.Combine(m_config.Core_Root, m_testJitName);
+                string backupJitPath = Path.Combine(m_config.Core_Root, "backup-" + m_testJitName);
                 if (File.Exists(backupJitPath))
                 {
                     if (m_config.Verbose)
@@ -672,7 +672,7 @@ namespace ManagedCodeGen
                         InstallBaseJit();
                         foreach (var assemblyInfo in assemblyWorkList)
                         {
-                            StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
+                            StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.Base, assemblyInfo);
                         }
 
                         progressBar.AwaitTasksAndShowProgress(assemblyWorkList, m_config, DasmWorkTasks, !m_config.DoDiffCompiles);
@@ -690,7 +690,7 @@ namespace ManagedCodeGen
                         InstallDiffJit();
                         foreach (var assemblyInfo in assemblyWorkList)
                         {
-                            StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
+                            StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.Diff, assemblyInfo);
                         }
 
                         progressBar.AwaitTasksAndShowProgress(assemblyWorkList, m_config, DasmWorkTasks, true);
