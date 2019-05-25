@@ -14,148 +14,98 @@
 //
 
 using System;
-using System.Diagnostics;
 using System.CommandLine;
+using System.CommandLine.Invocation;
 using System.IO;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
 using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Tools.Common;
+using Command = Microsoft.DotNet.Cli.Utils.Command;
+using CommandResult = Microsoft.DotNet.Cli.Utils.CommandResult;
 
 namespace ManagedCodeGen
 {
-    // Define options to be parsed 
     public class Config
     {
-        private ArgumentSyntax _syntaxResult;
-        private string _altjit = null;
-        private string _corerunExe = null;
-        private string _jitPath = null;
-        private string _rootPath = null;
-        private string _fileName = null;
-        private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
-        private bool _wait = false;
-        private bool _recursive = false;
-        private IReadOnlyList<string> _methods = Array.Empty<string>();
-        private IReadOnlyList<string> _platformPaths = Array.Empty<string>();
-        private bool _dumpGCInfo = false;
-        private bool _dumpDebugInfo = false;
-        private bool _noCopyJit = false;
-        private bool _verbose = false;
-        private bool _tiering = false;
-        private bool _cctors = false;
-
-        public Config(string[] args)
+        void ReportError(string message)
         {
-            _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
-            {
-                syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
-                syntax.DefineOption("c|corerun", ref _corerunExe, "The corerun compiler exe.");
-                syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
-                syntax.DefineOption("o|output", ref _rootPath, "The output path.");
-                syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
-                syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
-                syntax.DefineOption("debuginfo", ref _dumpDebugInfo, "Add Debug info to the disasm output.");
-                syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
-                syntax.DefineOption("t|tiering", ref _tiering, "Enable tiered jitting");
-                syntax.DefineOption("cctors", ref _cctors, "Jit and run cctors before jitting other methods");
-                syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
-                syntax.DefineOptionList("p|platform", ref _platformPaths, "Path to platform assemblies");
-
-                var waitArg = syntax.DefineOption("w|wait", ref _wait, "Wait for debugger to attach.");
-                waitArg.IsHidden = true;
-
-                var methodsArg = syntax.DefineOptionList("m|methods", ref _methods, "List of methods to disasm.");
-                methodsArg.IsHidden = true;
-
-                var noCopyArg = syntax.DefineOption("nocopy", ref _noCopyJit, "Correct jit has already been copied into the corerun directory");
-                noCopyArg.IsHidden = true;
-
-                // Warning!! - Parameters must occur after options to preserve parsing semantics.
-
-                syntax.DefineParameterList("assembly", ref _assemblyList, "The list of assemblies or directories to scan for assemblies.");
-            });
-
-            // Run validation code on parsed input to ensure we have a sensible scenario.
-
-            Validate();
+            Console.WriteLine(message);
+            Error = true;
         }
 
         // Validate arguments
         //
         // Pass a single tool as --corerun. Optionally specify a jit for corerun to use.
         //
-        private void Validate()
+        public void Validate()
         {
-            if (_corerunExe == null)
+            // Corerun must be specified and exist
+            if (Corerun == null)
             {
-                _syntaxResult.ReportError("Specify --corerun.");
+                ReportError("You must specify --corerun.");
+            }
+            else if (!File.Exists(Corerun))
+            {
+                ReportError("Can't find --corerun tool.");
+            }
+            else
+            {
+                // Set to full path for command resolution logic.
+                string fullCorerunPath = Path.GetFullPath(Corerun);
+                Corerun = fullCorerunPath;
             }
 
-            if ((_fileName == null) && (_assemblyList.Count == 0))
+            // JitPath must be specified and exist.
+            if (JitPath == null)
             {
-                _syntaxResult.ReportError("No input: Specify --file <arg> or list input assemblies.");
+                ReportError("You must specify --jitPath.");
+            }
+            else if (!File.Exists(JitPath))
+            {
+                ReportError("Can't find --jitPath library.");
+            }
+            else
+            {
+                // Set to full path for command resolution logic.
+                string fullJitPath = Path.GetFullPath(JitPath);
+                JitPath = fullJitPath;
             }
 
-            // Check that we can find the corerunExe
-            if (_corerunExe != null)
+            if ((FileName == null) && (AssemblyList.Count == 0))
             {
-                if (!File.Exists(_corerunExe))
-                {
-                    _syntaxResult.ReportError("Can't find --corerun tool.");
-                }
-                else
-                {
-                    // Set to full path for command resolution logic.
-                    string fullCorerunPath = Path.GetFullPath(_corerunExe);
-                    _corerunExe = fullCorerunPath;
-                }
+                ReportError("No input: Specify --fileName <arg> or list input assemblies.");
             }
 
-            // Check that we can find the jit library.
-            if (_jitPath != null)
+            if (FileName != null)
             {
-                if (!File.Exists(_jitPath))
+                if (!File.Exists(FileName))
                 {
-                    _syntaxResult.ReportError("Can't find --jit library.");
-                }
-                else
-                {
-                    // Set to full path for command resolution logic.
-                    string fullJitPath = Path.GetFullPath(_jitPath);
-                    _jitPath = fullJitPath;
-                }
-            }
-
-            if (_fileName != null)
-            {
-                if (!File.Exists(_fileName))
-                {
-                    var message = String.Format("Error reading input file {0}, file not found.", _fileName);
-                    _syntaxResult.ReportError(message);
+                    var message = String.Format("Error reading input file {0}, file not found.", FileName);
+                    ReportError(message);
                 }
             }
         }
 
         public bool HasUserAssemblies { get { return AssemblyList.Count > 0; } }
-        public bool WaitForDebugger { get { return _wait; } }
-        public bool UseJitPath { get { return (_jitPath != null); } }
-        public bool Recursive { get { return _recursive; } }
-        public bool UseFileName { get { return (_fileName != null); } }
-        public bool DumpGCInfo { get { return _dumpGCInfo; } }
-        public bool DumpDebugInfo { get { return _dumpDebugInfo; } }
-        public bool DoVerboseOutput { get { return _verbose; } }
-        public bool CopyJit { get { return !_noCopyJit; } }
-        public string CorerunExecutable { get { return _corerunExe; } }
-        public string JitPath { get { return _jitPath; } }
-        public string AltJit { get { return _altjit; } }
-        public string RootPath { get { return _rootPath; } }
-        public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
-        public string FileName { get { return _fileName; } }
-        public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
-        public bool Tiering => _tiering;
-        public bool Cctors => _cctors;
+        public bool Recursive { get; set; }
+        public bool UseFileName { get { return (FileName != null); } }
+        public bool DumpGCInfo { get; set; }
+        public bool DumpDebugInfo { get; set; }
+        public bool Verbose { get; set; }
+        public bool NoCopy { get; set; }
+        public bool CopyJit { get { return !NoCopy; } }
+        public string Corerun { get; set; }
+        public string JitPath { get; set; }
+        public string AltJit { get; set; }
+        public string RootPath { get; set; }
+        public IReadOnlyList<string> Platform { get; set; }
+        public string FileName { get; set; }
+        public IReadOnlyList<string> AssemblyList { get; set; }
+        public bool Tiering { get; set; }
+        public bool Cctors { get; set; }
+        public bool Error { get; set; }
     }
 
     public class AssemblyInfo
@@ -172,49 +122,90 @@ namespace ManagedCodeGen
     {
         public static int Main(string[] args)
         {
-            // Error count will be returned.  Start at 0 - this will be incremented
-            // based on the error counts derived from the DisasmEngine executions.
-            int errorCount = 0;
+            RootCommand rootCommand = new RootCommand();
 
-            // Parse and store comand line options.
-            var config = new Config(args);
+            Option altJitOption = new Option("--altjit", "If set, the name of the altjit to use (e.g., protononjit.dll).", new Argument<string>());
+            Option corerunOption = new Option("--corerun", "Path to corerun.", new Argument<string>());
+            corerunOption.AddAlias("-c");
+            Option jitPathOption = new Option("--jitPath", "The full path to the jit library.", new Argument<string>());
+            jitPathOption.AddAlias("-j");
+            Option outputOption = new Option("--output", "The output path.", new Argument<string>());
+            outputOption.AddAlias("-o");
+            Option fileNameOption = new Option("--fileName", "Name of file to take list of assemblies from. Both a file and assembly list can be used.", new Argument<string>());
+            fileNameOption.AddAlias("-f");
+            Option gcInfoOption = new Option("--gcinfo", "Add GC info to the disasm output.", new Argument<bool>());
+            Option debugInfoOption = new Option("--debuginfo", "Add Debug info to the disasm output.", new Argument<bool>());
+            Option verboseOption = new Option("--verbose", "Enable verbose output.", new Argument<bool>());
+            verboseOption.AddAlias("-v");
+            Option recursiveOption = new Option("--recursive", "Scan directories recursively", new Argument<bool>());
+            recursiveOption.AddAlias("-r");
+            Option platformOption = new Option("--platform", "Path to platform assemblies", new Argument<string>() { Arity = ArgumentArity.OneOrMore });
+            platformOption.AddAlias("-p");
+            Option tieringOption = new Option("--tiering", "Enable tiered jitting", new Argument<bool>());
+            tieringOption.AddAlias("-t");
+            Option cctorOption = new Option("--cctors", "Jit and run cctors before jitting other methods", new Argument<bool>());
+            Option methodsOption = new Option("--methods", "List of methods to disasm.", new Argument<string>() { Arity = ArgumentArity.OneOrMore });
+            methodsOption.AddAlias("-m");
+            Option noCopyOption = new Option("--nocopy", "Correct jit has already been copied into the corerun directory", new Argument<bool>());
+            noCopyOption.IsHidden = true;
 
-            // Stop to attach a debugger if desired.
-            if (config.WaitForDebugger)
+            Argument assemblies = new Argument<string>() { Arity = ArgumentArity.OneOrMore };
+            assemblies.Name = "assemblyList";
+
+            rootCommand.AddOption(altJitOption);
+            rootCommand.AddOption(corerunOption);
+            rootCommand.AddOption(jitPathOption);
+            rootCommand.AddOption(outputOption);
+            rootCommand.AddOption(fileNameOption);
+            rootCommand.AddOption(gcInfoOption);
+            rootCommand.AddOption(debugInfoOption);
+            rootCommand.AddOption(verboseOption);
+            rootCommand.AddOption(recursiveOption);
+            rootCommand.AddOption(platformOption);
+            rootCommand.AddOption(tieringOption);
+            rootCommand.AddOption(cctorOption);
+            rootCommand.AddOption(methodsOption);
+            rootCommand.AddOption(noCopyOption);
+
+            rootCommand.AddArgument(assemblies);
+
+            rootCommand.Handler = CommandHandler.Create<Config>((config) =>
             {
-                WaitForDebugger();
-            }
+                config.Validate();
 
-            // Builds assemblyInfoList on jitdasm
+                if (config.Error)
+                {
+                    return -1;
+                }
 
-            List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
+                int errorCount = 0;
 
-            // The disasm engine encapsulates a particular set of diffs.  An engine is
-            // produced with a given code generator and assembly list, which then produces
-            // a set of disasm outputs.
+                // Builds assemblyInfoList on jitdasm
 
-            DisasmEnginePmi corerunDisasm = new DisasmEnginePmi(config.CorerunExecutable, config, config.RootPath, assemblyWorkList);
-            corerunDisasm.GenerateAsm();
+                List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
 
-            if (corerunDisasm.ErrorCount > 0)
-            {
-                Console.Error.WriteLine("{0} errors compiling set.", corerunDisasm.ErrorCount);
-                errorCount += corerunDisasm.ErrorCount;
-            }
+                // The disasm engine encapsulates a particular set of diffs.  An engine is
+                // produced with a given code generator and assembly list, which then produces
+                // a set of disasm outputs.
 
-            return errorCount;
-        }
+                DisasmEnginePmi corerunDisasm = new DisasmEnginePmi(config.Corerun, config, config.RootPath, assemblyWorkList);
+                corerunDisasm.GenerateAsm();
 
-        private static void WaitForDebugger()
-        {
-            Console.WriteLine("Wait for a debugger to attach. Press ENTER to continue");
-            Console.WriteLine($"Process ID: {Process.GetCurrentProcess().Id}");
-            Console.ReadLine();
+                if (corerunDisasm.ErrorCount > 0)
+                {
+                    Console.Error.WriteLine("{0} errors compiling set.", corerunDisasm.ErrorCount);
+                    errorCount += corerunDisasm.ErrorCount;
+                }
+
+                return errorCount;
+            });
+
+            return rootCommand.InvokeAsync(args).Result;
         }
 
         public static List<AssemblyInfo> GenerateAssemblyWorklist(Config config)
         {
-            bool verbose = config.DoVerboseOutput;
+            bool verbose = config.Verbose;
             List<string> assemblyList = new List<string>();
             List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
 
@@ -313,7 +304,7 @@ namespace ManagedCodeGen
 
             foreach (var filePath in subFiles)
             {
-                if (config.DoVerboseOutput)
+                if (config.Verbose)
                 {
                     Console.WriteLine("Scanning: {0}", filePath);
                 }
@@ -371,14 +362,14 @@ namespace ManagedCodeGen
                 _config = config;
                 _executablePath = executable;
                 _rootPath = outputPath;
-                _platformPaths = config.PlatformPaths;
+                _platformPaths = config.Platform;
                 _jitPath = config.JitPath;
                 _altjit = config.AltJit;
                 _assemblyInfoList = assemblyInfoList;
 
                 this.doGCDump = config.DumpGCInfo;
                 this.doDebugDump = config.DumpDebugInfo;
-                this.verbose = config.DoVerboseOutput;
+                this.verbose = config.Verbose;
             }
 
             class ScriptResolverPolicyWrapper : ICommandResolverPolicy
@@ -388,7 +379,7 @@ namespace ManagedCodeGen
 
             public void GenerateAsm()
             {
-                string testOverlayDir = Path.GetDirectoryName(_config.CorerunExecutable);
+                string testOverlayDir = Path.GetDirectoryName(_config.Corerun);
                 string jitDir = Path.GetDirectoryName(_jitPath);
                 string realJitPath = Path.Combine(testOverlayDir, GetPmiJitLibraryName());
                 string tempJitPath = Path.Combine(testOverlayDir, GetPmiJitLibraryName("-backup"));
@@ -434,7 +425,7 @@ namespace ManagedCodeGen
                 // Build a command per assembly to generate the asm output.
                 foreach (var assembly in _assemblyInfoList)
                 {
-                    if (_config.DoVerboseOutput)
+                    if (_config.Verbose)
                     {
                         Console.WriteLine("assembly name: " + assembly.Name);
                     }
