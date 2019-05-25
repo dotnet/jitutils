@@ -21,6 +21,9 @@ using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using CommandResult = Microsoft.DotNet.Cli.Utils.CommandResult;
+using System.CommandLine.Invocation;
+using Process = System.Diagnostics.Process;
 
 namespace ManagedCodeGen
 {
@@ -31,50 +34,14 @@ namespace ManagedCodeGen
         {
             private static string s_configFileName = "config.json";
             private static string s_configFileRootKey = "format";
-
-            private ArgumentSyntax _syntaxResult;
-            private string _arch = null;
-            private string _os = null;
-            private string _build = null;
-            private string _rootPath = null;
-            private IReadOnlyList<string> _filenames = Array.Empty<string>();
-            private IReadOnlyList<string> _projects = Array.Empty<string>();
-            private string _srcDirectory = null;
-            private bool _untidy = false;
-            private bool _noformat = false;
-            private bool _fix = false;
-            private bool _verbose = false;
-            private bool _ignoreErrors = false;
-            private string _compileCommands = null;
             private bool _rewriteCompileCommands = false;
-
             private JObject _jObj;
             private string _jitUtilsRoot = null;
 
-            public Config(string[] args)
+            void ReportError(string message)
             {
-                LoadFileConfig();
-
-                _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
-                {
-                    syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: x64, x86)");
-                    syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Ubuntu, Fedora, etc.)");
-                    syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
-                    syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base coreclr directory");
-                    syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
-                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
-                    syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
-                    syntax.DefineOption("noformat", ref _noformat, "Do not run clang-format");
-                    syntax.DefineOption("f|fix", ref _fix, "Fix formatting errors discovered by clang-format and clang-tidy.");
-                    syntax.DefineOption("i|ignore-errors", ref _ignoreErrors, "Ignore clang-tidy errors");
-                    syntax.DefineOptionList("projects", ref _projects, "List of build projects clang-tidy should consider (e.g. dll, standalone, protojit, etc.). Default: dll");
-
-                    syntax.DefineParameterList("filenames", ref _filenames, "Optional list of files that should be formatted.");
-                });
-                
-                // Run validation code on parsed input to ensure we have a sensible scenario.
-
-                validate();
+                Console.WriteLine(message);
+                Error = true;
             }
 
             private void SetPlatform()
@@ -85,7 +52,7 @@ namespace ManagedCodeGen
 
                 if (result.ExitCode != 0)
                 {
-                    Console.Error.WriteLine("dotnet --info returned non-zero");
+                    ReportError("dotnet --info returned non-zero");
                 }
 
                 var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
@@ -98,140 +65,143 @@ namespace ManagedCodeGen
                     {
                         if (match.Groups[1].Value.Trim() == "Windows")
                         {
-                            _os = "Windows_NT";
+                            OS = "Windows_NT";
                         }
                         else if (match.Groups[1].Value.Trim() == "Darwin")
                         {
-                            _os = "OSX";
+                            OS = "OSX";
                         }
                         else if (match.Groups[1].Value.Trim() == "Linux")
                         {
                             // Assuming anything other than Windows or OSX is a Linux flavor
-                            _os = "Linux";
+                            OS = "Linux";
                         }
                         else
                         {
-                            Console.WriteLine("Unknown operating system. Please specify with --os");
-                            Environment.Exit(-1);
+                            ReportError("Unknown operating system. Please specify with --os");
                         }
                     }
                 }
             }
 
-            private void validate()
+            public void Validate()
             {
-                if (_arch == null)
+                if (Arch == null)
                 {
-                    if (_verbose)
+                    if (Verbose)
                     {
                         Console.WriteLine("Defaulting architecture to x64.");
                     }
-                    _arch = "x64";
+                    Arch = "x64";
                 }
 
-                if (_build == null)
+                if (Build == null)
                 {
-                    if (_verbose)
+                    if (Verbose)
                     {
                         Console.WriteLine("Defaulting build to Debug.");
                     }
 
-                    _build = "Debug";
+                    Build = "Debug";
                 }
 
-                if (_os == null)
+                if (OS == null)
                 {
-                    if (_verbose)
+                    if (Verbose)
                     {
                         Console.WriteLine("Discovering operating system.");
                     }
 
                     SetPlatform();
 
-                    if (_verbose)
+                    if (Error)
                     {
-                        Console.WriteLine("Operating system is {0}", _os);
+                        return;
+                    }
+
+                    if (Verbose)
+                    {
+                        Console.WriteLine("Operating system is {0}", OS);
                     }
                 }
 
-                if (_os == "Windows")
+                if (OS == "Windows")
                 {
-                    _os = "Windows_NT";
+                    OS = "Windows_NT";
                 }
 
-                if (_srcDirectory == null)
+                if (SourceDirectory == null)
                 {
-                    if (_verbose)
+                    if (Verbose)
                     {
                         Console.WriteLine("Formatting jit directory.");
                     }
-                    _srcDirectory = "jit";
+                    SourceDirectory = "jit";
                 }
 
-                if (_projects.Count == 0 && _verbose)
+                if (Projects.Count == 0 && Verbose)
                 {
                     Console.WriteLine("Formatting dll project.");
                 }
 
-                if (!_untidy && ( (_arch == null) || (_os == null) || (_build == null)))
+                if (!Untidy && ( (Arch == null) || (OS == null) || (Build == null)))
                 {
-                    _syntaxResult.ReportError("Specify --arch, --plaform, and --build for clang-tidy run.");
+                    ReportError("Specify --arch, --plaform, and --build for clang-tidy run.");
                 }
 
-                if (_rootPath == null)
+                if (CoreCLR == null)
                 {
-                    if (_verbose)
+                    if (Verbose)
                     {
                         Console.WriteLine("Discovering --coreclr.");
                     }
-                    _rootPath = Utility.GetRepoRoot(_verbose);
-                    if (_rootPath == null)
+                    CoreCLR = Utility.GetRepoRoot(Verbose);
+                    if (CoreCLR == null)
                     {
-                        _syntaxResult.ReportError("Specify --coreclr");
+                        ReportError("Specify --coreclr");
                     }
                     else
                     {
-                        Console.WriteLine("Using --coreclr={0}", _rootPath);
+                        Console.WriteLine("Using --coreclr={0}", CoreCLR);
                     }
                 }
 
-                if (!Directory.Exists(_rootPath))
+                if (!Directory.Exists(CoreCLR))
                 {
                     // If _rootPath doesn't exist, it is an invalid path
-                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
+                    ReportError("Invalid path to coreclr directory. Specify with --coreclr");
                 }
-                else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")))
+                else if (!File.Exists(Path.Combine(CoreCLR, "build.cmd")) || !File.Exists(Path.Combine(CoreCLR, "build.sh")))
                 {
                     // If _rootPath\build.cmd or _rootPath\build.sh do not exist, it is an invalid path to a coreclr repo
-                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
+                    ReportError("Invalid path to coreclr directory. Specify with --coreclr");
                 }
 
                 // Check that we can find compile_commands.json on windows
-                if (_os == "Windows_NT")
+                if (OS == "Windows_NT")
                 {
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
-                    if (!_untidy && _compileCommands == null)
+                    if (!Untidy && CompileCommands == null)
                     {
-                        string[] compileCommandsPath = { _rootPath, "bin", "nmakeobj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
-                        _compileCommands = Path.Combine(compileCommandsPath);
+                        string[] compileCommandsPath = { CoreCLR, "bin", "nmakeobj", "Windows_NT." + Arch + "." + Build, "compile_commands.json" };
+                        CompileCommands = Path.Combine(compileCommandsPath);
                         _rewriteCompileCommands = true;
 
-                        if (!File.Exists(_compileCommands))
+                        if (!File.Exists(CompileCommands))
                         {
                             // We haven't done a build, so we need to do one.
-                            if (_verbose)
+                            if (Verbose)
                             {
-                                Console.WriteLine("Neither compile_commands.json exists, nor is there a build log. Running CMake to generate compile_commands.json.");
+                                ReportError("Neither compile_commands.json exists, nor is there a build log. Running CMake to generate compile_commands.json.");
                             }
 
-                            string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
-                            string buildPath = Path.Combine(_rootPath, "build.cmd");
-                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
+                            string[] commandArgs = { Arch, Build, "usenmakemakefiles" };
+                            string buildPath = Path.Combine(CoreCLR, "build.cmd");
+                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, !Verbose, CoreCLR);
 
                             if (result.ExitCode != 0)
                             {
-                                Console.WriteLine("There was an error running CMake to generate compile_commands.json. Please do a full build to generate a build log.");
-                                Environment.Exit(-1);
+                                ReportError("There was an error running CMake to generate compile_commands.json. Please do a full build to generate a build log.");
                             }
                         }
                     }
@@ -241,30 +211,29 @@ namespace ManagedCodeGen
                 else
                 {
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
-                    if (!_untidy && _compileCommands == null)
+                    if (!Untidy && CompileCommands == null)
                     {
-                        string[] compileCommandsPath = { _rootPath, "bin", "obj", _os + "." + _arch + "." + _build, "compile_commands.json" };
-                        _compileCommands = Path.Combine(compileCommandsPath);
+                        string[] compileCommandsPath = { CoreCLR, "bin", "obj", OS + "." + Arch + "." + Build, "compile_commands.json" };
+                        CompileCommands = Path.Combine(compileCommandsPath);
                         _rewriteCompileCommands = true;
 
                         if (!File.Exists(Path.Combine(compileCommandsPath)))
                         {
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
-                            string[] commandArgs = { _arch, _build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
-                            string buildPath = Path.Combine(_rootPath, "build.sh");
-                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, true, _rootPath);
+                            string[] commandArgs = { Arch, Build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
+                            string buildPath = Path.Combine(CoreCLR, "build.sh");
+                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, true, CoreCLR);
 
                             if (result.ExitCode != 0)
                             {
-                                Console.WriteLine("There was an error running CMake to generate compile_commands.json. Please run build.sh configureonly");
-                                Environment.Exit(-1);
+                                ReportError("There was an error running CMake to generate compile_commands.json. Please run build.sh configureonly");
                             }
                         }
                     }
                 }
             }
 
-            private void LoadFileConfig()
+            public void LoadFileConfig()
             {
                 _jitUtilsRoot = Environment.GetEnvironmentVariable("JIT_UTILS_ROOT");
 
@@ -285,39 +254,39 @@ namespace ManagedCodeGen
 
                             // Set up arch
                             var arch = ExtractDefault<string>("arch", out found);
-                            _arch = (found) ? arch : _arch;
+                            Arch = (found) ? arch : Arch;
 
                             // Set up build
                             var build = ExtractDefault<string>("build", out found);
-                            _build = (found) ? build : _build;
+                            Build = (found) ? build : Build;
 
                             // Set up os
                             var os = ExtractDefault<string>("os", out found);
-                            _os = (found) ? os : _os;
+                            OS = (found) ? os : OS;
 
                             // Set up core_root.
                             var rootPath = ExtractDefault<string>("coreclr", out found);
-                            _rootPath = (found) ? rootPath : _rootPath;
+                            CoreCLR = (found) ? rootPath : CoreCLR;
 
                             // Set up compileCommands
                             var compileCommands = ExtractDefault<string>("compile-commands", out found);
-                            _compileCommands = (found) ? compileCommands : _compileCommands;
+                            CompileCommands = (found) ? compileCommands : CompileCommands;
 
                             // Set flag from default for verbose.
                             var verbose = ExtractDefault<bool>("verbose", out found);
-                            _verbose = (found) ? verbose : _verbose;
+                            Verbose = (found) ? verbose : Verbose;
 
                             // Set up untidy
                             var untidy = ExtractDefault<bool>("untidy", out found);
-                            _untidy = (found) ? untidy : _untidy;
+                            Untidy = (found) ? untidy : Untidy;
 
                             // Set up noformat
                             var noformat = ExtractDefault<bool>("noformat", out found);
-                            _noformat = (found) ? noformat : _noformat;
+                            NoFormat = (found) ? noformat : NoFormat;
 
                             // Set up fix
                             var fix = ExtractDefault<bool>("fix", out found);
-                            _fix = (found) ? fix : _fix;
+                            Fix = (found) ? fix : Fix;
                         }
 
                         Console.WriteLine("Environment variable JIT_UTILS_ROOT found - configuration loaded.");
@@ -351,21 +320,24 @@ namespace ManagedCodeGen
                 return default(T);
             }
 
-            public bool IsWindows { get { return (_os == "Windows_NT"); } }
-            public bool DoVerboseOutput { get { return _verbose; } }
-            public bool DoClangTidy { get { return !_untidy; } }
-            public bool DoClangFormat { get { return !_noformat; } }
-            public bool Fix { get { return _fix; } }
-            public bool IgnoreErrors { get { return _ignoreErrors; } }
+            public bool IsWindows { get { return (OS == "Windows_NT"); } }
+            public bool Verbose { get; set; }
+            public bool Untidy { get; set; }
+            public bool DoClangTidy { get { return !Untidy; } }
+            public bool NoFormat { get; set; }
+            public bool DoClangFormat { get { return !NoFormat; } }
+            public bool Fix { get; set; }
+            public bool IgnoreErrors { get; set; }
             public bool RewriteCompileCommands { get { return _rewriteCompileCommands; } }
-            public string CoreCLRRoot { get { return _rootPath; } }
-            public string Arch { get { return _arch; } }
-            public string OS { get { return _os; } }
-            public string Build { get { return _build; } }
-            public string CompileCommands { get { return _compileCommands; } }
-            public IReadOnlyList<string> Filenames { get { return _filenames; } }
-            public IReadOnlyList<string> Projects { get { return _projects.Count == 0 ? new List<string>{"dll"} : _projects; } }
-            public string SourceDirectory { get { return _srcDirectory; } }
+            public string CoreCLR { get; set; }
+            public string Arch { get; set; }
+            public string OS { get; set; }
+            public string Build { get; set; }
+            public string CompileCommands { get; set; }
+            public IReadOnlyList<string> Filenames { get; set; }
+            public IReadOnlyList<string> Projects { get; set; }
+            public string SourceDirectory { get; set; }
+            public bool Error { get; set; }
         }
 
         private class CompileCommand
@@ -384,11 +356,66 @@ namespace ManagedCodeGen
 
         public static int Main(string[] args)
         {
-            // Parse and store comand line options.
-            var config = new Config(args);
+            RootCommand rootCommand = new RootCommand();
 
+            Option archOption = new Option("--arch", "The architecture of the build (options: x64, x86)", new Argument<string>());
+            archOption.AddAlias("-a");
+            Option osOption = new Option("--os", "The operating system of the build (options: Windows, OSX, Ubuntu, Fedora, etc.)", new Argument<string>());
+            osOption.AddAlias("-o");
+            Option buildOption = new Option("--build", "The build type of the build (options: Release, Checked, Debug)", new Argument<string>());
+            buildOption.AddAlias("-b");
+            Option coreclrOption = new Option("--coreclr", "Full path to base coreclr directory", new Argument<string>());
+            coreclrOption.AddAlias("-c");
+            Option compileCommandsOption = new Option("--compile-commands", "Full path to compile_commands.json", new Argument<string>());
+            Option verboseOption = new Option("--verbose", "Enable verbose output.", new Argument<bool>());
+            verboseOption.AddAlias("-v");
+            Option untidyOption = new Option("--untidy", "Do not run clang-tidy", new Argument<bool>());
+            Option noFormatOption = new Option("--noformat", "Do not run clang-format", new Argument<bool>());
+            Option fixOption = new Option("--fix", "Fix formatting errors discovered by clang-format and clang-tidy.", new Argument<bool>());
+            fixOption.AddAlias("-f");
+            Option ignoreOption = new Option("--ignore-errors", "Ignore clang-tidy errors", new Argument<bool>());
+            ignoreOption.AddAlias("-i");
+            Option projectsOption = new Option("--projects", "List of build projects clang-tidy should consider (e.g. dll, standalone, protojit, etc.). Default: dll", 
+                new Argument<string>() { Arity = ArgumentArity.OneOrMore });
+
+            Argument fileNameList = new Argument<string>() { Arity = ArgumentArity.OneOrMore };
+            fileNameList.Name = "filenames";
+            fileNameList.Description = "Optional list of files that should be formatted.";
+
+            rootCommand.AddOption(archOption);
+            rootCommand.AddOption(osOption);
+            rootCommand.AddOption(buildOption);
+            rootCommand.AddOption(coreclrOption);
+            rootCommand.AddOption(compileCommandsOption);
+            rootCommand.AddOption(verboseOption);
+            rootCommand.AddOption(untidyOption);
+            rootCommand.AddOption(noFormatOption);
+            rootCommand.AddOption(fixOption);
+            rootCommand.AddOption(ignoreOption);
+            rootCommand.AddOption(projectsOption);
+
+            rootCommand.AddArgument(fileNameList);
+
+            rootCommand.Handler = CommandHandler.Create<Config>((config) =>
+            {
+                config.LoadFileConfig();
+                config.Validate();
+
+                if (config.Error)
+                {
+                    return -1;
+                }
+
+                return Process(config);
+            });
+
+            return rootCommand.InvokeAsync(args).Result;
+        }
+
+        public static int Process(Config config)
+        { 
             int returncode = 0;
-            bool verbose = config.DoVerboseOutput;
+            bool verbose = config.Verbose;
 
             List<string> filenames = new List<string>();
 
@@ -396,7 +423,7 @@ namespace ManagedCodeGen
             if (config.Filenames.Count() == 0)
             {
                 // add all files to a list of files
-                foreach (string filename in Directory.GetFiles(Path.Combine(config.CoreCLRRoot, "src", config.SourceDirectory)))
+                foreach (string filename in Directory.GetFiles(Path.Combine(config.CoreCLR, "src", config.SourceDirectory)))
                 {
                     // if it's not a directory, add it to our list
                     if (!Directory.Exists(filename) && (filename.EndsWith(".cpp") || filename.EndsWith(".h") || filename.EndsWith(".hpp")))
@@ -410,9 +437,9 @@ namespace ManagedCodeGen
                 foreach (string filename in config.Filenames)
                 {
                     string prefix = "";
-                    if (!filename.Contains(config.CoreCLRRoot))
+                    if (!filename.Contains(config.CoreCLR))
                     {
-                        prefix = Path.Combine(config.CoreCLRRoot, "src", config.SourceDirectory);
+                        prefix = Path.Combine(config.CoreCLR, "src", config.SourceDirectory);
                     }
 
                     if (File.Exists(Path.Combine(prefix, filename)))
@@ -429,7 +456,7 @@ namespace ManagedCodeGen
 
             if (config.DoClangTidy)
             {
-                string[] newCompileCommandsDirPath = { config.CoreCLRRoot, "bin", "obj", config.OS + "." + config.Arch + "." + config.Build };
+                string[] newCompileCommandsDirPath = { config.CoreCLR, "bin", "obj", config.OS + "." + config.Arch + "." + config.Build };
                 string compileCommands = config.CompileCommands;
                 string newCompileCommandsDir = Path.Combine(newCompileCommandsDirPath);
                 string newCompileCommands = Path.Combine(newCompileCommandsDir, "compile_commands_full.json");
