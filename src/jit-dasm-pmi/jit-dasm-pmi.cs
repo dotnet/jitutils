@@ -58,19 +58,19 @@ namespace ManagedCodeGen
             }
 
             // JitPath must be specified and exist.
-            if (JitPath == null)
+            if (Jit == null)
             {
                 ReportError("You must specify --jitPath.");
             }
-            else if (!File.Exists(JitPath))
+            else if (!File.Exists(Jit))
             {
                 ReportError("Can't find --jitPath library.");
             }
             else
             {
                 // Set to full path for command resolution logic.
-                string fullJitPath = Path.GetFullPath(JitPath);
-                JitPath = fullJitPath;
+                string fullJitPath = Path.GetFullPath(Jit);
+                Jit = fullJitPath;
             }
 
             if ((FileName == null) && (AssemblyList.Count == 0))
@@ -97,9 +97,10 @@ namespace ManagedCodeGen
         public bool NoCopy { get; set; }
         public bool CopyJit { get { return !NoCopy; } }
         public string Corerun { get; set; }
-        public string JitPath { get; set; }
+        public string Jit { get; set; }
         public string AltJit { get; set; }
-        public string RootPath { get; set; }
+        public string Output { get; set; }
+        public string RootPath { get { return Output; } }
         public IReadOnlyList<string> Platform { get; set; }
         public string FileName { get; set; }
         public IReadOnlyList<string> AssemblyList { get; set; }
@@ -127,8 +128,8 @@ namespace ManagedCodeGen
             Option altJitOption = new Option("--altjit", "If set, the name of the altjit to use (e.g., protononjit.dll).", new Argument<string>());
             Option corerunOption = new Option("--corerun", "Path to corerun.", new Argument<string>());
             corerunOption.AddAlias("-c");
-            Option jitPathOption = new Option("--jitPath", "The full path to the jit library.", new Argument<string>());
-            jitPathOption.AddAlias("-j");
+            Option jitOption = new Option("--jit", "The full path to the jit library.", new Argument<string>());
+            jitOption.AddAlias("-j");
             Option outputOption = new Option("--output", "The output path.", new Argument<string>());
             outputOption.AddAlias("-o");
             Option fileNameOption = new Option("--fileName", "Name of file to take list of assemblies from. Both a file and assembly list can be used.", new Argument<string>());
@@ -139,7 +140,7 @@ namespace ManagedCodeGen
             verboseOption.AddAlias("-v");
             Option recursiveOption = new Option("--recursive", "Scan directories recursively", new Argument<bool>());
             recursiveOption.AddAlias("-r");
-            Option platformOption = new Option("--platform", "Path to platform assemblies", new Argument<string>() { Arity = ArgumentArity.OneOrMore });
+            Option platformOption = new Option("--platform", "Path to platform assemblies", new Argument<string>() { Arity = ArgumentArity.ExactlyOne });
             platformOption.AddAlias("-p");
             Option tieringOption = new Option("--tiering", "Enable tiered jitting", new Argument<bool>());
             tieringOption.AddAlias("-t");
@@ -154,7 +155,7 @@ namespace ManagedCodeGen
 
             rootCommand.AddOption(altJitOption);
             rootCommand.AddOption(corerunOption);
-            rootCommand.AddOption(jitPathOption);
+            rootCommand.AddOption(jitOption);
             rootCommand.AddOption(outputOption);
             rootCommand.AddOption(fileNameOption);
             rootCommand.AddOption(gcInfoOption);
@@ -363,7 +364,7 @@ namespace ManagedCodeGen
                 _executablePath = executable;
                 _rootPath = outputPath;
                 _platformPaths = config.Platform;
-                _jitPath = config.JitPath;
+                _jitPath = config.Jit;
                 _altjit = config.AltJit;
                 _assemblyInfoList = assemblyInfoList;
 
