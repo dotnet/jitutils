@@ -158,22 +158,32 @@ public class CustomLoadContext : AssemblyLoadContext
     }
 }
 #else
-public class CustomLoadContext
+public class CustomLoadContext : AssemblyLoadContext
 {
+    readonly static string s_pmiPath;
+
+    public string PmiPath => s_pmiPath;
+
     public CustomLoadContext(string ignored)
     {
     }
 
-    // Use .cctor to install the resolve handler
+    // Use .cctor to install the resolve handler and set PmiPath
     static CustomLoadContext()
     {
         AppDomain currentDomain = AppDomain.CurrentDomain;
         currentDomain.AssemblyResolve += new ResolveEventHandler(Resolver.ResolveEventHandler);
+        s_pmiPath = Environment.GetEnvironmentVariable("PMIPATH");
     }
 
     public Assembly LoadAssembly(string assemblyPath)
     {
         return Assembly.LoadFrom(assemblyPath);
+    }
+
+    protected override Assembly Load(AssemblyName assemblyName)
+    {
+        return Resolver.Resolve(assemblyName.Name + ".dll", this);
     }
 }
 #endif
