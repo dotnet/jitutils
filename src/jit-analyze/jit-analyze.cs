@@ -3,15 +3,16 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-using System.Diagnostics;
 using System.CommandLine;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
+using System.CommandLine.Invocation;
+using Command = Microsoft.DotNet.Cli.Utils.Command;
+using CommandResult = Microsoft.DotNet.Cli.Utils.CommandResult;
 
 namespace ManagedCodeGen
 {
@@ -19,76 +20,40 @@ namespace ManagedCodeGen
     {
         public class Config
         {
-            private ArgumentSyntax _syntaxResult;
-            private string _basePath = null;
-            private string _diffPath = null;
-            private bool _recursive = false;
-            private bool _full = false;
-            private bool _warn = false;
-            private int _count = 5;
-            private string _json;
-            private string _tsv;
-            private bool _noreconcile = false;
-            private string _note;
-            private string _filter;
-
-            public Config(string[] args)
+            void ReportError(string message)
             {
-                _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
-                {
-                    syntax.DefineOption("b|base", ref _basePath, "Base file or directory.");
-                    syntax.DefineOption("d|diff", ref _diffPath, "Diff file or directory.");
-                    syntax.DefineOption("r|recursive", ref _recursive, "Search directories recursively.");
-                    syntax.DefineOption("c|count", ref _count,
-                        "Count of files and methods (at most) to output in the summary."
-                      + " (count) improvements and (count) regressions of each will be included."
-                      + " (default 5)");
-                    syntax.DefineOption("w|warn", ref _warn,
-                        "Generate warning output for files/methods that only "
-                      + "exists in one dataset or the other (only in base or only in diff).");
-                    syntax.DefineOption("note", ref _note,
-                        "Descriptive note to add to summary output");
-                    syntax.DefineOption("noreconcile", ref _noreconcile,
-                        "Do not reconcile unique methods in base/diff");
-                    syntax.DefineOption("json", ref _json,
-                        "Dump analysis data to specified file in JSON format.");
-                    syntax.DefineOption("tsv", ref _tsv,
-                        "Dump analysis data to specified file in tab-separated format.");
-                    syntax.DefineOption("filter", ref _filter,
-                        "Only consider assembly files whose names match the filter");
-                });
-
-                // Run validation code on parsed input to ensure we have a sensible scenario.
-                validate();
+                Console.WriteLine(message);
+                Error = true;
             }
 
-            private void validate()
+            public void validate()
             {
-                if (_basePath == null)
+                if (Base == null)
                 {
-                    _syntaxResult.ReportError("Base path (--base) is required.");
+                    ReportError("Base path (--base) is required.");
                 }
 
-                if (_diffPath == null)
+                if (Diff == null)
                 {
-                    _syntaxResult.ReportError("Diff path (--diff) is required.");
+                    ReportError("Diff path (--diff) is required.");
                 }
             }
 
-            public string BasePath { get { return _basePath; } }
-            public string DiffPath { get { return _diffPath; } }
-            public bool Recursive { get { return _recursive; } }
-            public bool Full { get { return _full; } }
-            public bool Warn { get { return _warn; } }
-            public int Count { get { return _count; } }
-            public string TSVFileName { get { return _tsv; } }
-            public string JsonFileName { get { return _json; } }
-            public bool DoGenerateJson { get { return _json != null; } }
-            public bool DoGenerateTSV { get { return _tsv != null; } }
-            public bool Reconcile { get { return !_noreconcile; } }
-            public string Note { get { return _note; } }
-
-            public string Filter {  get { return _filter; } }
+            public string Base { get; set; }
+            public string Diff { get; set; }
+            public bool Recursive { get; set; }
+            public bool Full { get; set; }
+            public bool Warn { get; set; }
+            public int Count { get; set; }
+            public string TsvFileName { get; set; }
+            public string JsonFileName { get; set; }
+            public bool DoGenerateJson { get { return JsonFileName != null; } }
+            public bool DoGenerateTSV { get { return TsvFileName != null; } }
+            public bool NoReconcile { get; set; }
+            public bool Reconcile { get { return !NoReconcile; } }
+            public string Note { get; set; }
+            public string Filter { get; set; }
+            public bool Error { get; set; }
         }
 
         public class FileInfo
@@ -688,61 +653,102 @@ namespace ManagedCodeGen
 
         public static int Main(string[] args)
         {
-            // Parse incoming arguments
-            Config config = new Config(args);
+            RootCommand rootCommand = new RootCommand();
 
-            Dictionary<string, int> diffCounts = DiffInText(config.DiffPath, config.BasePath);
+            Option basePathOption = new Option("--base", "Base file or directory.", new Argument<string>());
+            basePathOption.AddAlias("-b");
+            Option diffPathOption = new Option("--diff", "Diff file or directory.", new Argument<string>());
+            diffPathOption.AddAlias("-d");
+            Option recursiveOption = new Option("--recursive", "Search directories recursively.", new Argument<bool>());
+            recursiveOption.AddAlias("-r");
+            Option countOption = new Option("--count", "Count of files and methods (at most) to output in the summary."
+                  + " (count) improvements and (count) regressions of each will be included."
+                  + " (default 5)", new Argument<uint>(5));
+            countOption.AddAlias("-c");
+            Option warnOption = new Option("--warn", "Generate warning output for files/methods that only "
+                  + "exists in one dataset or the other (only in base or only in diff).", new Argument<bool>());
+            warnOption.AddAlias("-w");
+            Option noReconcileOption = new Option("--noreconcile", "Do not reconcile unique methods in base/diff", new Argument<bool>());
+            Option noteOption = new Option("--note", "Descriptive note to add to summary output", new Argument<string>());
+            Option jsonOption = new Option("--jsonFileName", "Dump analysis data to specified file in JSON format.", new Argument<string>());
+            Option tsvOption = new Option("--tsvFileName", "Dump analysis data to specified file in tab-separated format.", new Argument<string>());
+            Option filterOption = new Option("--filter", "Only consider assembly files whose names match the filter", new Argument<string>());
 
-            // Early out if no textual diffs found.
-            if (diffCounts == null)
+            rootCommand.AddOption(basePathOption);
+            rootCommand.AddOption(diffPathOption);
+            rootCommand.AddOption(recursiveOption);
+            rootCommand.AddOption(countOption);
+            rootCommand.AddOption(warnOption);
+            rootCommand.AddOption(noReconcileOption);
+            rootCommand.AddOption(noteOption);
+            rootCommand.AddOption(jsonOption);
+            rootCommand.AddOption(tsvOption);
+            rootCommand.AddOption(filterOption);
+
+            rootCommand.Handler = CommandHandler.Create<Config>((config) =>
             {
-                Console.WriteLine("No diffs found.");
-                return 0;
-            }
+                config.validate();
 
-            try
-            {
-                // Extract method info from base and diff directory or file.
-                var baseList = ExtractFileInfo(config.BasePath, config.Filter, config.Recursive);
-                var diffList = ExtractFileInfo(config.DiffPath, config.Filter, config.Recursive);
-
-                // Compare the method info for each file and generate a list of
-                // non-zero deltas.  The lists that include files in one but not
-                // the other are used as the comparator function only compares where it 
-                // has both sides.
-
-                var compareList = Comparator(baseList, diffList, config);
-
-                // Generate warning lists if requested.
-                if (config.Warn)
+                if (config.Error)
                 {
-                    WarnFiles(diffList, baseList);
-                    WarnMethods(compareList);
+                    return -1;
                 }
 
-                if (config.DoGenerateTSV)
+                Dictionary<string, int> diffCounts = DiffInText(config.Diff, config.Base);
+
+                // Early out if no textual diffs found.
+                if (diffCounts == null)
                 {
-                    GenerateTSV(compareList, config.TSVFileName);
+                    Console.WriteLine("No diffs found.");
+                    return 0;
                 }
 
-                if (config.DoGenerateJson)
+                try
                 {
-                    GenerateJson(compareList, config.JsonFileName);
+                    // Extract method info from base and diff directory or file.
+                    var baseList = ExtractFileInfo(config.Base, config.Filter, config.Recursive);
+                    var diffList = ExtractFileInfo(config.Diff, config.Filter, config.Recursive);
+
+                    // Compare the method info for each file and generate a list of
+                    // non-zero deltas.  The lists that include files in one but not
+                    // the other are used as the comparator function only compares where it 
+                    // has both sides.
+
+                    var compareList = Comparator(baseList, diffList, config);
+
+                    // Generate warning lists if requested.
+                    if (config.Warn)
+                    {
+                        WarnFiles(diffList, baseList);
+                        WarnMethods(compareList);
+                    }
+
+                    if (config.DoGenerateTSV)
+                    {
+                        GenerateTSV(compareList, config.TsvFileName);
+                    }
+
+                    if (config.DoGenerateJson)
+                    {
+                        GenerateJson(compareList, config.JsonFileName);
+                    }
+
+                    return Summarize(compareList, config, diffCounts);
+
                 }
+                catch (DirectoryNotFoundException e)
+                {
+                    Console.WriteLine("Error: {0}", e.Message);
+                    return 0;
+                }
+                catch (FileNotFoundException e)
+                {
+                    Console.WriteLine("Error: {0}", e.Message);
+                    return 0;
+                }
+            });
 
-                return Summarize(compareList, config, diffCounts);
-
-            }
-            catch (System.IO.DirectoryNotFoundException e)
-            {
-                Console.WriteLine("Error: {0}", e.Message);
-                return 0;
-            }
-            catch (System.IO.FileNotFoundException e)
-            {
-                Console.WriteLine("Error: {0}", e.Message);
-                return 0;
-            }
+            return rootCommand.InvokeAsync(args).Result;
         }
     }
 }

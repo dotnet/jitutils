@@ -13,6 +13,7 @@ using Microsoft.DotNet.Cli.Utils;
 //using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using CommandResult = Microsoft.DotNet.Cli.Utils.CommandResult;
 //using System.Collections.Concurrent;
 //using System.Threading.Tasks;
 //using System.Runtime.InteropServices;
@@ -44,7 +45,7 @@ namespace ManagedCodeGen
             // "--last_successful", in which case we don't know what the build number (and hence
             // tag) is.
             string tag = null;
-            if (!config.DoLastSucessful)
+            if (!config.LastSuccessful)
             {
                 tag = String.Format("{0}-{1}", config.JobName, config.Number);
                 if (tools.Where(x => (string)x["tag"] == tag).Any())
@@ -70,7 +71,7 @@ namespace ManagedCodeGen
                 cijobsArgs.Add(config.BranchName);
             }
 
-            if (config.DoLastSucessful)
+            if (config.LastSuccessful)
             {
                 cijobsArgs.Add("--last_successful");
             }
@@ -106,7 +107,7 @@ namespace ManagedCodeGen
             //
             // However, if we passed "--last_successful", we don't know that number! So, figure it out.
 
-            if (config.DoLastSucessful)
+            if (config.LastSuccessful)
             {
                 // Find the largest numbered build with this job name.
                 int maxBuildNum = -1;

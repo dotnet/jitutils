@@ -4,6 +4,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.CommandLine;
+using System.CommandLine.Invocation;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -635,7 +637,7 @@ class PrepareOne : PrepareBase
             {
                 Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
-                Console.WriteLine($"Completed method {type.FullName}::{method.Name}");
+                Console.Write($"Completed method {type.FullName}::{method.Name}");
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
                     Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
@@ -983,10 +985,11 @@ class Worker
                 {
                     visitor.StartMethod(type, methodBase);
                     keepGoing = visitor.FinishMethod(type, methodBase);
-                    if (!keepGoing)
-                    {
-                        break;
-                    }
+                }
+
+                if (!keepGoing)
+                {
+                    break;
                 }
             }
         }
@@ -1325,121 +1328,164 @@ class PrepareMethodinator
     // >= 100 - failure
     public static int Main(string[] args)
     {
-        if (args.Length < 2)
-        {
-            return Usage();
-        }
-
         // Tracing infrastructure unconditionally creates a Timer and uses it for checking
         // whether tracing has been enabled. Since the Timer callback is called on a worker thread,
         // we may get corrupted disasm output. To prevent that, force jitting of Timer callback infrastructure
         // before we PMI any method.
         EnsureTimerCallbackIsJitted();
 
-        string command = args[0].ToUpper();
-        string assemblyName = args[1];
-        int methodToPrep = -1; // For PREPONE, PREPALL. For PREPALL, this is the first method to prep.
-
-        Visitor v = null;
-
-        int dashIndex = command.IndexOf('-');
-        string rootCommand = dashIndex < 0 ? command : command.Substring(0, dashIndex);
-        switch (rootCommand)
+        // --- COUNT ---
+        Command countCommand = new Command("COUNT");
         {
-            case "DRIVEALL":
-            case "COUNT":
-                if (args.Length < 2)
+            countCommand.Description = "Count the number of types and methods in an assembly.";
+            countCommand.AddAlias("count");
+
+            Argument<string> assemblyArgument = new Argument<string>();
+            assemblyArgument.Arity = ArgumentArity.ExactlyOne;
+            assemblyArgument.Name = "assemblyName";
+            assemblyArgument.Description = "Assembly file to process";
+            countCommand.AddArgument(assemblyArgument);
+
+            countCommand.Handler = CommandHandler.Create<string>((assemblyName) =>
+            {
+                if (File.Exists(assemblyName))
                 {
-                    Console.WriteLine("ERROR: too few arguments");
-                    return Usage();
-                }
-                else if (args.Length > 2)
-                {
-                    Console.WriteLine("ERROR: too many arguments");
-                    return Usage();
+
+                    Visitor v = new Counter();
+                    Worker w = new Worker(v, false);
+                    return w.Work(assemblyName);
                 }
 
-                if (rootCommand == "DRIVEALL")
+                Console.WriteLine($"Failed: assembly '{assemblyName}' does not exist");
+                return 101;
+            });
+        }
+
+        // --- PREPALL ---
+        Command prepallCommand = new Command("PREPALL");
+        {
+            prepallCommand.Description = "JIT all the methods in an assembly or all assemblies in a directory tree.";
+            prepallCommand.AddAlias("prepall");
+
+            Argument<string> assemblyArgument = new Argument<string>();
+            assemblyArgument.Arity = ArgumentArity.ExactlyOne;
+            assemblyArgument.Name = "assemblyName";
+            assemblyArgument.Description = "Assembly file to process, or directory to recursively traverse";
+            prepallCommand.AddArgument(assemblyArgument);
+
+            Option methodOption = new Option("--method", "Index of the first method to jit", new Argument<int>(0) { Arity = ArgumentArity.ExactlyOne });
+            Option cctorOption = new Option("--cctors", "Try and invoke cctors first", new Argument<bool>());
+            Option quietOption = new Option("--quiet", "Don't show progress messages", new Argument<bool>());
+            Option timeOption = new Option("--time", "Show elapsed time information", new Argument<bool>());
+            prepallCommand.AddOption(methodOption);
+            prepallCommand.AddOption(cctorOption);
+            prepallCommand.AddOption(quietOption);
+            prepallCommand.AddOption(timeOption);
+
+            prepallCommand.Handler = CommandHandler.Create<string, int, bool, bool, bool>((assemblyName, method, cctors, quiet, time) =>
+            {
+                if (File.Exists(assemblyName))
+                {
+                    Visitor v = new PrepareAll(method, !quiet, time);
+                    Worker w = new Worker(v, cctors);
+                    return w.Work(assemblyName);
+                }
+
+#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0
+                else if (Directory.Exists(assemblyName))
+                {
+                    EnumerationOptions options = new EnumerationOptions();
+                    options.RecurseSubdirectories = true;
+                    IEnumerable<string> exeFiles = Directory.EnumerateFiles(assemblyName, "*.exe", options);
+                    IEnumerable<string> dllFiles = Directory.EnumerateFiles(assemblyName, "*.dll", options);
+                    IEnumerable<string> allFiles = exeFiles.Concat(dllFiles);
+                    Visitor v = new PrepareAll(method, !quiet, time);
+                    Worker w = new Worker(v, cctors);
+                    return w.Work(allFiles);
+                }
+#endif
+
+                Console.WriteLine($"Failed: '{assemblyName}' does not exist");
+                return 101;
+            });
+        }
+
+        // --- PREPONE ---
+        Command preponeCommand = new Command("PREPONE");
+        {
+            preponeCommand.Description = "JIT exactly one method in an assembly.";
+            preponeCommand.AddAlias("prepone");
+
+            Argument<string> assemblyArgument = new Argument<string>();
+            assemblyArgument.Arity = ArgumentArity.ExactlyOne;
+            assemblyArgument.Name = "assemblyName";
+            assemblyArgument.Description = "Assembly file to process";
+            preponeCommand.AddArgument(assemblyArgument);
+
+            Option methodOption = new Option("--method", "Index of the method to jit", new Argument<int>(0) { Arity = ArgumentArity.ExactlyOne });
+            Option cctorOption = new Option("--cctors", "Try and invoke cctors first", new Argument<bool>());
+            Option quietOption = new Option("--quiet", "Don't show progress messages", new Argument<bool>());
+            Option timeOption = new Option("--time", "Show elapsed time information", new Argument<bool>());
+            preponeCommand.AddOption(methodOption);
+            preponeCommand.AddOption(cctorOption);
+            preponeCommand.AddOption(quietOption);
+            preponeCommand.AddOption(timeOption);
+
+            preponeCommand.Handler = CommandHandler.Create<string, int, bool, bool, bool>((assemblyName, method, cctors, quiet, time) =>
+            {
+                if (File.Exists(assemblyName))
+                {
+                    Visitor v = new PrepareOne(method, !quiet, time);
+                    Worker w = new Worker(v, cctors);
+                    return w.Work(assemblyName);
+                }
+
+                Console.WriteLine($"Failed: '{assemblyName}' does not exist");
+                return 101;
+            });
+        }
+
+        // --- DRIVEALL ---
+        Command driveallCommand = new Command("DRIVEALL");
+        {
+            driveallCommand.Description = "JIT all the methods in an assembly robustly, skipping methods with asserts.";
+            driveallCommand.AddAlias("driveall");
+
+            Argument<string> assemblyArgument = new Argument<string>();
+            assemblyArgument.Arity = ArgumentArity.ExactlyOne;
+            assemblyArgument.Name = "assemblyName";
+            assemblyArgument.Description = "Assembly file to process";
+            driveallCommand.AddArgument(assemblyArgument);
+
+            // Thse options are ignored by the handler -- DRIVEALL will grab the command line for child invocations of PREPALL.
+            // But by including them here we validate them early.
+            Option cctorOption = new Option("--cctors", "Try and invoke cctors first", new Argument<bool>());
+            Option quietOption = new Option("--quiet", "Don't show progress messages", new Argument<bool>());
+            Option timeOption = new Option("--time", "Show elapsed time information", new Argument<bool>());
+            driveallCommand.AddOption(cctorOption);
+            driveallCommand.AddOption(quietOption);
+            driveallCommand.AddOption(timeOption);
+
+            driveallCommand.Handler = CommandHandler.Create<string>((assemblyName) =>
+            {
+                if (File.Exists(assemblyName))
                 {
                     return PMIDriver.PMIDriver.Drive(assemblyName);
                 }
 
-                v = new Counter();
-                break;
-
-            case "PREPALL":
-            case "PREPONE":
-                if (args.Length < 3)
-                {
-                    methodToPrep = 0;
-                }
-                else if (args.Length > 3)
-                {
-                    Console.WriteLine("ERROR: too many arguments");
-                    return Usage();
-                }
-                else
-                {
-                    try
-                    {
-                        methodToPrep = Convert.ToInt32(args[2]);
-                    }
-                    catch (System.FormatException)
-                    {
-                        Console.WriteLine("ERROR: illegal method number");
-                        return Usage();
-                    }
-                }
-
-                bool all = command.IndexOf("ALL") > 0;
-                bool verbose = !(command.IndexOf("QUIET") > 0);
-                bool time = verbose || command.IndexOf("TIME") > 0;
-
-                if (all)
-                {
-                    v = new PrepareAll(methodToPrep, verbose, time);
-                }
-                else
-                {
-                    v = new PrepareOne(methodToPrep, verbose, time);
-                }
-                break;
-
-            default:
-                Console.WriteLine("ERROR: Unknown command {0}", command);
-                return Usage();
+                Console.WriteLine($"Failed: '{assemblyName}' does not exist");
+                return 101;
+            });
         }
 
-        bool runCctors = command.IndexOf("CCTORS") > 0;
+        // --- ROOT ---
+        RootCommand rootCommand = new RootCommand();
+        rootCommand.AddCommand(countCommand);
+        rootCommand.AddCommand(prepallCommand);
+        rootCommand.AddCommand(preponeCommand);
+        rootCommand.AddCommand(driveallCommand);
 
-        Worker w = new Worker(v, runCctors);
-        int result = 0;
-        string msg = "a file";
-
-#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0
-        msg += " or a directory";
-        if (Directory.Exists(assemblyName))
-        {
-            EnumerationOptions options = new EnumerationOptions();
-            options.RecurseSubdirectories = true;
-            IEnumerable<string> exeFiles = Directory.EnumerateFiles(assemblyName, "*.exe", options);
-            IEnumerable<string> dllFiles = Directory.EnumerateFiles(assemblyName, "*.dll", options);
-            IEnumerable<string> allFiles = exeFiles.Concat(dllFiles);
-            result = w.Work(allFiles);
-        }
-        else
-#endif
-
-        if (File.Exists(assemblyName))
-        {
-            result = w.Work(assemblyName);
-        }
-        else
-        {
-            Console.WriteLine($"ERROR: {assemblyName} is not {msg}");
-            result = 101;
-        }
-
-        return result;
+        // Parse and execute
+        return rootCommand.InvokeAsync(args).Result;
     }
 }
