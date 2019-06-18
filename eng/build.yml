@@ -17,13 +17,13 @@ jobs:
       version: $(SdkVersion)
       installationPath: $(Agent.ToolsDirectory)/dotnet
 
-  - ${{ if eq(variables['Agent.OS'], 'Windows_NT') }}:
+  - ${{ if eq(variables['Agent.Os'], 'Windows_NT') }}:
     - script: bootstrap.cmd
       displayName: Build the tools
       env:
         DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
-  - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
+  - ${{ if ne(variables['Agent.Os'], 'Windows_NT') }}:
     - script: ./bootstrap.sh
       displayName: Build the tools
       env:
