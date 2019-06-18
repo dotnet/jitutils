@@ -1,12 +1,10 @@
 parameters:
   name: ''
   pool: ''
-  strategy: ''
 
 jobs:
 - job: ${{ parameters.name }}
   pool: ${{ parameters.pool }}
-  strategy: ${{ parameters.strategy }}
 
   steps:
   - checkout: self
@@ -19,14 +17,23 @@ jobs:
       version: $(SdkVersion)
       installationPath: $(Agent.ToolsDirectory)/dotnet
 
-  - script: dotnet publish -c Release -r $(RuntimeID) -f $(TargetFramework) -o $(Build.StagingDirectory) --self-contained false
-    displayName: Build the tools
-    env:
-      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  - ${{ if eq(variables['Agent.OS'], 'Windows_NT') }}:
+    - script: bootstrap.cmd
+      displayName: Build the tools
+      env:
+      - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
+        value: true
+
+  - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
+    - script: ./bootstrap.sh
+      displayName: Build the tools
+      env:
+      - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
+        value: true
 
   - ${{ if in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI') }}:
     - task: PublishBuildArtifacts@1
       displayName: Publish build artifacts
       inputs:
         pathtoPublish: $(Build.StagingDirectory)
-        artifactName: jitutils-$(RuntimeID)-$(TargetFramework)
+        artifactName: ${{ format('jitutils-{0}', parameters.name }}
