@@ -1,9 +1,9 @@
 parameters:
-  name: ''
+  agentOs: ''
   pool: ''
 
 jobs:
-- job: ${{ parameters.name }}
+- job: ${{ parameters.agentOs }}
   pool: ${{ parameters.pool }}
 
   steps:
@@ -17,15 +17,13 @@ jobs:
       version: $(SdkVersion)
       installationPath: $(Agent.ToolsDirectory)/dotnet
 
-  - script: echo $(Agent.OS)
-
-  - ${{ if eq(variables['Agent.Os'], 'Windows_NT') }}:
+  - ${{ if eq(parameters.agentOs, 'Windows_NT') }}:
     - script: bootstrap.cmd
-      displayName: Build the tools
+      displayName: ${{ format('Build the tools ({0})', parameters.name }}
       env:
         DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
-  - ${{ if ne(variables['Agent.Os'], 'Windows_NT') }}:
+  - ${{ if ne(parameters.agentOs, 'Windows_NT') }}:
     - script: ./bootstrap.sh
       displayName: Build the tools
       env:
@@ -36,4 +34,4 @@ jobs:
       displayName: Publish build artifacts
       inputs:
         pathtoPublish: $(Build.StagingDirectory)
-        artifactName: ${{ format('jitutils-{0}', parameters.name) }}
+        artifactName: ${{ format('jitutils-{0}', parameters.agentOs) }}

@@ -11,18 +11,18 @@ variables:
 jobs:
 - template: /eng/build.yml
   parameters:
-    name: Windows
+    agentOs: Windows
     pool:
       vmImage: vs2017-win2016
 
 - template: /eng/build.yml
   parameters:
-    name: Linux
+    agentOs: Linux
     pool:
       vmImage: ubuntu-16.04
 
 - template: /eng/build.yml
   parameters:
-    name: macOS
+    agentOs: macOS
     pool:
       vmImage: macOS-10.13
