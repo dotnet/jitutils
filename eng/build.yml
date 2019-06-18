@@ -36,4 +36,4 @@ jobs:
       displayName: Publish build artifacts
       inputs:
         pathtoPublish: $(Build.StagingDirectory)
-        artifactName: ${{ format('jitutils-{0}', parameters.name }}
+        artifactName: ${{ format('jitutils-{0}', parameters.name) }}
