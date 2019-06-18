@@ -21,15 +21,13 @@ jobs:
     - script: bootstrap.cmd
       displayName: Build the tools
       env:
-      - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
-        value: true
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
   - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
     - script: ./bootstrap.sh
       displayName: Build the tools
       env:
-      - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
-        value: true
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
   - ${{ if in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI') }}:
     - task: PublishBuildArtifacts@1
