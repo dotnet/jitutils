@@ -23,6 +23,7 @@ namespace ManagedCodeGen
             private string _basePath = null;
             private string _diffPath = null;
             private bool _recursive = false;
+            private string _fileExtension = ".dasm";
             private bool _full = false;
             private bool _warn = false;
             private int _count = 5;
@@ -39,6 +40,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("b|base", ref _basePath, "Base file or directory.");
                     syntax.DefineOption("d|diff", ref _diffPath, "Diff file or directory.");
                     syntax.DefineOption("r|recursive", ref _recursive, "Search directories recursively.");
+                    syntax.DefineOption("ext|fileExtension", ref _fileExtension, "File extension to look for.");
                     syntax.DefineOption("c|count", ref _count,
                         "Count of files and methods (at most) to output in the summary."
                       + " (count) improvements and (count) regressions of each will be included."
@@ -78,6 +80,7 @@ namespace ManagedCodeGen
             public string BasePath { get { return _basePath; } }
             public string DiffPath { get { return _diffPath; } }
             public bool Recursive { get { return _recursive; } }
+            public string FileExtension { get { return _fileExtension; } }
             public bool Full { get { return _full; } }
             public bool Warn { get { return _warn; } }
             public int Count { get { return _count; } }
@@ -656,22 +659,62 @@ namespace ManagedCodeGen
                 foreach (var line in rawLines)
                 {
                     string manipulatedLine = line;
+                    string[] fields = null;
 
                     int numFields = 5;
 
-                    Regex unixGitOutputRegex = new Regex(@"\{\w+\s=>\s\w+\}");
-                    if (unixGitOutputRegex.Matches(line).Count > 0)
+                    // Example output:
+                    // 32\t2\t/coreclr/bin/asm/asm/{diff => base}/101301.dasm
+                    //
+                    // This should be split into:
+                    //
+                    // 32\t2\t/coreclr/bin/asm/asm/base/101301.dasm\t/coreclr/bin/asm/asm/diff/101301.dasm
+                    Regex gitMergedOutputRegex = new Regex(@"\{(\w+)\s=>\s(\w+)\}");
+                    if (gitMergedOutputRegex.Matches(line).Count > 0)
                     {
-                        string[] splitLine = unixGitOutputRegex.Split(line);
-                        manipulatedLine = String.Join("base", splitLine);
+                        // Do the first split to remove the integers from the file path.
+                        // Then reconstruct both the diff and the base paths.
+                        string[] firstSplit = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+                        string[] splitLine = gitMergedOutputRegex.Split(firstSplit[2]);
 
-                        numFields = 3;
+                        // Split will output:
+                        //
+                        // 32\t2\t/coreclr/bin/asm/asm/
+                        // {diffFolder}
+                        // {baseFolder}
+                        // 101301.dasm
+
+                        // Create the base path from the second group
+                        // {diff => base}
+                        string manipulatedBasePath = String.Join(splitLine[2], new string[] {
+                            splitLine[0],
+                            splitLine[3]
+                        });
+
+                        // Create the diff path from the first 
+                        // {diff => base}
+                        string manipulatedDiffPath = String.Join(splitLine[1], new string[] {
+                            splitLine[0],
+                            splitLine[3]
+                        });
+
+                        fields = new string[4] {
+                            firstSplit[0],
+                            firstSplit[1],
+                            manipulatedBasePath,
+                            manipulatedDiffPath
+                        };
+
+                        numFields = 4;
+                    }
+                    else
+                    {
+                        fields = line.Split(new char[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
                     }
 
-                    var fields = manipulatedLine.Split(new[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
                     if (fields.Length != numFields)
                     {
-                        Console.WriteLine($"Couldn't parse --numstat output '{manipulatedLine}` : {fields.Length} fields");
+                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : {fields.Length} fields");
                         continue;
                     }
 
