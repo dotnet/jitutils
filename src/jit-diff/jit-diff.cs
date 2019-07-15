@@ -137,6 +137,7 @@ namespace ManagedCodeGen
             private bool _gcinfo = false;
             private bool _debuginfo = false;
             private bool _verbose = false;
+            private bool _tier0 = false;
             private string _jobName = null;
             private string _number = null;
             private bool _lastSuccessful = false;
@@ -193,6 +194,8 @@ namespace ManagedCodeGen
                     syntax.DefineOption("cctors", ref _cctors, "With --pmi, jit and run cctors before jitting other methods");
                     syntax.DefineOptionList("assembly", ref _assemblyList, "Run asm diffs on a given set of assemblies. An individual item can be an assembly or a directory tree containing assemblies.");
                     syntax.DefineOption("tsv", ref _tsv, "Dump analysis data to diffs.tsv in output directory.");
+                    syntax.DefineOption("tier0", ref _tier0, "Diff tier0 codegen where possible.");
+
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
                         "List defaults and available tools in " + s_configFileName + ".");
@@ -1100,6 +1103,10 @@ namespace ManagedCodeGen
                     // Set flag from default for verbose.
                     var verbose = ExtractDefault<bool>("verbose", out found);
                     _verbose = (found) ? verbose : _verbose;
+
+                    // Set flag from default for tier0.
+                    var tier0 = ExtractDefault<bool>("tier0", out found);
+                    _tier0 = (found) ? tier0 : _tier0;
                 }
             }
 
@@ -1178,7 +1185,7 @@ namespace ManagedCodeGen
                     PrintDefault("debuginfo", DefaultType.DT_bool);
                     PrintDefault("tag", DefaultType.DT_string);
                     PrintDefault("verbose", DefaultType.DT_bool);
-
+                    PrintDefault("tier0", DefaultType.DT_bool);
                     Console.WriteLine();
                 }
 
@@ -1232,6 +1239,7 @@ namespace ManagedCodeGen
             public bool GenerateGCInfo { get { return _gcinfo; } }
             public bool GenerateDebugInfo { get { return _debuginfo; } }
             public bool Verbose { get { return _verbose; } }
+            public bool Tier0 { get { return _tier0; } }
             public bool DoAnalyze { get { return !_noanalyze; } }
             public Commands DoCommand { get { return _command; } }
             public string JobName { get { return _jobName; } }

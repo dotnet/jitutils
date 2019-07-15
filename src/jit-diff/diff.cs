@@ -301,6 +301,12 @@ namespace ManagedCodeGen
                     commandArgs.Add("--gcinfo");
                 }
 
+                if (config.Tier0)
+                {
+                    commandArgs.Add("--tier0");
+                    diffString += " [tier0]";
+                }
+
                 if (config.GenerateDebugInfo)
                 {
                     commandArgs.Add("--debuginfo");
