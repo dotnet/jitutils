@@ -43,7 +43,7 @@ namespace ManagedCodeGen
         private bool _dumpDebugInfo = false;
         private bool _noCopyJit = false;
         private bool _verbose = false;
-        private bool _tiering = false;
+        private bool _tier0 = false;
         private bool _cctors = false;
 
         public Config(string[] args)
@@ -58,7 +58,7 @@ namespace ManagedCodeGen
                 syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
                 syntax.DefineOption("debuginfo", ref _dumpDebugInfo, "Add Debug info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
-                syntax.DefineOption("t|tiering", ref _tiering, "Enable tiered jitting");
+                syntax.DefineOption("tier0", ref this._tier0, "Generate tier0 code.");
                 syntax.DefineOption("cctors", ref _cctors, "Jit and run cctors before jitting other methods");
                 syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
                 syntax.DefineOptionList("p|platform", ref _platformPaths, "Path to platform assemblies");
@@ -154,7 +154,7 @@ namespace ManagedCodeGen
         public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
         public string FileName { get { return _fileName; } }
         public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
-        public bool Tiering => _tiering;
+        public bool Tier0 => _tier0;
         public bool Cctors => _cctors;
     }
 
@@ -501,8 +501,16 @@ namespace ManagedCodeGen
                     AddEnvironmentVariable("COMPlus_JitNoForceFallback", "1");      // Don't stress noway fallback path.
                     AddEnvironmentVariable("COMPlus_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
                     
-                    // We likely don't want tiering enabled, but allow it, if user asks for it.
-                    AddEnvironmentVariable("COMPlus_TieredCompilation", _config.Tiering ? "1" : "0");
+                    // We likely don't want tiering enabled, but allow it, if user wants tier0 codegen
+                    AddEnvironmentVariable("COMPlus_TieredCompilation", _config.Tier0 ? "1" : "0");
+
+                    if (_config.Tier0)
+                    {
+                        // jit all methods at tier0
+                        AddEnvironmentVariable("COMPlus_TC_QuickJitForLoops", "1");
+                        // don't promote any method to tier1
+                        AddEnvironmentVariable("COMPlus_TC_CallCounting", "0");
+                    }
 
                     if (this.doGCDump)
                     {
