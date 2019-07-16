@@ -49,7 +49,7 @@ goto :argLoop
 :build
 
 REM Declare the list of projects
-set projects=jit-diff jit-dasm jit-analyze jit-format cijobs pmi jit-dasm-pmi
+set projects=jit-diff jit-dasm jit-analyze jit-format cijobs pmi jit-dasm-pmi jit-decisions-analyze
 
 REM Build each project
 for %%p in (%projects%) do (
