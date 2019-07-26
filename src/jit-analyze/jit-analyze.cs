@@ -236,7 +236,7 @@ namespace ManagedCodeGen
             if (Directory.Exists(fullRootPath))
             {
                 string fileNamePattern = filter ?? "*";
-                string searchPattern = fileNamePattern + ".dasm";
+                string searchPattern = fileNamePattern + Config.FileExtension;
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
                          .Select(p => new FileInfo
                          {
