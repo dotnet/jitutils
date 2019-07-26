@@ -742,7 +742,7 @@ namespace ManagedCodeGen
                     string fullBaseFilePath = Path.GetFullPath(fields[2]);
                     if (!File.Exists(fullBaseFilePath))
                     {
-                        Console.WriteLine($"Couldn't parse --numstat output '{manipulatedLine}` : '{fullBaseFilePath}' does not exist");
+                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : '{fullBaseFilePath}' does not exist");
                         continue;
                     }
 
