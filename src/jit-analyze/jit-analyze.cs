@@ -618,6 +618,19 @@ namespace ManagedCodeGen
             public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
         }
 
+        // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
+        // Use "git diff" to do the analysis for us, then parse that output.
+        //
+        // "git diff --no-index --exit-code --numstat" output shows added/deleted lines:
+        //
+        //   <added> <removed> <base-path> => <diff-path>
+        //
+        // For example:
+        // 6       6       "dasmset_8/diff/Vector3Interop_ro/Vector3Interop_ro.dasm" => "dasmset_8/base/Vector3Interop_ro/Vector3Interop_ro.dasm"
+        //
+        // Note, however, that it can also use a smaller output format, for example:
+        //
+        // 6       6       dasmset_8/{diff => base}/Vector3Interop_ro/Vector3Interop_ro.dasm
         public static Dictionary<string, int> DiffInText(string diffPath, string basePath)
         {
             // run get diff command to see if we have textual diffs.
@@ -670,12 +683,19 @@ namespace ManagedCodeGen
                     //
                     // 32\t2\t/coreclr/bin/asm/asm/base/101301.dasm\t/coreclr/bin/asm/asm/diff/101301.dasm
                     Regex gitMergedOutputRegex = new Regex(@"\{(\w+)\s=>\s(\w+)\}");
+                    Regex whitespaceRegex = new Regex(@"(\w+)\s+(\w+)\s+(.*)");
                     if (gitMergedOutputRegex.Matches(line).Count > 0)
                     {
                         // Do the first split to remove the integers from the file path.
                         // Then reconstruct both the diff and the base paths.
-                        string[] firstSplit = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
-                        string[] splitLine = gitMergedOutputRegex.Split(firstSplit[2]);
+                        var groups = whitespaceRegex.Match(line).Groups;
+                        string[] modifiedLine = new string[] {
+                            groups[whitespaceRegex.GroupNameFromNumber(1)].ToString(),
+                            groups[whitespaceRegex.GroupNameFromNumber(2)].ToString(),
+                            groups[whitespaceRegex.GroupNameFromNumber(3)].ToString()
+                        };
+
+                        string[] splitLine = gitMergedOutputRegex.Split(modifiedLine[2]);
 
                         // Split will output:
                         //
@@ -699,8 +719,8 @@ namespace ManagedCodeGen
                         });
 
                         fields = new string[4] {
-                            firstSplit[0],
-                            firstSplit[1],
+                            modifiedLine[0],
+                            modifiedLine[1],
                             manipulatedBasePath,
                             manipulatedDiffPath
                         };
