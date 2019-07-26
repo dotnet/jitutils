@@ -225,7 +225,7 @@ namespace ManagedCodeGen
             public IEnumerable<int> diffOffsets;
         }
 
-        public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, bool recursive)
+        public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
         {
             // if path is a directory, enumerate files and extract
             // otherwise just extract.
@@ -236,7 +236,7 @@ namespace ManagedCodeGen
             if (Directory.Exists(fullRootPath))
             {
                 string fileNamePattern = filter ?? "*";
-                string searchPattern = fileNamePattern + Config.FileExtension;
+                string searchPattern = fileNamePattern + fileExtension;
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
                          .Select(p => new FileInfo
                          {
@@ -779,8 +779,8 @@ namespace ManagedCodeGen
             try
             {
                 // Extract method info from base and diff directory or file.
-                var baseList = ExtractFileInfo(config.BasePath, config.Filter, config.Recursive);
-                var diffList = ExtractFileInfo(config.DiffPath, config.Filter, config.Recursive);
+                var baseList = ExtractFileInfo(config.BasePath, config.Filter, config.FileExtension, config.Recursive);
+                var diffList = ExtractFileInfo(config.DiffPath, config.Filter, config.FileExtension, config.Recursive);
 
                 // Compare the method info for each file and generate a list of
                 // non-zero deltas.  The lists that include files in one but not
