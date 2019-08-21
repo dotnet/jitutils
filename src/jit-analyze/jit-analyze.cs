@@ -365,7 +365,16 @@ namespace ManagedCodeGen
                 Console.Write($" (using filter '{config.Filter}')");
             }
             Console.WriteLine("\n(Lower is better)\n");
-            Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDeltaBytes, (double)totalDeltaBytes / totalBaseBytes);
+
+            if (totalBaseBytes != 0)
+            {
+                Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDeltaBytes, (double)totalDeltaBytes / totalBaseBytes);
+            }
+            else 
+            {
+                var totalDiffBytes = fileDeltaList.Sum(x => x.diffBytes);
+                Console.WriteLine("Warning: the base size is 0, the diff size is {0}, have you used a release version?", totalDiffBytes);
+            }
 
             if (totalDeltaBytes != 0)
             {
