@@ -351,7 +351,7 @@ namespace ManagedCodeGen
         //
         public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
         {
-            var totalDiffBytes = fileDeltaList.Sum(x => x.deltaBytes);
+            var totalDeltaBytes = fileDeltaList.Sum(x => x.deltaBytes);
             var totalBaseBytes = fileDeltaList.Sum(x => x.baseBytes);
 
             if (config.Note != null)
@@ -365,11 +365,20 @@ namespace ManagedCodeGen
                 Console.Write($" (using filter '{config.Filter}')");
             }
             Console.WriteLine("\n(Lower is better)\n");
-            Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDiffBytes, (double)totalDiffBytes / totalBaseBytes);
 
-            if (totalDiffBytes != 0)
+            if (totalBaseBytes != 0)
             {
-                Console.WriteLine("    diff is {0}", totalDiffBytes < 0 ? "an improvement." : "a regression.");
+                Console.WriteLine("Total bytes of diff: {0} ({1:P} of base)", totalDeltaBytes, (double)totalDeltaBytes / totalBaseBytes);
+            }
+            else 
+            {
+                var totalDiffBytes = fileDeltaList.Sum(x => x.diffBytes);
+                Console.WriteLine("Warning: the base size is 0, the diff size is {0}, have you used a release version?", totalDiffBytes);
+            }
+
+            if (totalDeltaBytes != 0)
+            {
+                Console.WriteLine("    diff is {0}", totalDeltaBytes < 0 ? "an improvement." : "a regression.");
             }
 
             if (config.Reconcile)
@@ -498,7 +507,7 @@ namespace ManagedCodeGen
                 }
             }
 
-            return Math.Abs(totalDiffBytes);
+            return Math.Abs(totalDeltaBytes);
         }
 
         public static void WarnFiles(IEnumerable<FileInfo> diffList, IEnumerable<FileInfo> baseList)
