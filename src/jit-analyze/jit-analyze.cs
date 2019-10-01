@@ -26,12 +26,14 @@ namespace ManagedCodeGen
             private string _fileExtension = ".dasm";
             private bool _full = false;
             private bool _warn = false;
-            private int _count = 5;
+            private int _count = 20;
             private string _json;
             private string _tsv;
             private bool _noreconcile = false;
             private string _note;
             private string _filter;
+            private bool _codesize = false;
+            private bool _perfscore = false;
 
             public Config(string[] args)
             {
@@ -44,7 +46,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("c|count", ref _count,
                         "Count of files and methods (at most) to output in the summary."
                       + " (count) improvements and (count) regressions of each will be included."
-                      + " (default 5)");
+                      + " (default 20)");
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
@@ -58,7 +60,16 @@ namespace ManagedCodeGen
                         "Dump analysis data to specified file in tab-separated format.");
                     syntax.DefineOption("filter", ref _filter,
                         "Only consider assembly files whose names match the filter");
+                    syntax.DefineOption("codesize", ref _codesize,
+                        "Perform code size diffs, (default)");
+                    syntax.DefineOption("perfscore", ref _perfscore,
+                        "Perform perfScore diffs");
                 });
+
+                if (!_codesize && !_perfscore)
+                {
+                    _codesize = true;
+                }
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
                 validate();
@@ -92,6 +103,8 @@ namespace ManagedCodeGen
             public string Note { get { return _note; } }
 
             public string Filter {  get { return _filter; } }
+            public bool CodeSize  { get { return _codesize; } }
+            public bool PerfScore { get { return _perfscore; } }
         }
 
         public class FileInfo
@@ -125,14 +138,14 @@ namespace ManagedCodeGen
         {
             public string name;
             public int totalBytes;
-            public int prologBytes;
+            public double perfScore;
             public int functionCount;
             public IEnumerable<int> functionOffsets;
             public override string ToString()
             {
                 return String.Format(@"name {0}, total bytes {1}, prolog bytes {2}, "
                     + "function count {3}, offsets {4}",
-                    name, totalBytes, prologBytes, functionCount,
+                    name, totalBytes, perfScore, functionCount,
                     String.Join(", ", functionOffsets.ToArray()));
             }
         }
@@ -158,7 +171,7 @@ namespace ManagedCodeGen
             }
         }
 
-        public class FileDelta
+        public class CodeSizeFileDelta
         {
             public string basePath;
             public string diffPath;
@@ -172,17 +185,17 @@ namespace ManagedCodeGen
             public int methodsInBoth;
             public IEnumerable<MethodInfo> methodsOnlyInBase;
             public IEnumerable<MethodInfo> methodsOnlyInDiff;
-            public IEnumerable<MethodDelta> methodDeltaList;
+            public IEnumerable<MethodSizeDelta> methodDeltaList;
 
             // Adjust lists to include empty methods in diff|base for methods that appear only in base|diff.
             // Also adjust delta to take these methods into account.
             public void Reconcile()
             {
-                List<MethodDelta> reconciles = new List<MethodDelta>();
+                List<MethodSizeDelta> reconciles = new List<MethodSizeDelta>();
 
                 foreach (MethodInfo m in methodsOnlyInBase)
                 {
-                    reconciles.Add(new MethodDelta
+                    reconciles.Add(new MethodSizeDelta
                     {
                         name = m.name,
                         baseBytes = m.totalBytes,
@@ -197,7 +210,7 @@ namespace ManagedCodeGen
 
                 foreach (MethodInfo m in methodsOnlyInDiff)
                 {
-                    reconciles.Add(new MethodDelta
+                    reconciles.Add(new MethodSizeDelta
                     {
                         name = m.name,
                         baseBytes = 0,
@@ -215,12 +228,79 @@ namespace ManagedCodeGen
             }
         }
 
-        public class MethodDelta
+        public class MethodSizeDelta
         {
             public string name;
             public int baseBytes;
             public int diffBytes;
             public int deltaBytes { get { return diffBytes - baseBytes; } }
+            public IEnumerable<int> baseOffsets;
+            public IEnumerable<int> diffOffsets;
+        }
+
+        public class PerfScoreFileDelta
+        {
+            public string basePath;
+            public string diffPath;
+            public double basePerfScore;
+            public double diffPerfScore;
+            public double deltaPerfScore;
+            public double reconciledPerfScoreBase;
+            public int    reconciledCountBase;
+            public double reconciledPerfScoreDiff;
+            public int    reconciledCountDiff;
+            public int methodsInBoth;
+            public IEnumerable<MethodInfo> methodsOnlyInBase;
+            public IEnumerable<MethodInfo> methodsOnlyInDiff;
+            public IEnumerable<MethodPerfDelta> methodDeltaList;
+
+            // Adjust lists to include empty methods in diff|base for methods that appear only in base|diff.
+            // Also adjust delta to take these methods into account.
+            public void Reconcile()
+            {
+                List<MethodPerfDelta> reconciles = new List<MethodPerfDelta>();
+
+                foreach (MethodInfo m in methodsOnlyInBase)
+                {
+                    reconciles.Add(new MethodPerfDelta
+                    {
+                        name = m.name,
+                        basePerfScore = m.perfScore,
+                        diffPerfScore = 0,
+                        baseOffsets = m.functionOffsets,
+                        diffOffsets = null
+                    });
+                    basePerfScore += m.perfScore;
+                    reconciledPerfScoreBase += m.perfScore;
+                    reconciledCountBase++;
+                }
+
+                foreach (MethodInfo m in methodsOnlyInDiff)
+                {
+                    reconciles.Add(new MethodPerfDelta
+                    {
+                        name = m.name,
+                        basePerfScore = 0,
+                        diffPerfScore = m.perfScore,
+                        baseOffsets = null,
+                        diffOffsets = m.functionOffsets
+                    });
+                    diffPerfScore += m.perfScore;
+                    reconciledPerfScoreDiff += m.perfScore;
+                    reconciledCountDiff++;
+                }
+
+                methodDeltaList = methodDeltaList.Concat(reconciles);
+                deltaPerfScore = deltaPerfScore + reconciledPerfScoreDiff - reconciledPerfScoreBase;
+            }
+        }
+
+        public class MethodPerfDelta
+        {
+            public string name;
+            public double basePerfScore;
+            public double diffPerfScore;
+            public double deltaPerfScore { get { return diffPerfScore - basePerfScore; } }
             public IEnumerable<int> baseOffsets;
             public IEnumerable<int> diffOffsets;
         }
@@ -264,7 +344,7 @@ namespace ManagedCodeGen
         public static IEnumerable<MethodInfo> ExtractMethodInfo(string filePath)
         {
             Regex namePattern = new Regex(@"for method (.*)$");
-            Regex dataPattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
+            Regex dataPattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,}), perf score (\d+(\.\d+)?)");
             return File.ReadLines(filePath)
                              .Select((x, i) => new { line = x, index = i })
                              .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
@@ -279,8 +359,8 @@ namespace ManagedCodeGen
                                      // Use matched data or default to 0
                                      totalBytes = dataMatch.Success ?
                                         Int32.Parse(dataMatch.Groups[1].Value) : 0,
-                                     prologBytes = dataMatch.Success ?
-                                        Int32.Parse(dataMatch.Groups[2].Value) : 0,
+                                     perfScore = dataMatch.Success ?
+                                        Double.Parse(dataMatch.Groups[3].Value) : 0,
                                      // Use function index only from non-data lines (the name line)
                                      functionOffset = dataMatch.Success ?
                                         0 : x.index
@@ -291,7 +371,7 @@ namespace ManagedCodeGen
                              {
                                  name = x.Key,
                                  totalBytes = x.Sum(z => z.totalBytes),
-                                 prologBytes = x.Sum(z => z.prologBytes),
+                                 perfScore = x.Sum(z => z.perfScore),
                                  functionCount = x.Select(z => z).Where(z => z.totalBytes == 0).Count(),
                                  // for all non-zero function offsets create list.
                                  functionOffsets = x.Select(z => z)
@@ -303,14 +383,14 @@ namespace ManagedCodeGen
         // Compare base and diff file lists and produce a sorted list of method
         // deltas by file.  Delta is computed diffBytes - baseBytes so positive
         // numbers are regressions. (lower is better)       
-        public static IEnumerable<FileDelta> Comparator(IEnumerable<FileInfo> baseInfo,
+        public static IEnumerable<CodeSizeFileDelta> CodeSizeComparator(IEnumerable<FileInfo> baseInfo,
             IEnumerable<FileInfo> diffInfo, Config config)
         {
             MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
             return baseInfo.Join(diffInfo, b => b.path, d => d.path, (b, d) =>
             {
                 var jointList = b.methodList.Join(d.methodList,
-                        x => x.name, y => y.name, (x, y) => new MethodDelta
+                        x => x.name, y => y.name, (x, y) => new MethodSizeDelta
                         {
                             name = x.name,
                             baseBytes = x.totalBytes,
@@ -320,7 +400,7 @@ namespace ManagedCodeGen
                         })
                         .OrderByDescending(r => r.deltaBytes);
 
-                FileDelta f = new FileDelta
+                CodeSizeFileDelta f = new CodeSizeFileDelta
                 {
                     basePath = b.path,
                     diffPath = d.path,
@@ -342,6 +422,48 @@ namespace ManagedCodeGen
             }).ToList();
         }
 
+        // Compare base and diff file lists and produce a sorted list of method
+        // deltas by file.  Delta is computed diffPerfScore - basePerfScore so positive
+        // numbers are regressions. (lower is better)       
+        public static IEnumerable<PerfScoreFileDelta> PerfScoreComparator(IEnumerable<FileInfo> baseInfo,
+            IEnumerable<FileInfo> diffInfo, Config config)
+        {
+            MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
+            return baseInfo.Join(diffInfo, b => b.path, d => d.path, (b, d) =>
+            {
+                var jointList = b.methodList.Join(d.methodList,
+                        x => x.name, y => y.name, (x, y) => new MethodPerfDelta
+                        {
+                            name = x.name,
+                            basePerfScore = x.perfScore,
+                            diffPerfScore = y.perfScore,
+                            baseOffsets = x.functionOffsets,
+                            diffOffsets = y.functionOffsets
+                        })
+                        .OrderByDescending(r => r.deltaPerfScore);
+
+                PerfScoreFileDelta f = new PerfScoreFileDelta
+                {
+                    basePath = b.path,
+                    diffPath = d.path,
+                    basePerfScore = jointList.Sum(x => x.basePerfScore),
+                    diffPerfScore = jointList.Sum(x => x.diffPerfScore),
+                    deltaPerfScore = jointList.Sum(x => x.deltaPerfScore),
+                    methodsInBoth = jointList.Count(),
+                    methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer),
+                    methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer),
+                    methodDeltaList = jointList.Where(x => x.deltaPerfScore != 0)
+                };
+
+                if (config.Reconcile)
+                {
+                    f.Reconcile();
+                }
+
+                return f;
+            }).ToList();
+        }
+
         // Summarize differences across all the files.
         // Output:
         //     Total bytes differences
@@ -349,7 +471,7 @@ namespace ManagedCodeGen
         //     Top diffs by size across all files
         //     Top diffs by percentage size across all files
         //
-        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
+        public static int CodeSizeSummarize(IEnumerable<CodeSizeFileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
         {
             var totalDeltaBytes = fileDeltaList.Sum(x => x.deltaBytes);
             var totalBaseBytes = fileDeltaList.Sum(x => x.baseBytes);
@@ -484,10 +606,11 @@ namespace ManagedCodeGen
                 }
             }
 
-            DisplayMethodMetric("\nTop method regressions by size (bytes):", methodRegressionCount, sortedMethodRegressions);
-            DisplayMethodMetric("\nTop method improvements by size (bytes):", methodImprovementCount, sortedMethodImprovements);
-            DisplayMethodMetric("\nTop method regressions by size (percentage):", methodRegressionCount, sortedMethodRegressionsByPercentage);
-            DisplayMethodMetric("\nTop method improvements by size (percentage):", methodImprovementCount, sortedMethodImprovementsByPercentage);
+            DisplayMethodMetric("\nTop method regressions by codesize change  (bytes):", methodRegressionCount, sortedMethodRegressions);
+            DisplayMethodMetric("\nTop method improvements by codesize change (bytes):", methodImprovementCount, sortedMethodImprovements);
+
+            DisplayMethodMetric("\nTop method regressions by codesize change (percentage):", methodRegressionCount, sortedMethodRegressionsByPercentage);
+            DisplayMethodMetric("\nTop method improvements by codesize change (percentage):", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
             Console.WriteLine("\n{0} total methods with size differences ({1} improved, {2} regressed), {3} unchanged.",
                 sortedMethodCount, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
@@ -507,7 +630,175 @@ namespace ManagedCodeGen
                 }
             }
 
-            return Math.Abs(totalDeltaBytes);
+            return totalDeltaBytes;
+        }
+
+        // Summarize differences across all the files.
+        // Output:
+        //     Total perfScore differences
+        //     Top files by total perfScore
+        //     Top method diffs by percentage perfScore across all files
+        //
+        public static double PerfScoreSummarize(IEnumerable<PerfScoreFileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
+        {
+            var totalDeltaPerfScore = fileDeltaList.Sum(x => x.deltaPerfScore);
+            var totalBasePerfScore = fileDeltaList.Sum(x => x.basePerfScore);
+
+            if (config.Note != null)
+            {
+                Console.WriteLine($"\n{config.Note}");
+            }
+
+            Console.Write("\nSummary:");
+            if (config.Filter != null)
+            {
+                Console.Write($" (using filter '{config.Filter}')");
+            }
+            Console.WriteLine("\n(Lower is better)\n");
+
+            if (totalBasePerfScore != 0)
+            {
+                Console.WriteLine("Total perfScore of diff: {0:N2} ({1:P} of base)", totalDeltaPerfScore, (double)totalDeltaPerfScore / totalBasePerfScore);
+            }
+            else 
+            {
+                var totalDiffPerfScore = fileDeltaList.Sum(x => x.diffPerfScore);
+                Console.WriteLine("Warning: the base score is 0, the diff score is {0}, have you used a release version?", totalDiffPerfScore);
+            }
+
+            if (totalDeltaPerfScore != 0)
+            {
+                Console.WriteLine("    diff is {0}", totalDeltaPerfScore < 0 ? "an improvement." : "a regression.");
+            }
+
+            if (config.Reconcile)
+            {
+                // See if base or diff had any unique methods
+                var uniqueToBase = fileDeltaList.Sum(x => x.reconciledCountBase);
+                var uniqueToDiff = fileDeltaList.Sum(x => x.reconciledCountDiff);
+
+                // Only dump reconciliation stats if there was at least one unique
+                if (uniqueToBase + uniqueToDiff > 0)
+                {
+                    var reconciledPerfScoreBase = fileDeltaList.Sum(x => x.reconciledPerfScoreBase);
+                    var reconciledPerfScoreDiff = fileDeltaList.Sum(x => x.reconciledPerfScoreDiff);
+                    Console.WriteLine("\nTotal byte diff includes {0:N2} perfScore from reconciling methods", reconciledPerfScoreDiff - reconciledPerfScoreBase);
+                    Console.WriteLine("\tBase had {0,4} unique methods, {1,8:N2} unique perfScore", uniqueToBase, reconciledPerfScoreBase);
+                    Console.WriteLine("\tDiff had {0,4} unique methods, {1,8:N2} unique perfScore", uniqueToDiff, reconciledPerfScoreDiff);
+                }
+            }
+
+            int requestedCount = config.Count;
+            var sortedFileImprovements = fileDeltaList
+                                            .Where(x => x.deltaPerfScore < 0)
+                                            .OrderBy(d => d.deltaPerfScore).ToList();
+            var sortedFileRegressions = fileDeltaList
+                                            .Where(x => x.deltaPerfScore > 0)
+                                            .OrderByDescending(d => d.deltaPerfScore).ToList();
+            int fileImprovementCount = sortedFileImprovements.Count();
+            int fileRegressionCount = sortedFileRegressions.Count();
+            int sortedFileCount = fileImprovementCount + fileRegressionCount;
+            int unchangedFileCount = fileDeltaList.Count() - sortedFileCount;
+
+            void DisplayFileMetric(string headerText, int metricCount, dynamic list)
+            {
+                if (metricCount > 0)
+                {
+                    Console.WriteLine(headerText);
+                    foreach (var fileDelta in list.GetRange(0, Math.Min(metricCount, requestedCount)))
+                    {
+                        Console.WriteLine("    {1,12:N2} : {0} ({2:P} of base)", fileDelta.basePath,
+                            fileDelta.deltaPerfScore, (double)fileDelta.deltaPerfScore / fileDelta.basePerfScore);
+                    }
+                }
+            }
+
+            DisplayFileMetric("\nTop file regressions by perfScore:", fileRegressionCount, sortedFileRegressions);
+            DisplayFileMetric("\nTop file improvements by perfScore:", fileImprovementCount, sortedFileImprovements);
+
+            Console.WriteLine("\n{0} total files with score differences ({1} improved, {2} regressed), {3} unchanged.",
+                sortedFileCount, fileImprovementCount, fileRegressionCount, unchangedFileCount);
+
+            var methodDeltaList = fileDeltaList
+                                        .SelectMany(fd => fd.methodDeltaList, (fd, md) => new
+                                        {
+                                            path = fd.basePath,
+                                            name = md.name,
+                                            deltaPerfScore = md.deltaPerfScore,
+                                            basePerfScore = md.basePerfScore,
+                                            diffPerfScore = md.diffPerfScore,
+                                            baseCount = md.baseOffsets == null ? 0 : md.baseOffsets.Count(),
+                                            diffCount = md.diffOffsets == null ? 0 : md.diffOffsets.Count()
+                                        }).ToList();
+            var sortedMethodImprovements = methodDeltaList
+                                            .Where(x => x.deltaPerfScore < 0)
+                                            .OrderBy(d => d.deltaPerfScore).ToList();
+            var sortedMethodRegressions = methodDeltaList
+                                            .Where(x => x.deltaPerfScore > 0)
+                                            .OrderByDescending(d => d.deltaPerfScore).ToList();
+            int methodImprovementCount = sortedMethodImprovements.Count();
+            int methodRegressionCount = sortedMethodRegressions.Count();
+            int sortedMethodCount = methodImprovementCount + methodRegressionCount;
+            int unchangedMethodCount = fileDeltaList.Sum(x => x.methodsInBoth) - sortedMethodCount;
+
+            var sortedMethodImprovementsByPercentage = methodDeltaList
+                                            .Where(x => x.deltaPerfScore < 0)
+                                            .OrderBy(d => (double)d.deltaPerfScore / d.basePerfScore).ToList();
+            var sortedMethodRegressionsByPercentage = methodDeltaList
+                                            .Where(x => x.deltaPerfScore > 0)
+                                            .OrderByDescending(d => (double)d.deltaPerfScore / d.basePerfScore).ToList();
+
+            void DisplayMethodMetric(string headerText, int metricCount, dynamic list)
+            {
+                if (metricCount > 0)
+                {
+                    Console.WriteLine(headerText);
+                    foreach (var method in list.GetRange(0, Math.Min(metricCount, requestedCount)))
+                    {
+                        Console.Write("    {2,8:N2} ({3,6:P} of base) : {0} - {1}", method.path, method.name, method.deltaPerfScore,
+                            (double)method.deltaPerfScore / method.basePerfScore);
+
+                        if (method.baseCount == method.diffCount)
+                        {
+                            if (method.baseCount > 1)
+                            {
+                                Console.Write(" ({0} methods)", method.baseCount);
+                            }
+                        }
+                        else
+                        {
+                            Console.Write(" ({0} base, {1} diff methods)", method.baseCount, method.diffCount);
+                        }
+                        Console.WriteLine();
+                    }
+                }
+            }
+
+            DisplayMethodMetric("\nTop method regressions by total perfscore change:", methodRegressionCount, sortedMethodRegressions);
+            DisplayMethodMetric("\nTop method improvements by total perfscore change:", methodImprovementCount, sortedMethodImprovements);
+
+            DisplayMethodMetric("\nTop method regressions by perfscore change percentage:", methodRegressionCount, sortedMethodRegressionsByPercentage);
+            DisplayMethodMetric("\nTop method improvements by perfscore change percentage:", methodImprovementCount, sortedMethodImprovementsByPercentage);
+
+            Console.WriteLine("\n{0} total methods with score differences ({1} improved, {2} regressed), {3} unchanged.",
+                sortedMethodCount, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
+
+            // Show files with text diffs but not score diffs.
+            // TODO: resolve diffs to particular methods in the files.
+            var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaPerfScore == 0))
+                .OrderByDescending(x => diffCounts[x.basePath]);
+
+            int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
+            if (zeroDiffFilesWithDiffCount > 0)
+            {
+                Console.WriteLine("\n{0} files had text diffs but not score diffs.", zeroDiffFilesWithDiffCount);
+                foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+                {
+                    Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                }
+            }
+
+            return totalDeltaPerfScore;
         }
 
         public static void WarnFiles(IEnumerable<FileInfo> diffList, IEnumerable<FileInfo> baseList)
@@ -541,7 +832,7 @@ namespace ManagedCodeGen
             }
         }
 
-        public static void WarnMethods(IEnumerable<FileDelta> compareList)
+        public static void WarnMethods(IEnumerable<CodeSizeFileDelta> compareList)
         {
             foreach (var delta in compareList)
             {
@@ -571,7 +862,7 @@ namespace ManagedCodeGen
             }
         }
 
-        public static void GenerateJson(IEnumerable<FileDelta> compareList, string path)
+        public static void GenerateJson(IEnumerable<CodeSizeFileDelta> compareList, string path)
         {
             using (var outputStream = System.IO.File.Create(path))
             {
@@ -600,7 +891,7 @@ namespace ManagedCodeGen
             }
         }
 
-        public static void GenerateTSV(IEnumerable<FileDelta> compareList, string path)
+        public static void GenerateTSV(IEnumerable<CodeSizeFileDelta> compareList, string path)
         {
             string schema = "{0}\t{1}\t{2}\t{3}\t{4}";
             using (var outputStream = System.IO.File.Create(path))
@@ -616,6 +907,87 @@ namespace ManagedCodeGen
                             // Method names often contain commas, so use tabs as field separators
                             outputStreamWriter.WriteLine(schema, file.basePath, method.name, method.diffBytes,
                                 method.baseBytes, method.deltaBytes);
+                        }
+                    }
+                }
+            }
+        }
+
+        public static void WarnMethods(IEnumerable<PerfScoreFileDelta> compareList)
+        {
+            foreach (var delta in compareList)
+            {
+                var onlyInBaseCount = delta.methodsOnlyInBase.Count();
+                var onlyInDiffCount = delta.methodsOnlyInDiff.Count();
+
+                if ((onlyInBaseCount > 0) || (onlyInDiffCount > 0))
+                {
+                    Console.WriteLine("Mismatched methods in {0}", delta.basePath);
+                    if (onlyInBaseCount > 0)
+                    {
+                        Console.WriteLine("Base:");
+                        foreach (var method in delta.methodsOnlyInBase)
+                        {
+                            Console.WriteLine("    {0}", method.name);
+                        }
+                    }
+                    if (onlyInDiffCount > 0)
+                    {
+                        Console.WriteLine("Diff:");
+                        foreach (var method in delta.methodsOnlyInDiff)
+                        {
+                            Console.WriteLine("    {0}", method.name);
+                        }
+                    }
+                }
+            }
+        }
+
+        public static void GenerateJson(IEnumerable<PerfScoreFileDelta> compareList, string path)
+        {
+            using (var outputStream = System.IO.File.Create(path))
+            {
+                using (var outputStreamWriter = new StreamWriter(outputStream))
+                {
+                    foreach (var file in compareList)
+                    {
+                        if (file.deltaPerfScore == 0)
+                        {
+                            // Early out if there are no diff scores.
+                            continue;
+                        }
+
+                        try
+                        {
+                            // Serialize file delta to output file.
+                            outputStreamWriter.Write(JsonConvert.SerializeObject(file, Formatting.Indented));
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine("Exception serializing JSON: {0}", e.ToString());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        public static void GenerateTSV(IEnumerable<PerfScoreFileDelta> compareList, string path)
+        {
+            string schema = "{0}\t{1}\t{2}\t{3}\t{4}";
+            using (var outputStream = System.IO.File.Create(path))
+            {
+                using (var outputStreamWriter = new StreamWriter(outputStream))
+                {
+                    outputStreamWriter.WriteLine(schema, "File", "Method", "DiffPerfScore",
+                        "BasePerfScore", "DeltaPerfScore");
+                    foreach (var file in compareList)
+                    {
+                        foreach (var method in file.methodDeltaList)
+                        {
+                            // Method names often contain commas, so use tabs as field separators
+                            outputStreamWriter.WriteLine(schema, file.basePath, method.name, method.diffPerfScore,
+                                method.basePerfScore, method.deltaPerfScore);
                         }
                     }
                 }
@@ -791,32 +1163,66 @@ namespace ManagedCodeGen
                 var baseList = ExtractFileInfo(config.BasePath, config.Filter, config.FileExtension, config.Recursive);
                 var diffList = ExtractFileInfo(config.DiffPath, config.Filter, config.FileExtension, config.Recursive);
 
-                // Compare the method info for each file and generate a list of
-                // non-zero deltas.  The lists that include files in one but not
-                // the other are used as the comparator function only compares where it 
-                // has both sides.
-
-                var compareList = Comparator(baseList, diffList, config);
-
-                // Generate warning lists if requested.
-                if (config.Warn)
-                {
-                    WarnFiles(diffList, baseList);
-                    WarnMethods(compareList);
+                if (config.CodeSize)
+                {              
+                    // Compare the method info for each file and generate a list of
+                    // non-zero deltas.  The lists that include files in one but not
+                    // the other are used as the comparator function only compares where it 
+                    // has both sides.
+                    
+                    var compareList = CodeSizeComparator(baseList, diffList, config);
+                    
+                    // Generate warning lists if requested.
+                    if (config.Warn)
+                    {
+                        WarnFiles(diffList, baseList);
+                        WarnMethods(compareList);
+                    }
+                    
+                    if (config.DoGenerateTSV)
+                    {
+                        GenerateTSV(compareList, config.TSVFileName);
+                    }
+                    
+                    if (config.DoGenerateJson)
+                    {
+                        GenerateJson(compareList, config.JsonFileName);
+                    }
+                    
+                    var totalDiff = CodeSizeSummarize(compareList, config, diffCounts);
+                    Console.WriteLine("total codesize diff: {0:N2}", totalDiff);
                 }
 
-                if (config.DoGenerateTSV)
-                {
-                    GenerateTSV(compareList, config.TSVFileName);
+                if (config.PerfScore)
+                {              
+                    // Compare the method info for each file and generate a list of
+                    // non-zero deltas.  The lists that include files in one but not
+                    // the other are used as the comparator function only compares where it 
+                    // has both sides.
+                    
+                    var compareList = PerfScoreComparator(baseList, diffList, config);
+                    
+                    // Generate warning lists if requested.
+                    if (config.Warn)
+                    {
+                        WarnFiles(diffList, baseList);
+                        WarnMethods(compareList);
+                    }
+                    
+                    if (config.DoGenerateTSV)
+                    {
+                        GenerateTSV(compareList, config.TSVFileName);
+                    }
+                    
+                    if (config.DoGenerateJson)
+                    {
+                        GenerateJson(compareList, config.JsonFileName);
+                    }
+                    
+                    var totalDiff = PerfScoreSummarize(compareList, config, diffCounts);
+                    Console.WriteLine("total perfscore diff: {0:N2}", totalDiff);
                 }
-
-                if (config.DoGenerateJson)
-                {
-                    GenerateJson(compareList, config.JsonFileName);
-                }
-
-                return Summarize(compareList, config, diffCounts);
-
+                return 100;
             }
             catch (System.IO.DirectoryNotFoundException e)
             {

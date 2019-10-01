@@ -150,6 +150,11 @@ namespace ManagedCodeGen
             private bool _tsv;
             private bool _cctors;
 
+            // used by jit-analyze 
+            private bool _codesize = false;
+            private bool _perfscore = false;
+            private int  _count = 20;
+
             private JObject _jObj;
             private bool _configFileLoaded = false;
             private bool _noJitUtilsRoot = false;
@@ -195,6 +200,11 @@ namespace ManagedCodeGen
                     syntax.DefineOptionList("assembly", ref _assemblyList, "Run asm diffs on a given set of assemblies. An individual item can be an assembly or a directory tree containing assemblies.");
                     syntax.DefineOption("tsv", ref _tsv, "Dump analysis data to diffs.tsv in output directory.");
                     syntax.DefineOption("tier0", ref _tier0, "Diff tier0 codegen where possible.");
+
+                    // used by jit-analyze 
+                    syntax.DefineOption("codesize", ref _codesize, "jit-analyze will produce code size diffs (default)");
+                    syntax.DefineOption("perfscore", ref _perfscore, "jit-analyze will produce perf score diffs");
+                    syntax.DefineOption("count", ref _count, "provide the count parameter to jit-analyze (default 20)");
 
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
@@ -578,6 +588,12 @@ namespace ManagedCodeGen
                     // Setting --corelib as the default
                     Console.WriteLine("No assemblies specified; defaulting to corelib");
                     _corelib = true;
+                }
+
+                if (!_codesize && !_perfscore)
+                {
+                    // Setting --codesize as the default
+                    _codesize = true;
                 }
 
                 if (Verbose)
@@ -1254,6 +1270,10 @@ namespace ManagedCodeGen
             public IReadOnlyList<string> AssemblyList => _assemblyList;
             public bool tsv {  get { return _tsv;  } }
             public bool Cctors => _cctors;
+
+            public bool CodeSize { get { return _codesize; } }
+            public bool PerfScore { get { return _perfscore; } }
+            public int  Count { get { return _count; } }
         }
 
         private static string[] s_testDirectories =
