@@ -63,7 +63,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("codesize", ref _codesize,
                         "Perform code size diffs, (default)");
                     syntax.DefineOption("perfscore", ref _perfscore,
-                        "Perform perfScore diffs");
+                        "Perform PerfScore diffs");
                 });
 
                 if (!_codesize && !_perfscore)
@@ -682,9 +682,9 @@ namespace ManagedCodeGen
                 {
                     var reconciledPerfScoreBase = fileDeltaList.Sum(x => x.reconciledPerfScoreBase);
                     var reconciledPerfScoreDiff = fileDeltaList.Sum(x => x.reconciledPerfScoreDiff);
-                    Console.WriteLine("\nTotal byte diff includes {0:N2} perfScore from reconciling methods", reconciledPerfScoreDiff - reconciledPerfScoreBase);
-                    Console.WriteLine("\tBase had {0,4} unique methods, {1,8:N2} unique perfScore", uniqueToBase, reconciledPerfScoreBase);
-                    Console.WriteLine("\tDiff had {0,4} unique methods, {1,8:N2} unique perfScore", uniqueToDiff, reconciledPerfScoreDiff);
+                    Console.WriteLine("\nTotal byte diff includes {0:N2} PerfScore from reconciling methods", reconciledPerfScoreDiff - reconciledPerfScoreBase);
+                    Console.WriteLine("\tBase had {0,4} unique methods, {1,8:N2} unique PerfScore", uniqueToBase, reconciledPerfScoreBase);
+                    Console.WriteLine("\tDiff had {0,4} unique methods, {1,8:N2} unique PerfScore", uniqueToDiff, reconciledPerfScoreDiff);
                 }
             }
 
@@ -1217,7 +1217,7 @@ namespace ManagedCodeGen
                     }
                     
                     var totalDiff = PerfScoreSummarize(compareList, config, diffCounts);
-                    Console.WriteLine("total perfscore diff: {0:N2}", totalDiff);
+                    Console.WriteLine("total PerfScore diff: {0:N2}", totalDiff);
                 }
                 return 100;
             }
