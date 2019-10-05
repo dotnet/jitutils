@@ -143,7 +143,7 @@ namespace ManagedCodeGen
             public IEnumerable<int> functionOffsets;
             public override string ToString()
             {
-                return String.Format(@"name {0}, total bytes {1}, prolog bytes {2}, "
+                return String.Format(@"name {0}, total bytes {1}, PerfScore {2}, "
                     + "function count {3}, offsets {4}",
                     name, totalBytes, perfScore, functionCount,
                     String.Join(", ", functionOffsets.ToArray()));
@@ -339,7 +339,7 @@ namespace ManagedCodeGen
         }
 
         // Extract lines of the passed in file and create a method info object
-        // for each method descript line containing total bytes, prolog bytes, 
+        // for each method descript line containing total bytes, PerfScore, 
         // and offset in the file.
         public static IEnumerable<MethodInfo> ExtractMethodInfo(string filePath)
         {
@@ -606,11 +606,11 @@ namespace ManagedCodeGen
                 }
             }
 
-            DisplayMethodMetric("\nTop method regressions by codesize change  (bytes):", methodRegressionCount, sortedMethodRegressions);
-            DisplayMethodMetric("\nTop method improvements by codesize change (bytes):", methodImprovementCount, sortedMethodImprovements);
+            DisplayMethodMetric("\nTop method regressions by code size change  (bytes):", methodRegressionCount, sortedMethodRegressions);
+            DisplayMethodMetric("\nTop method improvements by code size change (bytes):", methodImprovementCount, sortedMethodImprovements);
 
-            DisplayMethodMetric("\nTop method regressions by codesize change (percentage):", methodRegressionCount, sortedMethodRegressionsByPercentage);
-            DisplayMethodMetric("\nTop method improvements by codesize change (percentage):", methodImprovementCount, sortedMethodImprovementsByPercentage);
+            DisplayMethodMetric("\nTop method regressions by code size change (percentage):", methodRegressionCount, sortedMethodRegressionsByPercentage);
+            DisplayMethodMetric("\nTop method improvements by code size change (percentage):", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
             Console.WriteLine("\n{0} total methods with size differences ({1} improved, {2} regressed), {3} unchanged.",
                 sortedMethodCount, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
@@ -658,12 +658,12 @@ namespace ManagedCodeGen
 
             if (totalBasePerfScore != 0)
             {
-                Console.WriteLine("Total perfScore of diff: {0:N2} ({1:P} of base)", totalDeltaPerfScore, (double)totalDeltaPerfScore / totalBasePerfScore);
+                Console.WriteLine("Total PerfScore of diff: {0:N2} ({1:P} of base)", totalDeltaPerfScore, (double)totalDeltaPerfScore / totalBasePerfScore);
             }
             else 
             {
                 var totalDiffPerfScore = fileDeltaList.Sum(x => x.diffPerfScore);
-                Console.WriteLine("Warning: the base score is 0, the diff score is {0}, have you used a release version?", totalDiffPerfScore);
+                Console.WriteLine("Warning: the base PerfScore is 0, the diff PerfScore is {0}, have you used a release version?", totalDiffPerfScore);
             }
 
             if (totalDeltaPerfScore != 0)
@@ -713,10 +713,10 @@ namespace ManagedCodeGen
                 }
             }
 
-            DisplayFileMetric("\nTop file regressions by perfScore:", fileRegressionCount, sortedFileRegressions);
-            DisplayFileMetric("\nTop file improvements by perfScore:", fileImprovementCount, sortedFileImprovements);
+            DisplayFileMetric("\nTop file regressions by PerfScore:", fileRegressionCount, sortedFileRegressions);
+            DisplayFileMetric("\nTop file improvements by PerfScore:", fileImprovementCount, sortedFileImprovements);
 
-            Console.WriteLine("\n{0} total files with score differences ({1} improved, {2} regressed), {3} unchanged.",
+            Console.WriteLine("\n{0} total files with PerfScore differences ({1} improved, {2} regressed), {3} unchanged.",
                 sortedFileCount, fileImprovementCount, fileRegressionCount, unchangedFileCount);
 
             var methodDeltaList = fileDeltaList
@@ -774,16 +774,13 @@ namespace ManagedCodeGen
                 }
             }
 
-            DisplayMethodMetric("\nTop method regressions by total perfscore change:", methodRegressionCount, sortedMethodRegressions);
-            DisplayMethodMetric("\nTop method improvements by total perfscore change:", methodImprovementCount, sortedMethodImprovements);
+            DisplayMethodMetric("\nTop method regressions by PerfScore change percentage:", methodRegressionCount, sortedMethodRegressionsByPercentage);
+            DisplayMethodMetric("\nTop method improvements by PerfScore change percentage:", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
-            DisplayMethodMetric("\nTop method regressions by perfscore change percentage:", methodRegressionCount, sortedMethodRegressionsByPercentage);
-            DisplayMethodMetric("\nTop method improvements by perfscore change percentage:", methodImprovementCount, sortedMethodImprovementsByPercentage);
-
-            Console.WriteLine("\n{0} total methods with score differences ({1} improved, {2} regressed), {3} unchanged.",
+            Console.WriteLine("\n{0} total methods with PerfScore differences ({1} improved, {2} regressed), {3} unchanged.",
                 sortedMethodCount, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
 
-            // Show files with text diffs but not score diffs.
+            // Show files with text diffs but no PerfScore diffs.
             // TODO: resolve diffs to particular methods in the files.
             var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaPerfScore == 0))
                 .OrderByDescending(x => diffCounts[x.basePath]);
@@ -791,7 +788,7 @@ namespace ManagedCodeGen
             int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
             if (zeroDiffFilesWithDiffCount > 0)
             {
-                Console.WriteLine("\n{0} files had text diffs but not score diffs.", zeroDiffFilesWithDiffCount);
+                Console.WriteLine("\n{0} files had text diffs but no PerfScore diffs.", zeroDiffFilesWithDiffCount);
                 foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
                 {
                     Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
