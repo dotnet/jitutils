@@ -1,3 +1,12 @@
+variables:
+- name: Build.Repository.Clean
+  value: true
+
+resources:
+  containers:
+  - container: LinuxContainer
+    image: microsoft/dotnet-buildtools-prereqs:ubuntu-14.04-cross-0cd4667-20170319080304
+
 trigger:
 - master
 
@@ -5,20 +14,91 @@ pr:
 - master
 
 jobs:
-- template: /eng/build.yml
+- template: /eng/common/templates/job/job.yml
   parameters:
-    agentOs: Windows_NT
+    name: Windows_NT
+    enableTelemetry: true
+    enablePublishBuildArtifacts: true
     pool:
-      vmImage: vs2017-win2016
+      name: NetCorePublic-Pool
+      queue: BuildPool.Windows.10.Amd64.VS2017.Open
+    strategy:
+      matrix:
+        debug_configuration:
+          _BuildConfig: Debug
+        release_configuration:
+          _BuildConfig: Release
+    steps:
+    - script: eng\common\cibuild.cmd
+        -configuration $(_BuildConfig)
+        -prepareMachine
+      name: Build
+      displayName: Build
+      condition: succeeded()
+    - task: PublishBuildArtifacts@1
+      displayName: Publish Logs to VSTS
+      inputs:
+        PathtoPublish: '$(Build.SourcesDirectory)/artifacts/log/$(_BuildConfig)'
+        PublishLocation: Container
+        ArtifactName: $(Agent.Os)_$(Agent.JobName)
+      continueOnError: true
+      condition: always()
 
-- template: /eng/build.yml
+- template: /eng/common/templates/job/job.yml
   parameters:
-    agentOs: Linux
+    name: OSX
+    enableTelemetry: true
+    enablePublishBuildArtifacts: true
     pool:
-      vmImage: ubuntu-16.04
+      name: Hosted macOS
+    strategy:
+      matrix:
+        debug_configuration:
+          _BuildConfig: Debug
+        release_configuration:
+          _BuildConfig: Release
+    steps:
+    - script: eng/common/cibuild.sh
+        --configuration $(_BuildConfig)
+        --prepareMachine
+      name: Build
+      displayName: Build
+      condition: succeeded()
+    - task: PublishBuildArtifacts@1
+      displayName: Publish Logs to VSTS
+      inputs:
+        PathtoPublish: '$(Build.SourcesDirectory)/artifacts/log/$(_BuildConfig)'
+        PublishLocation: Container
+        ArtifactName: $(Agent.Os)_$(Agent.JobName)
+      continueOnError: true
+      condition: always()
 
-- template: /eng/build.yml
+- template: /eng/common/templates/job/job.yml
   parameters:
-    agentOs: macOS
+    name: Linux
+    enableTelemetry: true
+    enablePublishBuildArtifacts: true
     pool:
-      vmImage: macOS-10.13
+      name: Hosted Ubuntu 1604
+    container: LinuxContainer
+    strategy:
+      matrix:
+        debug_configuration:
+          _BuildConfig: Debug
+        release_configuration:
+          _BuildConfig: Release
+    steps:
+    - script: eng/common/cibuild.sh
+        --configuration $(_BuildConfig)
+        --prepareMachine
+      name: Build
+      displayName: Build
+      condition: succeeded()
+    - task: PublishBuildArtifacts@1
+      displayName: Publish Logs to VSTS
+      inputs:
+        PathtoPublish: '$(Build.SourcesDirectory)/artifacts/log/$(_BuildConfig)'
+        PublishLocation: Container
+        ArtifactName: $(Agent.Os)_$(Agent.JobName)
+      continueOnError: true
+      condition: always()
