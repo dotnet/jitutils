@@ -459,14 +459,7 @@ namespace ManagedCodeGen
 
                 foreach (string project in config.Projects)
                 {
-                    if (config.IsWindows && config.RewriteCompileCommands)
-                    {
-                        compileCommands = rewriteCompileCommands(newCompileCommands, project);
-                    }
-                    else
-                    {
-                        compileCommands = rewriteCompileCommands(newCompileCommands, project);
-                    }
+                    compileCommands = rewriteCompileCommands(newCompileCommands, project);
 
                     if (verbose)
                     {
@@ -544,26 +537,27 @@ namespace ManagedCodeGen
                     string compileCommand = command["command"].Value<string>().Replace("-I", "-isystem").Replace("\\","/");
                     if (compileCommand.Contains("cl.exe"))
                     {
-                        string[] compileCommandsSplit = compileCommand.Split(new[] {" ", Environment.NewLine}, StringSplitOptions.None);
-                        compileCommand = "";
+                        // First extract cl.exe path: it may contain spaces.
+                        int clExeIndex = compileCommand.IndexOf("cl.exe");
+                        int spaceAfterClExeIndex = compileCommand.IndexOf(" ", clExeIndex);
+                        string clExeCommand = compileCommand.Substring(0, spaceAfterClExeIndex);
+
+                        string[] compileCommandsSplit = compileCommand.Substring(spaceAfterClExeIndex).Split(new[] {" ", Environment.NewLine}, StringSplitOptions.None);
+                        compileCommand = clExeCommand + " -target x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions -DSOURCE_FORMATTING=1";
 
                         foreach (string option in compileCommandsSplit)
                         {
-                            if (option.ToLower().Contains("cl.exe"))
+                            if (option.Contains("-isystem"))
                             {
-                                compileCommand = compileCommand + option + " -target x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions -DSOURCE_FORMATTING=1 ";
-                            }
-                            else if (option.Contains("-isystem"))
-                            {
-                                compileCommand = compileCommand + option + " ";
+                                compileCommand = compileCommand + " " + option;
                             }
                             else if (option.Contains("-D"))
                             {
-                                compileCommand = compileCommand + option + " ";
+                                compileCommand = compileCommand + " " + option;
                             }
                             else if (option.Contains("src/jit"))
                             {
-                                compileCommand = compileCommand + option;
+                                compileCommand = compileCommand + " " + option;
                             }
                         }
                     }
@@ -626,7 +620,7 @@ namespace ManagedCodeGen
                 List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
                 CommandResult result = Utility.TryCommand("clang-tidy", commandArgs, true);
 
-                if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && result.StdOut.Contains("error:"))))
+                if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && (result.StdOut.Contains("error:") || result.StdOut.Contains("Error")))))
                 {
                     if (verbose)
                     {
@@ -637,7 +631,7 @@ namespace ManagedCodeGen
                     formatOk = false;
                 }
 
-                if (!ignoreErrors && result.StdErr.Contains("error:"))
+                if (!ignoreErrors && (result.StdErr.Contains("error:") || result.StdErr.Contains("Error")))
                 {
                     Console.Error.WriteLine("Error in clang-tidy: {0}", result.StdErr);
                     formatOk = false;
