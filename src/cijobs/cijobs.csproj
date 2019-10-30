@@ -1,10 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="$([MSBuild]::GetPathOfFileAbove(target-framework.props))" />
-  <Import Project="$([MSBuild]::GetPathOfFileAbove(jit-include.props))" />
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>

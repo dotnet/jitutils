@@ -6,6 +6,7 @@
     <RootNamespace>Mutate</RootNamespace>
     <AssemblyName>Mutate</AssemblyName>
     <LangVersion>7.3</LangVersion>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

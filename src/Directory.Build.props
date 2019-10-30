@@ -1,0 +1,14 @@
+<Project>
+  <Import Project="..\Directory.Build.props" />
+  <ItemGroup>
+    <PackageReference Include="System.Collections" Version="$(SystemCollectionsPackageVersion)" />
+    <PackageReference Include="System.CommandLine" Version="$(SystemCommandLinePackageVersion)" />
+    <PackageReference Include="System.IO.FileSystem" Version="$(SystemIOFileSystemPackageVersion)" />
+    <PackageReference Include="System.IO.FileSystem.Primitives" Version="$(SystemIOFileSystemPrimitivesPackageVersion)" />
+    <PackageReference Include="System.Net.Primitives" Version="$(SystemNetPrimitivesPackageVersion)" />
+    <PackageReference Include="System.Security.Principal" Version="$(SystemSecurityPrincipalPackageVersion)" />
+    <PackageReference Include="Microsoft.DotNet.Cli.Utils" Version="$(MicrosoftDotNetCliUtilsPackageVersion)" />
+    <PackageReference Include="Microsoft.Win32.Primitives" Version="$(MicrosoftWin32PrimitivesPackageVersion)" />
+    <PackageReference Include="runtime.native.System" Version="$(runtimenativeSystemPackageVersion)" />
+  </ItemGroup>
+</Project>
