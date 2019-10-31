@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using pmi;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -1411,6 +1412,22 @@ class PrepareMethodinator
         }
 
         bool runCctors = command.IndexOf("CCTORS") > 0;
+        bool logTailCallDecisions = command.IndexOf("TAILCALLS") > 0;
+        bool logInliningDecisions = command.IndexOf("INLINES") > 0;
+
+        if (logTailCallDecisions)
+        {
+            JITDecisionEventListener.s_enabledEvents.Add("MethodJitTailCallSucceeded");
+            JITDecisionEventListener.s_enabledEvents.Add("MethodJitTailCallFailed");
+        }
+        if (logInliningDecisions)
+        {
+            JITDecisionEventListener.s_enabledEvents.Add("MethodJitInliningSucceeded");
+            JITDecisionEventListener.s_enabledEvents.Add("MethodJitInliningFailed");
+        }
+
+        using var eventListener =
+            logTailCallDecisions || logInliningDecisions ? new JITDecisionEventListener() : null;
 
         Worker w = new Worker(v, runCctors);
         int result = 0;

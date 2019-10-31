@@ -51,7 +51,7 @@ while getopts "hpfbt:" opt; do
 done
 
 # declare the array of projects   
-declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs pmi jit-dasm-pmi)
+declare -a projects=(jit-dasm jit-diff jit-analyze jit-format cijobs pmi jit-dasm-pmi jit-decisions-analyze)
 
 # for each project either build or publish
 for proj in "${projects[@]}"
