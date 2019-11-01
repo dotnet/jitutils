@@ -543,7 +543,8 @@ namespace ManagedCodeGen
                         string clExeCommand = compileCommand.Substring(0, spaceAfterClExeIndex);
 
                         string[] compileCommandsSplit = compileCommand.Substring(spaceAfterClExeIndex).Split(new[] {" ", Environment.NewLine}, StringSplitOptions.None);
-                        compileCommand = clExeCommand + " -target x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions -DSOURCE_FORMATTING=1";
+                        compileCommand = clExeCommand + " -target x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fmsc-version=1900 -fexceptions -fcxx-exceptions " +
+                                                        "-DSOURCE_FORMATTING=1 -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH";
 
                         foreach (string option in compileCommandsSplit)
                         {
@@ -555,7 +556,11 @@ namespace ManagedCodeGen
                             {
                                 compileCommand = compileCommand + " " + option;
                             }
-                            else if (option.Contains("src/jit"))
+                            // Include the path of the source file to check but don't include the option specifying the location 
+                            // of the precompiled header file. It's not needed for clang-tidy and currently the precompiled
+                            // header won't be found at the specified location: we run the build that generates compile_commands.json
+                            // in ConfigureOnly mode so the precompiled headers are not generated.
+                            else if (option.Contains("src/jit") && !option.StartsWith("/Fp"))
                             {
                                 compileCommand = compileCommand + " " + option;
                             }
