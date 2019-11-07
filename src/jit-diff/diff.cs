@@ -252,7 +252,7 @@ namespace ManagedCodeGen
             public static int DiffCommand(Config config)
             {
                 DiffTool diffTool = NewDiffTool(config);
-                string diffString = $"{diffTool.Name} Diffs for ";
+                string diffString = $"{diffTool.Name} {config.Metric} Diffs for ";
                 bool needPrefix = false;
 
                 if (config.CoreLib)
@@ -346,6 +346,8 @@ namespace ManagedCodeGen
                     analysisArgs.Add("--diff");
                     analysisArgs.Add(Path.Combine(config.OutputPath, "diff"));
                     analysisArgs.Add("--recursive");
+                    analysisArgs.Add("--metric");
+                    analysisArgs.Add(config.Metric);
                     analysisArgs.Add("--note");
 
                     string jitName = config.AltJit ?? "default jit";
@@ -363,7 +365,7 @@ namespace ManagedCodeGen
                             s_analysisTool, String.Join(" ", analysisArgs));
                     }
 
-                    Console.WriteLine("Analyzing diffs...");
+                    Console.WriteLine($"Analyzing {config.Metric} diffs...");
                     startTime = DateTime.Now;
                     CommandResult analyzeResult = Utility.TryCommand(s_analysisTool, analysisArgs);
                     Console.WriteLine($"Completed analysis in {(DateTime.Now - startTime).TotalSeconds:F2}s");

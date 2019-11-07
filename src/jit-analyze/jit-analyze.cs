@@ -49,7 +49,7 @@ namespace ManagedCodeGen
             private string _fileExtension = ".dasm";
             private bool _full = false;
             private bool _warn = false;
-            private int _count = 5;
+            private int _count = 20;
             private string _json;
             private string _tsv;
             private bool _noreconcile = false;
@@ -68,7 +68,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("c|count", ref _count,
                         "Count of files and methods (at most) to output in the summary."
                       + " (count) improvements and (count) regressions of each will be included."
-                      + " (default 5)");
+                      + " (default 20)");
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
@@ -188,7 +188,7 @@ namespace ManagedCodeGen
         {
             public override string Name => "CodeSize";
             public override string DisplayName => "Code Size";
-            public override string Unit => "bytes";
+            public override string Unit => "byte";
             public override bool LowerIsBetter => true;
             public override Metric Clone() => new CodeSizeMetric();
             public override string ValueString => $"{Value}";
@@ -198,7 +198,7 @@ namespace ManagedCodeGen
         {
             public override string Name => "PrologSize";
             public override string DisplayName => "Prolog Size";
-            public override string Unit => "bytes";
+            public override string Unit => "byte";
             public override bool LowerIsBetter => true;
             public override Metric Clone() => new PrologSizeMetric();
             public override string ValueString => $"{Value}";
@@ -682,7 +682,7 @@ namespace ManagedCodeGen
             {
                 if (metricCount > 0)
                 {
-                    Console.WriteLine($"\n{headerText} ({unitName}):");
+                    Console.WriteLine($"\n{headerText} ({unitName}s):");
                     foreach (var fileDelta in list.Take(Math.Min(metricCount, requestedCount)))
                     {
                         Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
@@ -700,7 +700,7 @@ namespace ManagedCodeGen
 
             var methodDeltaList = fileDeltaList
                                         .SelectMany(fd => fd.methodDeltaList, (fd, md) => new
-                                        {<
+                                        {
                                             path = fd.basePath,
                                             name = md.name,
                                             deltaMetric = md.deltaMetrics.GetMetric(config.Metric),
@@ -756,7 +756,7 @@ namespace ManagedCodeGen
             DisplayMethodMetric("Top method regressions", unitName, methodRegressionCount, sortedMethodRegressions);
             DisplayMethodMetric("Top method improvements", unitName, methodImprovementCount, sortedMethodImprovements);
             DisplayMethodMetric("Top method regressions", "percentage", methodRegressionCount, sortedMethodRegressionsByPercentage);
-            DisplayMethodMetric("Top method improvements", "percentge", methodImprovementCount, sortedMethodImprovementsByPercentage);
+            DisplayMethodMetric("Top method improvements", "percentage", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
             Console.WriteLine("\n{0} total methods with {1} differences ({2} improved, {3} regressed), {4} unchanged.",
                 sortedMethodCount, metricName, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
