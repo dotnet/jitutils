@@ -149,7 +149,7 @@ namespace ManagedCodeGen
             private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
             private bool _tsv;
             private bool _cctors;
-
+            private string _metric = "CodeSize";
             private JObject _jObj;
             private bool _configFileLoaded = false;
             private bool _noJitUtilsRoot = false;
@@ -178,6 +178,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("t|tag", ref _tag, "Name of root in output directory. Allows for many sets of output.");
                     syntax.DefineOption("c|corelib", ref _corelib, "Diff System.Private.CoreLib.dll.");
                     syntax.DefineOption("f|frameworks", ref _frameworks, "Diff frameworks.");
+                    syntax.DefineOption("m|metric", ref _metric, false, "Metric to use for diff computations (default: CodeSize).");
                     syntax.DefineOption("benchmarks", ref _benchmarks, "Diff core benchmarks.");
                     syntax.DefineOption("tests", ref _tests, "Diff all tests.");
                     syntax.DefineOption("gcinfo", ref _gcinfo, "Add GC info to the disasm output.");
@@ -1254,6 +1255,7 @@ namespace ManagedCodeGen
             public IReadOnlyList<string> AssemblyList => _assemblyList;
             public bool tsv {  get { return _tsv;  } }
             public bool Cctors => _cctors;
+            public string Metric => _metric;
         }
 
         private static string[] s_testDirectories =
