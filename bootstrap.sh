@@ -75,7 +75,7 @@ function download_tools {
     if validate_url ${clangFormatUrl} > /dev/null; then
         echo "Downloading clang-format to bin directory"
         # download appropriate version of clang-format
-        wget ${clangFormatUrl} -O bin/clang-format
+        wget --progress=dot:giga ${clangFormatUrl} -O bin/clang-format
         chmod 751 bin/clang-format
     else
         echo "clang-format not found here: ${clangFormatUrl}"
@@ -86,7 +86,7 @@ function download_tools {
     if validate_url ${clangTidyUrl} > /dev/null; then
         echo "Downloading clang-tidy to bin directory"
         # download appropriate version of clang-tidy
-        wget ${clangTidyUrl} -O bin/clang-tidy
+        wget --progress=dot:giga ${clangTidyUrl} -O bin/clang-tidy
         chmod 751 bin/clang-tidy
     else
         echo "clang-tidy not found here: ${clangTidyUrl}"
