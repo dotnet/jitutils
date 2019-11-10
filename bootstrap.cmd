@@ -7,11 +7,13 @@ REM    if we can tell we're being run from within an existing "git clone", don't
 REM 2. Build the jitutils tools.
 REM 3. Download (if necessary) clang-format.exe and clang-tidy.exe (used by the jit-format tool).
 
+set __ExitCode=0
+
 where /q dotnet.exe
-if %errorlevel% NEQ 0 echo Can't find dotnet.exe! Please install this ^(e.g., from https://www.microsoft.com/net/core^) and add dotnet.exe to PATH && goto :EOF
+if %errorlevel% NEQ 0 echo Can't find dotnet.exe! Please install this ^(e.g., from https://www.microsoft.com/net/core^) and add dotnet.exe to PATH&set __ExitCode=1&goto :script_exit
 
 where /q git.exe
-if %errorlevel% NEQ 0 echo Can't find git.exe! Please add to PATH & goto :EOF
+if %errorlevel% NEQ 0 echo Can't find git.exe! Please add to PATH&set __ExitCode=1&goto :script_exit
 
 set __root=%~dp0
 setlocal
@@ -57,16 +59,20 @@ if errorlevel 1 (
 REM Now go ahead and build it.
 call :build_jitutils
 
-:done_build
 popd
+
+REM If the build failed, we need to check it here, before the "endlocal".
+if %__ExitCode% NEQ 0 goto :script_exit
 
 :: Add utilites to the current path, but only if not already there
 endlocal
 call :AddToPath %__root%bin
 set __root=
-goto :eof
+goto :script_exit
 
 REM ===================================================================
+REM == This is top-level, not a "call".
+REM ==
 :clone_jitutils
 
 pushd %__root%
@@ -74,6 +80,8 @@ pushd %__root%
 :: Clone the jitutils repo
 
 git clone https://github.com/dotnet/jitutils.git
+if errorlevel 1 echo ERROR: clone failed.&set __ExitCode=1&goto :script_exit
+if not exist .\jitutils echo ERROR: can't find jitutils directory.&set __ExitCode=1goto :script_exit
 
 pushd .\jitutils
 
@@ -83,24 +91,29 @@ popd
 
 popd
 
+REM If the build failed, we need to check it here, before the "endlocal".
+if %__ExitCode% NEQ 0 goto :script_exit
+
 :: Add utilites to the current path
 endlocal
 call :AddToPath %__root%jitutils\bin
 set __root=
-goto :eof
+goto :script_exit
 
 REM ===================================================================
 :build_jitutils
 
-if not exist .\build.cmd echo Can't find build.cmd.&goto :eof
+if not exist .\build.cmd echo Can't find build.cmd.&set __ExitCode=1&goto :eof
 
 :: Pull in needed packages.  This works globally (due to jitutils.sln).
 
 dotnet restore
+if errorlevel 1 echo ERROR: dotnet restore failed.&set __ExitCode=1&goto :eof
 
 :: Build and publish all the utilties and frameworks
 
 call .\build.cmd -p -f
+if errorlevel 1 echo ERROR: build failed.&set __ExitCode=1&goto :eof
 
 :: Check to see if clang-format and clang-tidy are available. Since we're going
 :: to add the 'bin' directory to the path, and they most likely already live there
@@ -116,18 +129,7 @@ IF %errorlevel% NEQ 0 GOTO DownloadTools
 where /Q clang-tidy
 IF %errorlevel% NEQ 0 GOTO DownloadTools
 
-GOTO CheckVersion
-
-:DownloadTools
-
-:: Download clang-format and clang-tidy
-echo Downloading formatting tools
-call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" -OutFile bin\clang-format.exe
-call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" -OutFile bin\clang-tidy.exe
-
-GOTO build_done
-
-:CheckVersion
+REM We found the tools on the path; now make sure the versions are good.
 
 clang-format --version | findstr 3.8 > NUL
 If %errorlevel% EQU 0 GOTO build_done
@@ -138,10 +140,24 @@ clang-tidy --version
 echo Please install version 3.8.* and put the tools on the PATH to use jit-format.
 echo Tools can be found at http://llvm.org/releases/download.html#3.8.0
 
-goto :DownloadTools
+:DownloadTools
+
+:: Download clang-format and clang-tidy
+echo Downloading formatting tools
+
+call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" -OutFile bin\clang-format.exe
+if errorlevel 1 echo ERROR: failed to download clang-format.&set __ExitCode=1&goto :eof
+
+call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" -OutFile bin\clang-tidy.exe
+if errorlevel 1 echo ERROR: failed to download clang-tidy.&set __ExitCode=1&goto :eof
 
 :build_done
 goto :eof
+
+REM ===================================================================
+:script_exit
+REM Note, this entire line gets variable expanded before execution, so the "exit" use of %__ExitCode% gets expanded before it is cleared during execution.
+set __ExitCode=&exit /b %__ExitCode%
 
 REM ===================================================================
 :AddToPath
