@@ -75,7 +75,7 @@ function download_tools {
     if validate_url ${clangFormatUrl} > /dev/null; then
         echo "Downloading clang-format to bin directory"
         # download appropriate version of clang-format
-        wget ${clangFormatUrl} -O bin/clang-format
+        wget --progress=dot:giga ${clangFormatUrl} -O bin/clang-format
         chmod 751 bin/clang-format
     else
         echo "clang-format not found here: ${clangFormatUrl}"
@@ -86,31 +86,36 @@ function download_tools {
     if validate_url ${clangTidyUrl} > /dev/null; then
         echo "Downloading clang-tidy to bin directory"
         # download appropriate version of clang-tidy
-        wget ${clangTidyUrl} -O bin/clang-tidy
+        wget --progress=dot:giga ${clangTidyUrl} -O bin/clang-tidy
         chmod 751 bin/clang-tidy
     else
         echo "clang-tidy not found here: ${clangTidyUrl}"
     fi
 
     if [ ! -f bin/clang-format -o ! -f bin/clang-tidy ]; then
-        echo "Either Clang-tidy or clang-format was not installed. Please install and put them on the PATH to use jit-format."
+        echo "Either clang-tidy or clang-format was not installed. Please install and put them on the PATH to use jit-format."
         echo "Tools can be found at http://llvm.org/releases/download.html#3.8.0"
+        return 1
     fi
+
+    return 0
 }
 
 # Start the non-functions.
+
+__ErrMsgPrefix="ERROR: "
 
 get_host_os
 
 # Check if our required tools exist.
 
 if ! hash dotnet 2>/dev/null; then
-    echo "Can't find dotnet! Please install from http://dot.net and add to PATH."
+    echo "${__ErrMsgPrefix}Can't find dotnet! Please install from http://dot.net and add to PATH."
     exit 1
 fi
 
 if ! hash git 2>/dev/null; then
-    echo "Can't find git! Please add to PATH."
+    echo "${__ErrMsgPrefix}Can't find git! Please add to PATH."
     exit 1
 fi
 
@@ -137,6 +142,15 @@ fi
 
 if [ ${__clone_repo} == 1 ]; then
     git clone https://github.com/dotnet/jitutils.git
+    exit_code=$?
+    if [ $exit_code != 0 ]; then
+        echo "${__ErrMsgPrefix}git clone failed."
+        exit $exit_code
+    fi
+    if [ ! -d ${__root}/jitutils ]; then
+        echo "${__ErrMsgPrefix}can't find ${__root}/jitutils."
+        exit 1
+    fi
     pushd ${__root}/jitutils >/dev/null
 else
     pushd . >/dev/null
@@ -145,13 +159,25 @@ fi
 # Pull in needed packages.  This works globally (due to jitutils.sln).
 
 dotnet restore
+exit_code=$?
+if [ $exit_code != 0 ]; then
+    echo "${__ErrMsgPrefix}Failed to restore packages."
+    exit $exit_code
+fi
 
 # Build and publish all the utilties and frameworks
 
 ./build.sh -p -f
+exit_code=$?
+if [ $exit_code != 0 ]; then
+    echo "${__ErrMsgPrefix}Build failed."
+    exit $exit_code
+fi
 
-if ! hash clang-format 2>/dev/null || ! hash clang-format 2>/dev/null; then
+exit_code=0
+if ! hash clang-format 2>/dev/null || ! hash clang-tidy 2>/dev/null; then
     download_tools
+    exit_code=$?
 else
     if ! clang-format --version | grep -q 3.8 || ! clang-tidy --version | grep -q 3.8; then
         echo "jit-format requires clang-format and clang-tidy version 3.8.*. Currently installed: "
@@ -160,7 +186,12 @@ else
 
         echo "Installing version 3.8 of clang tools"
         download_tools
+        exit_code=$?
     fi
+fi
+if [ $exit_code != 0 ]; then
+    echo "${__ErrMsgPrefix}Failed to download clang-format and clang-tidy."
+    exit $exit_code
 fi
 
 popd >/dev/null
@@ -169,3 +200,4 @@ echo "Adding ${__root}/jitutils/bin to PATH"
 export PATH=$PATH:${__root}/jitutils/bin
 
 echo "Done setting up!"
+exit 0

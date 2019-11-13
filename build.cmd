@@ -5,9 +5,7 @@ REM Build and optionally publish sub projects
 REM
 REM This script will by default build release versions of the tools.
 REM If publish (-p) is requested it will create standalone versions of the
-REM tools in <root>/src/<project>/<buildType>/netcoreapp2.1/<platform>/Publish/.
-REM These tools can be installed via the install script (install.{sh|cmd}) in
-REM this directory.
+REM tools in <root>/src/<project>/bin/<platform>/<BuildType>/netcoreapp<version>.
 
 set scriptDir=%~dp0
 set appInstallDir=%scriptDir%bin
@@ -48,6 +46,9 @@ goto :argLoop
 
 :build
 
+REM Do as many builds as possible; don't stop on first failure (if any).
+set __ExitCode=0
+
 REM Declare the list of projects
 set projects=jit-diff jit-dasm jit-analyze jit-format cijobs pmi jit-dasm-pmi jit-decisions-analyze
 
@@ -55,9 +56,13 @@ REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
         dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
+        if errorlevel 1 echo ERROR: dotnet publish failed for .\src\%%p.&set __ExitCode=1
+
         copy .\wrapper.bat %appInstallDir%\%%p.bat
+        if not exist %appInstallDir%\%%p.bat echo ERROR: Failed to copy wrapper script to %appInstallDir%\%%p.bat&set __ExitCode=1
     ) else (
         dotnet build -c %buildType% .\src\%%p
+        if errorlevel 1 echo ERROR: dotnet build failed for .\src\%%p.&set __ExitCode=1
     )
 )
 
@@ -65,24 +70,27 @@ if %fx%==true (
     @REM Need to expicitly restore 'packages' project for host runtime in order
     @REM for subsequent publish to be able to accept --runtime parameter to
     @REM publish it as standalone.
+
     dotnet restore --runtime %platform% .\src\packages
+    if errorlevel 1 echo ERROR: dotnet restore of .\src\packages failed.&set __ExitCode=1
+
     dotnet publish -c %buildType% -o %fxInstallDir% --runtime %platform% .\src\packages
+    if errorlevel 1 echo ERROR: dotnet publish of .\src\packages failed.&set __ExitCode=1
     
     @REM remove package version of mscorlib* - refer to core root version for diff testing
     if exist %fxInstallDir%\mscorlib* del /q %fxInstallDir%\mscorlib*
 )
 
 REM Done
-exit /b 0
+exit /b %__ExitCode%
 
 :usage
 echo.
-echo  build.cmd [-b ^<BUILD TYPE^>] [-f] [-h] [-p] [-t ^<TARGET^>]
+echo  build.cmd [-b ^<BUILD TYPE^>] [-f] [-h] [-p]
 echo.
 echo      -b ^<BUILD TYPE^>   : Build type, can be Debug or Release.
 echo      -h                : Show this message.
 echo      -f                : Publish default framework directory in ^<script_root^>\fx.
 echo      -p                : Publish utilities.
-echo      -t ^<TARGET^>       : Target framework. Default is netcoreapp2.1.
 echo. 
 exit /b 1

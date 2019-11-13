@@ -10,7 +10,7 @@
 function usage
 {
     echo ""
-    echo "build.sh [-b <BUILD TYPE>] [-f] [-h] [-p] [-t <TARGET>]"
+    echo "build.sh [-b <BUILD TYPE>] [-f] [-h] [-p]"
     echo ""
     echo "    -b <BUILD TYPE> : Build type, can be Debug or Release."
     echo "    -h              : Show this message."
@@ -20,6 +20,8 @@ function usage
 }
 
 # defaults
+__ErrMsgPrefix="ERROR: "
+final_exit_code=0
 buildType="Release"
 publish=false
 workingDir="$PWD"
@@ -31,8 +33,8 @@ platform="`dotnet --info | awk '/RID/ {print $2}'`"
 appInstallDir="$scriptDir/bin"
 fxInstallDir="$scriptDir/fx"
 
-# process for '-h', '-p', 'f', '-b <arg>', and '-t <arg>'
-while getopts "hpfbt:" opt; do
+# process for '-h', '-p', 'f', '-b <arg>'
+while getopts "hpfb:" opt; do
     case "$opt" in
     h)
         usage
@@ -58,9 +60,24 @@ for proj in "${projects[@]}"
 do
     if [ "$publish" == true ]; then
         dotnet publish -c $buildType -o $appInstallDir ./src/$proj
+        exit_code=$?
+        if [ $exit_code != 0 ]; then
+            echo "${__ErrMsgPrefix}dotnet publish of ./src/${proj} failed."
+            final_exit_code=1
+        fi
+
         cp ./wrapper.sh $appInstallDir/$proj
+        if [ ! -f $appInstallDir/$proj ]; then
+            echo "Failed to copy wrapper script to $appInstallDir/$proj"
+            final_exit_code=1
+        fi
     else
         dotnet build -c $buildType ./src/$proj
+        exit_code=$?
+        if [ $exit_code != 0 ]; then
+            echo "${__ErrMsgPrefix}dotnet build  of ./src/${proj} failed."
+            final_exit_code=1
+        fi
     fi
 done
 
@@ -71,8 +88,21 @@ if [ "$fx" == true ]; then
     # for subsequent publish to be able to accept --runtime parameter to publish
     # it as standalone.
     dotnet restore --runtime $platform ./src/packages
+    exit_code=$?
+    if [ $exit_code != 0 ]; then
+        echo "${__ErrMsgPrefix}dotnet restore of ./src/packages failed."
+        final_exit_code=1
+    fi
+
     dotnet publish -c $buildType -o $fxInstallDir --runtime $platform ./src/packages
+    exit_code=$?
+    if [ $exit_code != 0 ]; then
+        echo "${__ErrMsgPrefix}dotnet publish of ./src/packages failed."
+        final_exit_code=1
+    fi
 
     # remove package version of mscorlib* - refer to core root version for diff testing.
     rm -f $fxInstallDir/mscorlib*
 fi
+
+exit $final_exit_code
