@@ -891,13 +891,13 @@ namespace ManagedCodeGen
 
                             foreach (Metric metric in MetricCollection.AllMetrics)
                             {
-	                        // Metric Base Value
+                                // Metric Base Value
                                 outputStreamWriter.Write($"{method.baseMetrics.GetMetric(metric.Name).Value}\t");
 
-	                        // Metric Diff Value
+                                // Metric Diff Value
                                 outputStreamWriter.Write($"{method.diffMetrics.GetMetric(metric.Name).Value}\t");
 
-	                        // Metric Delta Value
+                                // Metric Delta Value
                                 outputStreamWriter.Write($"{method.deltaMetrics.GetMetric(metric.Name).Value}\t");
 
                                 // Metric Delta Percentage of Base
