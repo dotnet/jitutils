@@ -878,7 +878,7 @@ namespace ManagedCodeGen
                     outputStreamWriter.Write($"File\tMethod");
                     foreach (Metric metric in MetricCollection.AllMetrics)
                     {
-                        outputStreamWriter.Write($"\tBase {metric.Name}\tDiff {metric.Name}\tDelta {metric.Name}");
+                        outputStreamWriter.Write($"\tBase {metric.Name}\tDiff {metric.Name}\tDelta {metric.Name}\tPercentage {metric.Name}");
                     }
                     outputStreamWriter.WriteLine();
 
@@ -891,9 +891,22 @@ namespace ManagedCodeGen
 
                             foreach (Metric metric in MetricCollection.AllMetrics)
                             {
+	                        // Metric Base Value
                                 outputStreamWriter.Write($"{method.baseMetrics.GetMetric(metric.Name).Value}\t");
+
+	                        // Metric Diff Value
                                 outputStreamWriter.Write($"{method.diffMetrics.GetMetric(metric.Name).Value}\t");
+
+	                        // Metric Delta Value
                                 outputStreamWriter.Write($"{method.deltaMetrics.GetMetric(metric.Name).Value}\t");
+
+                                // Metric Delta Percentage of Base
+                                double deltaPercentage = 0.0;
+                                if (method.baseMetrics.GetMetric(metric.Name).Value != 0)
+                                {
+                                    deltaPercentage = method.deltaMetrics.GetMetric(metric.Name).Value / method.baseMetrics.GetMetric(metric.Name).Value;
+                                }
+                                outputStreamWriter.Write($"{deltaPercentage}\t");
                             }
 
                             outputStreamWriter.WriteLine();

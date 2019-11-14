@@ -345,6 +345,8 @@ namespace ManagedCodeGen
                     analysisArgs.Add(Path.Combine(config.OutputPath, "base"));
                     analysisArgs.Add("--diff");
                     analysisArgs.Add(Path.Combine(config.OutputPath, "diff"));
+                    analysisArgs.Add("--count");
+                    analysisArgs.Add(config.Count.ToString());
                     analysisArgs.Add("--recursive");
                     analysisArgs.Add("--metric");
                     analysisArgs.Add(config.Metric);
