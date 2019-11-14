@@ -875,10 +875,10 @@ namespace ManagedCodeGen
             {
                 using (var outputStreamWriter = new StreamWriter(outputStream))
                 {
-                    outputStreamWriter.Write($"File\tMethod\t");
+                    outputStreamWriter.Write($"File\tMethod");
                     foreach (Metric metric in MetricCollection.AllMetrics)
                     {
-                        outputStreamWriter.Write($"Base{metric.Name}\tDiff{metric.Name}\tDelta{metric.Name}");
+                        outputStreamWriter.Write($"\tBase {metric.Name}\tDiff {metric.Name}\tDelta {metric.Name}");
                     }
                     outputStreamWriter.WriteLine();
 
