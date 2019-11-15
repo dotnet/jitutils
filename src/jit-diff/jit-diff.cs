@@ -149,6 +149,7 @@ namespace ManagedCodeGen
             private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
             private bool _tsv;
             private bool _cctors;
+            private int  _count = 20;
             private string _metric = "CodeSize";
             private JObject _jObj;
             private bool _configFileLoaded = false;
@@ -178,7 +179,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("t|tag", ref _tag, "Name of root in output directory. Allows for many sets of output.");
                     syntax.DefineOption("c|corelib", ref _corelib, "Diff System.Private.CoreLib.dll.");
                     syntax.DefineOption("f|frameworks", ref _frameworks, "Diff frameworks.");
-                    syntax.DefineOption("m|metric", ref _metric, false, "Metric to use for diff computations (default: CodeSize).");
+                    syntax.DefineOption("m|metric", ref _metric, false, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize");
                     syntax.DefineOption("benchmarks", ref _benchmarks, "Diff core benchmarks.");
                     syntax.DefineOption("tests", ref _tests, "Diff all tests.");
                     syntax.DefineOption("gcinfo", ref _gcinfo, "Add GC info to the disasm output.");
@@ -196,6 +197,9 @@ namespace ManagedCodeGen
                     syntax.DefineOptionList("assembly", ref _assemblyList, "Run asm diffs on a given set of assemblies. An individual item can be an assembly or a directory tree containing assemblies.");
                     syntax.DefineOption("tsv", ref _tsv, "Dump analysis data to diffs.tsv in output directory.");
                     syntax.DefineOption("tier0", ref _tier0, "Diff tier0 codegen where possible.");
+
+                    // used by jit-analyze 
+                    syntax.DefineOption("count", ref _count, "provide the count parameter to jit-analyze (default 20)");
 
                     // List command section.
                     syntax.DefineCommand("list", ref _command, Commands.List,
@@ -1255,6 +1259,7 @@ namespace ManagedCodeGen
             public IReadOnlyList<string> AssemblyList => _assemblyList;
             public bool tsv {  get { return _tsv;  } }
             public bool Cctors => _cctors;
+            public int  Count { get { return _count; } }
             public string Metric => _metric;
         }
 
