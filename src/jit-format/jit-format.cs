@@ -37,6 +37,7 @@ namespace ManagedCodeGen
             private string _os = null;
             private string _build = null;
             private string _rootPath = null;
+            private string _repoRootPath = null;
             private IReadOnlyList<string> _filenames = Array.Empty<string>();
             private IReadOnlyList<string> _projects = Array.Empty<string>();
             private string _srcDirectory = null;
@@ -212,7 +213,7 @@ namespace ManagedCodeGen
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
                     if (!_untidy && _compileCommands == null)
                     {
-                        string[] compileCommandsPath = { _rootPath, "artifacts", "nmakeobj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
+                        string[] compileCommandsPath = { _rootPath, "..", "..", "artifacts", "nmakeobj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
                         _compileCommands = Path.Combine(compileCommandsPath);
                         _rewriteCompileCommands = true;
 
@@ -243,7 +244,7 @@ namespace ManagedCodeGen
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
                     if (!_untidy && _compileCommands == null)
                     {
-                        string[] compileCommandsPath = { _rootPath, "artifacts", "obj", _os + "." + _arch + "." + _build, "compile_commands.json" };
+                        string[] compileCommandsPath = { _rootPath, "..", "..", "artifacts", "obj", "coreclr", _os + "." + _arch + "." + _build, "compile_commands.json" };
                         _compileCommands = Path.Combine(compileCommandsPath);
                         _rewriteCompileCommands = true;
 
@@ -429,7 +430,7 @@ namespace ManagedCodeGen
 
             if (config.DoClangTidy)
             {
-                string[] newCompileCommandsDirPath = { config.CoreCLRRoot, "artifacts", "obj", config.OS + "." + config.Arch + "." + config.Build };
+                string[] newCompileCommandsDirPath = { config.CoreCLRRoot, "..", "..", "artifacts", "obj", "coreclr", config.OS + "." + config.Arch + "." + config.Build };
                 string compileCommands = config.CompileCommands;
                 string newCompileCommandsDir = Path.Combine(newCompileCommandsDirPath);
                 string newCompileCommands = Path.Combine(newCompileCommandsDir, "compile_commands_full.json");
