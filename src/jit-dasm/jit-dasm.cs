@@ -32,6 +32,12 @@ using Microsoft.DotNet.Tools.Common;
 
 namespace ManagedCodeGen
 {
+    public enum CodeGenerator
+    {
+        Crossgen,
+        Crossgen2
+    }
+
     // Define options to be parsed 
     public class Config
     {
@@ -49,13 +55,14 @@ namespace ManagedCodeGen
         private bool _dumpGCInfo = false;
         private bool _dumpDebugInfo = false;
         private bool _verbose = false;
+        private CodeGenerator _codeGenerator;
 
         public Config(string[] args)
         {
             _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
             {
                 syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
-                syntax.DefineOption("c|crossgen", ref _crossgenExe, "The crossgen compiler exe.");
+                syntax.DefineOption("c|crossgen", ref _crossgenExe, "The crossgen or crossgen2 compiler exe.");
                 syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
                 syntax.DefineOption("o|output", ref _rootPath, "The output path.");
                 syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
@@ -109,6 +116,19 @@ namespace ManagedCodeGen
                     // Set to full path for command resolution logic.
                     string fullCrossgenPath = Path.GetFullPath(_crossgenExe);
                     _crossgenExe = fullCrossgenPath;
+
+                    switch (Path.GetFileNameWithoutExtension(fullCrossgenPath).ToLower())
+                    {
+                        case "crossgen":
+                            _codeGenerator = CodeGenerator.Crossgen;
+                            break;
+                        case "crossgen2":
+                            _codeGenerator = CodeGenerator.Crossgen2;
+                            break;
+                        default:
+                            _syntaxResult.ReportError("--crossgen tool should be crossgen or crossgen2.");
+                            break;
+                    }
                 }
             }
 
@@ -152,6 +172,7 @@ namespace ManagedCodeGen
         public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
         public string FileName { get { return _fileName; } }
         public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
+        public CodeGenerator CodeGenerator { get { return _codeGenerator; } }
     }
 
     public class AssemblyInfo
@@ -189,7 +210,17 @@ namespace ManagedCodeGen
             // produced with a given code generator and assembly list, which then produces
             // a set of disasm outputs.
 
-            DisasmEngine crossgenDisasm = new DisasmEngine(config.CrossgenExecutable, config, config.RootPath, assemblyWorkList);
+
+            DisasmEngine crossgenDisasm;
+
+            if (config.CodeGenerator == CodeGenerator.Crossgen)
+            {
+                crossgenDisasm = new CrossgenDisasmEngine(config.CrossgenExecutable, config, config.RootPath, assemblyWorkList);
+            }
+            else
+            {
+                crossgenDisasm = new Crossgen2DisasmEngine(config.CrossgenExecutable, config, config.RootPath, assemblyWorkList);
+            }
             crossgenDisasm.GenerateAsm();
             
             if (crossgenDisasm.ErrorCount > 0)
@@ -338,19 +369,20 @@ namespace ManagedCodeGen
             return assemblyInfoList;
         }
 
-        private class DisasmEngine
+        private abstract class DisasmEngine
         {
-            private string _executablePath;
+            protected string _executablePath;
             private Config _config;
             private string _rootPath = null;
-            private IReadOnlyList<string> _platformPaths;
-            private string _jitPath = null;
+            protected IReadOnlyList<string> _platformPaths;
+            protected string _jitPath = null;
             private string _altjit = null;
             private List<AssemblyInfo> _assemblyInfoList;
             public bool doGCDump = false;
             public bool doDebugDump = false;
             public bool verbose = false;
             private int _errorCount = 0;
+            protected Dictionary<string, string> _environmentVariables;
 
             public int ErrorCount { get { return _errorCount; } }
 
@@ -364,6 +396,7 @@ namespace ManagedCodeGen
                 _jitPath = config.JitPath;
                 _altjit = config.AltJit;
                 _assemblyInfoList = assemblyInfoList;
+                _environmentVariables = new Dictionary<string, string>();
 
                 this.doGCDump = config.DumpGCInfo;
                 this.doDebugDump = config.DumpDebugInfo;
@@ -394,66 +427,45 @@ namespace ManagedCodeGen
                         continue;
                     }
 
-                    List<string> commandArgs = new List<string>() { fullPathAssembly };
+                    List<string> commandArgs = new List<string>();
 
                     // Tell crossgen not to output a success/failure message at the end; that message
                     // includes a full path to the generated .ni.dll file, which makes all base/diff
                     // asm files appear to have diffs.
-                    commandArgs.Insert(0, "/silent");
+                    AddSilentOption(commandArgs);
                     // Also pass /nologo to avoid spurious diffs that sometimes appear when errors
                     // occur (sometimes the logo lines and error lines are interleaved).
-                    commandArgs.Insert(0, "/nologo");
+                    AddNoLogoOption(commandArgs);
 
                     // Set jit path if it's defined.
                     if (_jitPath != null)
                     {
-                        commandArgs.Insert(0, "/JitPath");
-                        commandArgs.Insert(1, _jitPath);
+                        AddJitPathOption(commandArgs);
                     }
-                    
+
                     // Set platform assembly path if it's defined.
                     if (_platformPaths.Count > 0)
                     {
-                        commandArgs.Insert(0, "/Platform_Assemblies_Paths");
-                        commandArgs.Insert(1, String.Join(" ", _platformPaths));
+                        AddAssembliesPathsOption(commandArgs);
                     }
 
                     string extension = Path.GetExtension(fullPathAssembly);
                     string nativeOutput = Path.ChangeExtension(fullPathAssembly, "ni" + extension);
+                    string mapOutput = Path.ChangeExtension(fullPathAssembly, "ni.map");
 
                     if (_rootPath != null)
                     {
                         string assemblyNativeFileName = Path.ChangeExtension(assembly.Name, "ni" + extension);
+                        string assemblyMapFileName = Path.ChangeExtension(assembly.Name, "ni.map");
                         nativeOutput = Path.Combine(_rootPath, assembly.OutputPath, assemblyNativeFileName);
+                        mapOutput = Path.Combine(_rootPath, assembly.OutputPath, assemblyMapFileName);
 
                         PathUtility.EnsureParentDirectoryExists(nativeOutput);
 
-                        commandArgs.Insert(0, "/out");
-                        commandArgs.Insert(1, nativeOutput);
+                        AddOutputPathOption(commandArgs, nativeOutput);
                     }
 
-                    Command generateCmd = null;
-
-                    // Add environment variables to the environment of the command we are going to execute, and
-                    // display them to the user in verbose mode.
-                    void AddEnvironmentVariable(string varName, string varValue)
-                    {
-                        generateCmd.EnvironmentVariable(varName, varValue);
-                        if (this.verbose)
-                        {
-                            Console.WriteLine("Setting: {0}={1}", varName, varValue);
-                        }
-                    }
-
-                    try 
-                    {
-                        generateCmd = Command.Create(new ScriptResolverPolicyWrapper(), _executablePath, commandArgs);
-                    }
-                    catch (CommandUnknownException e)
-                    {
-                        Console.Error.WriteLine("\nError: {0} command not found!\n", e);
-                        Environment.Exit(-1);
-                    }
+                    commandArgs.Add(fullPathAssembly);
 
                     // Pick up ambient COMPlus settings.
                     foreach (string envVar in Environment.GetEnvironmentVariables().Keys)
@@ -491,6 +503,30 @@ namespace ManagedCodeGen
                         AddEnvironmentVariable("COMPlus_AltJitName", _altjit);
                     }
 
+                    string dasmPath = null;
+                    if (_rootPath != null)
+                    {
+                        // Generate path to the output file
+                        var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
+                        dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
+
+                        PathUtility.EnsureParentDirectoryExists(dasmPath);
+
+                        AddEnvironmentVariable("COMPlus_JitStdOutFile", dasmPath);
+                    }
+
+                    Command generateCmd = null;
+
+                    try
+                    {
+                        generateCmd = CreateCommand(new ScriptResolverPolicyWrapper(), commandArgs);
+                    }
+                    catch (CommandUnknownException e)
+                    {
+                        Console.Error.WriteLine("\nError: {0} command not found!\n", e);
+                        Environment.Exit(-1);
+                    }
+
                     if (this.verbose)
                     {
                         Console.WriteLine("Running: {0} {1}", _executablePath, String.Join(" ", commandArgs));
@@ -500,14 +536,7 @@ namespace ManagedCodeGen
 
                     if (_rootPath != null)
                     {
-                        // Generate path to the output file
-                        var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
-                        var dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
                         var logPath = Path.ChangeExtension(dasmPath, ".log");
-
-                        PathUtility.EnsureParentDirectoryExists(dasmPath);
-
-                        generateCmd.EnvironmentVariable("COMPlus_JitStdOutFile", dasmPath);
 
                         // Redirect stdout/stderr to log file and run command.
                         using (var outputStreamWriter = File.CreateText(logPath))
@@ -523,7 +552,7 @@ namespace ManagedCodeGen
                         if (result.ExitCode != 0)
                         {
                             _errorCount++;
-                            
+
                             if (result.ExitCode == -2146234344)
                             {
                                 Console.Error.WriteLine("{0} is not a managed assembly", fullPathAssembly);
@@ -560,7 +589,7 @@ namespace ManagedCodeGen
                         }
                     }
 
-                    // Remove the generated .ni.exe/dll file; typical use case is generating dasm for
+                    // Remove the generated .ni.exe/dll/map file; typical use case is generating dasm for
                     // assemblies in the test tree, and leaving the .ni.dll around would mean that
                     // subsequent test passes would re-use that code instead of jitting with the
                     // compiler that's supposed to be tested.
@@ -568,7 +597,137 @@ namespace ManagedCodeGen
                     {
                         File.Delete(nativeOutput);
                     }
+                    if (File.Exists(mapOutput))
+                    {
+                        File.Delete(mapOutput);
+                    }
                 }
+            }
+
+            // Add environment variables to the environment of the command we are going to execute, and
+            // display them to the user in verbose mode.
+            void AddEnvironmentVariable(string varName, string varValue)
+            {
+                _environmentVariables[varName] = varValue;
+                if (this.verbose)
+                {
+                    Console.WriteLine("Setting: {0}={1}", varName, varValue);
+                }
+            }
+
+            abstract protected void AddSilentOption(List<string> commandArgs);
+
+            abstract protected void AddNoLogoOption(List<string> commandArgs);
+
+            abstract protected void AddJitPathOption(List<string> commandArgs);
+
+            abstract protected void AddAssembliesPathsOption(List<string> commandArgs);
+
+            abstract protected void AddOutputPathOption(List<string> commandArgs, string outputPath);
+
+            abstract protected void AddOptimizationOption(List<string> commandArgs);
+
+            abstract protected Command CreateCommand(ICommandResolverPolicy resolverPolicy, List<string> commandArgs);
+        }
+
+        sealed private class CrossgenDisasmEngine : DisasmEngine
+        {
+            public CrossgenDisasmEngine(string executable, Config config, string outputPath,
+                List<AssemblyInfo> assemblyInfoList) : base(executable, config, outputPath, assemblyInfoList)
+            {
+            }
+
+            override protected void AddSilentOption(List<string> commandArgs)
+            {
+                commandArgs.Add("/silent");
+            }
+
+            override protected void AddNoLogoOption(List<string> commandArgs)
+            {
+                commandArgs.Add("/nologo");
+            }
+
+            override protected void AddJitPathOption(List<string> commandArgs)
+            {
+                commandArgs.Add("/JitPath");
+                commandArgs.Add(_jitPath);
+            }
+
+            override protected void AddAssembliesPathsOption(List<string> commandArgs)
+            {
+                commandArgs.Add("/Platform_Assemblies_Paths");
+                commandArgs.Add(String.Join(" ", _platformPaths));
+            }
+
+            override protected void AddOutputPathOption(List<string> commandArgs, string outputPath)
+            {
+                commandArgs.Add("/out");
+                commandArgs.Add(outputPath);
+            }
+
+            override protected void AddOptimizationOption(List<string> commandArgs)
+            {
+            }
+
+            override protected Command CreateCommand(ICommandResolverPolicy resolverPolicy, List<string> commandArgs)
+            {
+                Command command = Command.Create(resolverPolicy, _executablePath, commandArgs);
+                foreach (var envVar in _environmentVariables)
+                {
+                    command.EnvironmentVariable(envVar.Key, envVar.Value);
+                }
+                return command;
+            }
+        }
+
+        sealed private class Crossgen2DisasmEngine : DisasmEngine
+        {
+            public Crossgen2DisasmEngine(string executable, Config config, string outputPath,
+                List<AssemblyInfo> assemblyInfoList) : base(executable, config, outputPath, assemblyInfoList)
+            {
+            }
+
+            override protected void AddSilentOption(List<string> commandArgs)
+            {
+            }
+
+            override protected void AddNoLogoOption(List<string> commandArgs)
+            {
+            }
+
+            override protected void AddJitPathOption(List<string> commandArgs)
+            {
+                commandArgs.Add("--jitpath");
+                commandArgs.Add(_jitPath);
+            }
+
+            override protected void AddAssembliesPathsOption(List<string> commandArgs)
+            {
+                commandArgs.Add("--reference");
+                commandArgs.Add(String.Join(" ", _platformPaths.Select(str => Path.Combine(str, "*.dll"))));
+            }
+
+            override protected void AddOutputPathOption(List<string> commandArgs, string outputPath)
+            {
+                commandArgs.Add("--outputfilepath");
+                commandArgs.Add(outputPath);
+            }
+
+            override protected void AddOptimizationOption(List<string> commandArgs)
+            {
+                commandArgs.Add("--optimize");
+            }
+
+            override protected Command CreateCommand(ICommandResolverPolicy resolverPolicy, List<string> commandArgs)
+            {
+                foreach (var envVar in _environmentVariables)
+                {
+                    commandArgs.Add("--codegenopt");
+                    string complusPrefix = "COMPlus_";
+                    commandArgs.Add(String.Format("{0}={1}", envVar.Key.Substring(complusPrefix.Length), envVar.Value));
+                }
+                Command command = Command.Create(resolverPolicy, _executablePath, commandArgs);
+                return command;
             }
         }
     }

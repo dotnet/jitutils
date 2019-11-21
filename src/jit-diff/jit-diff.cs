@@ -171,7 +171,7 @@ namespace ManagedCodeGen
                     var diffOption = syntax.DefineOption("d|diff", ref _diffPath, false,
                         "The diff compiler directory or tag. Will use crossgen, corerun, or clrjit from this directory.");
                     syntax.DefineOption("crossgen", ref _crossgenExe,
-                        "The crossgen compiler exe. When this is specified, will use clrjit from the --base and " +
+                        "The crossgen or crossgen2 compiler exe. When this is specified, will use clrjit from the --base and " +
                         "--diff directories with this crossgen.");
                     syntax.DefineOption("o|output", ref _outputPath, "The output path.");
                     syntax.DefineOption("noanalyze", ref _noanalyze, "Do not analyze resulting base, diff dasm directories. (By default, the directories are analyzed for diffs.)");
