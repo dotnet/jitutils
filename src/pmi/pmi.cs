@@ -1302,8 +1302,11 @@ class PrepareMethodinator
 
     private static void DummyTimerCallback(object state)
     {
-        timer.Change(Timeout.Infinite, Timeout.Infinite);
-        flag = 1;
+        if (timer != null)
+        {
+            timer.Change(Timeout.Infinite, Timeout.Infinite);
+            flag = 1;
+        }
     }
 
     private static void EnsureTimerCallbackIsJitted()
