@@ -1316,7 +1316,7 @@ class PrepareMethodinator
             callback: new TimerCallback(DummyTimerCallback),
             state: null,
             dueTime: 10,
-            period: Timeout.Infinite);
+            period: 1000);
         while (flag == 0)
         {
             Thread.Sleep(1);
