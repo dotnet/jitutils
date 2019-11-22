@@ -1302,11 +1302,8 @@ class PrepareMethodinator
 
     private static void DummyTimerCallback(object state)
     {
-        if (timer != null)
-        {
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
-            flag = 1;
-        }
+        timer.Change(Timeout.Infinite, Timeout.Infinite);
+        flag = 1;
     }
 
     private static void EnsureTimerCallbackIsJitted()
@@ -1315,8 +1312,9 @@ class PrepareMethodinator
         timer = new Timer(
             callback: new TimerCallback(DummyTimerCallback),
             state: null,
-            dueTime: 10,
-            period: 1000);
+            dueTime: Timeout.Infinite,
+            period: Timeout.Infinite);
+        timer.Change(10, Timeout.Infinite);
         while (flag == 0)
         {
             Thread.Sleep(1);
