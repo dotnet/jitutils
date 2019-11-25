@@ -175,8 +175,8 @@ The "jit-diff diff" command has this help message:
                               directory.
         -d, --diff [arg]      The diff compiler directory or tag. Will use crossgen or clrjit from this
                               directory.
-        --crossgen <arg>      The crossgen compiler exe. When this is specified, will use clrjit from
-                              the --base and --diff directories with this crossgen.
+        --crossgen <arg>      The crossgen or crossgen2 compiler exe. When this is specified,
+                              will use clrjit from the --base and --diff directories with this crossgen.
         -o, --output <arg>    The output path.
         --noanalyze           Do not analyze resulting base, diff dasm directories. (By default, the
                               directories are analyzed for diffs.)
@@ -279,7 +279,7 @@ Explanation:
    System.Runtime.dll can be found for the purpose of using them to generate dasm.
 4. `--base` -- specify the directory in which a baseline JIT can be found.
 5. `--diff` -- specify the directory in which a diff (experimental) JIT can be found.
-6. `--crossgen` -- specify the crossgen.exe to use. Note that this must match the build flavor of `--core_root`.
+6. `--crossgen` -- specify the crossgen.exe or crossgen2.exe to use. Note that this must match the build flavor of `--core_root`.
 
 You create the `CORE_ROOT` directory "layout" by running the runtest script.
 On Windows, this can be created by running the following in the dotnet/coreclr repo root.
@@ -507,7 +507,7 @@ Sample help command line:
 
     --altjit <arg>             If set, the name of the altjit to use
                                (e.g., protononjit.dll).
-    -c, --crossgen <arg>       The crossgen compiler exe.
+    -c, --crossgen <arg>       The crossgen or crossgen2 compiler exe.
     -j, --jit <arg>            The full path to the jit library.
     -o, --output <arg>         The output path.
     -f, --file <arg>           Name of file to take list of assemblies
