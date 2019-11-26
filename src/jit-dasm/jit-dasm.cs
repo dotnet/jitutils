@@ -465,6 +465,8 @@ namespace ManagedCodeGen
                         AddOutputPathOption(commandArgs, nativeOutput);
                     }
 
+                    AddOptimizationOption(commandArgs);
+
                     commandArgs.Add(fullPathAssembly);
 
                     // Pick up ambient COMPlus settings.
