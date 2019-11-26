@@ -506,7 +506,7 @@ namespace ManagedCodeGen
             Regex namePattern = new Regex(@"for method (.*)$");
             Regex dataPattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
             // use new regex for perf score so we can still parse older files that did not have it.
-            Regex dataPattern2 = new Regex(@"perf score (\d+(\.\d+)?)");
+            Regex dataPattern2 = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
 
             var result = 
              File.ReadLines(filePath)
@@ -527,7 +527,7 @@ namespace ManagedCodeGen
                                      prologBytes = dataMatch.Success ?
                                         Int32.Parse(dataMatch.Groups[2].Value) : 0,
                                      perfScore = dataMatch2.Success ?
-                                        Double.Parse(dataMatch2.Groups[1].Value) : 0,
+                                        Double.Parse(dataMatch2.Groups[2].Value) : 0,
                                      // Use function index only from non-data lines (the name line)
                                      functionOffset = dataMatch.Success ?
                                         0 : x.index
