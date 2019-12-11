@@ -50,7 +50,7 @@ REM Do as many builds as possible; don't stop on first failure (if any).
 set __ExitCode=0
 
 REM Declare the list of projects
-set projects=jit-diff jit-dasm jit-analyze jit-format cijobs pmi jit-dasm-pmi jit-decisions-analyze
+set projects=jit-diff jit-dasm jit-analyze jit-format pmi jit-dasm-pmi jit-decisions-analyze
 
 REM Build each project
 for %%p in (%projects%) do (
