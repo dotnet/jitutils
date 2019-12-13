@@ -60,7 +60,6 @@ build.sh [-b <BUILD TYPE>] [-f] [-h] [-p] [-t <TARGET>]
     -h              : Show this message.
     -f              : Install default framework directory in <script_root>/fx.
     -p              : Publish utilities.
-    -t <TARGET>     : Target framework. Default is netcoreapp2.0.
 ```
 
 ## 50,000 foot view
@@ -552,8 +551,8 @@ Sample help command line:
 ## packages
 
 This is a skeleton project that exists to pull down a predictable set of framework 
-assemblies and publish them in the root in the subdirectory './fx'.  Today this is 
-set to the NetCoreApp1.0 frameworks.  When this package is installed 
+assemblies and publish them in the root in the subdirectory './fx'.
+When this package is installed 
 via the `build.{cmd|sh}` script this set can be used on any supported platform for 
 diffing.  Note: The mscorlib.dll is removed, as this assembly should be updated from 
 the selected base runtime that is under test, for consistency. To add particular packages 

@@ -37,7 +37,6 @@ namespace ManagedCodeGen
             private string _os = null;
             private string _build = null;
             private string _rootPath = null;
-            private string _repoRootPath = null;
             private IReadOnlyList<string> _filenames = Array.Empty<string>();
             private IReadOnlyList<string> _projects = Array.Empty<string>();
             private string _srcDirectory = null;
