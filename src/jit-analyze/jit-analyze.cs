@@ -231,6 +231,7 @@ namespace ManagedCodeGen
                 }
             }
 
+            [JsonProperty()]
             private Metric[] metrics;
 
             public MetricCollection()
@@ -846,25 +847,8 @@ namespace ManagedCodeGen
             {
                 using (var outputStreamWriter = new StreamWriter(outputStream))
                 {
-                    foreach (var file in compareList)
-                    {
-                        if (file.deltaMetrics.IsZero())
-                        {
-                            // Early out if there are no diff metrics.
-                            continue;
-                        }
-
-                        try
-                        {
-                            // Serialize file delta to output file.
-                            outputStreamWriter.Write(JsonConvert.SerializeObject(file, Formatting.Indented));
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine("Exception serializing JSON: {0}", e.ToString());
-                            break;
-                        }
-                    }
+                    // Serialize file delta to output file.
+                    outputStreamWriter.Write(JsonConvert.SerializeObject(compareList.Where(file => !file.deltaMetrics.IsZero()), Formatting.Indented));
                 }
             }
         }
