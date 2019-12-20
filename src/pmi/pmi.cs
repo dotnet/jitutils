@@ -122,7 +122,7 @@ public class Resolver
     }
 }
 
-#if NETCOREAPP3_0
+#if NETCOREAPP3_0 || NETCOREAPP3_1
 public class CustomLoadContext : AssemblyLoadContext
 {
     public string PmiPath { get; }
@@ -1434,7 +1434,7 @@ class PrepareMethodinator
         int result = 0;
         string msg = "a file";
 
-#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0
+#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NETCOREAPP3_1
         msg += " or a directory";
         if (Directory.Exists(assemblyName))
         {
