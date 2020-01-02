@@ -21,7 +21,7 @@ namespace ManagedCodeGen
             return resultPath;
         }
 
-        // GetRepoRoot: Determine if the current directory is within the directory tree of a dotnet/coreclr
+        // GetRepoRoot: Determine if the current directory is within the directory tree of a dotnet/runtime
         // repo clone. Depends on "git".
         public static string GetRepoRoot(bool verbose = false)
         {
@@ -41,7 +41,7 @@ namespace ManagedCodeGen
             var git_root = lines[0];
             var repo_root = git_root.Replace('/', Path.DirectorySeparatorChar);
 
-            // Is it actually the dotnet/coreclr repo?
+            // Is it actually the dotnet/runtime repo?
             commandArgs = new List<string> { "remote", "-v" };
             result = TryCommand("git", commandArgs, true);
             if (result.ExitCode != 0)
@@ -53,12 +53,12 @@ namespace ManagedCodeGen
                 return null;
             }
 
-            bool isCoreClr = result.StdOut.Contains("/coreclr");
-            if (!isCoreClr)
+            bool isRuntime = result.StdOut.Contains("/runtime");
+            if (!isRuntime)
             {
                 if (verbose)
                 {
-                    Console.Error.WriteLine("Doesn't appear to be the dotnet/coreclr repo:");
+                    Console.Error.WriteLine("Doesn't appear to be the dotnet/runtime repo:");
                     Console.Error.WriteLine(result.StdOut);
                 }
                 return null;

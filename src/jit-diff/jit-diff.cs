@@ -46,7 +46,7 @@ namespace ManagedCodeGen
         private static string s_analysisTool = "jit-analyze";
         private static string s_configFileName = "config.json";
         private static string s_configFileRootKey = "asmdiff";
-        private static string[] s_defaultDiffDirectoryPath = { "bin", "diffs" };
+        private static string[] s_defaultDiffDirectoryPath = { "artifacts", "diffs" };
 
         private static string GetJitLibraryName(string platformMoniker)
         {
@@ -187,8 +187,8 @@ namespace ManagedCodeGen
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("core_root", ref _platformPath, "Path to test CORE_ROOT.");
                     syntax.DefineOption("test_root", ref _testPath, "Path to test tree. Use with --benchmarks or --tests.");
-                    syntax.DefineOption("base_root", ref _baseRoot, "Path to root of base dotnet/coreclr repo.");
-                    syntax.DefineOption("diff_root", ref _diffRoot, "Path to root of diff dotnet/coreclr repo.");
+                    syntax.DefineOption("base_root", ref _baseRoot, "Path to root of base dotnet/runtime repo.");
+                    syntax.DefineOption("diff_root", ref _diffRoot, "Path to root of diff dotnet/runtime repo.");
                     syntax.DefineOption("arch", ref _arch, "Architecture to diff (x86, x64).");
                     syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
                     syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
@@ -381,9 +381,9 @@ namespace ManagedCodeGen
                     // --crossgen and --core_root need to be from the same build.
                     //
                     // E.g.:
-                    //    test_root: c:\gh\coreclr\bin\tests\Windows_NT.x64.Release
-                    //    Core_Root: c:\gh\coreclr\bin\tests\Windows_NT.x64.Release\Tests\Core_Root
-                    //    base/diff: c:\gh\coreclr\bin\Product\Windows_NT.x64.Checked
+                    //    test_root: c:\gh\runtime\artifacts\tests\coreclr\Windows_NT.x64.Release
+                    //    Core_Root: c:\gh\runtime\artifacts\tests\coreclr\Windows_NT.x64.Release\Tests\Core_Root
+                    //    base/diff: c:\gh\runtime\artifacts\bin\coreclr\Windows_NT.x64.Checked
 
                     List<string> archList;
                     List<string> buildList;
@@ -434,7 +434,7 @@ namespace ManagedCodeGen
 
                             if (needBasePath && (_baseRoot != null))
                             {
-                                tryBasePath = Path.Combine(_baseRoot, "bin", "Product", buildDirName);
+                                tryBasePath = Path.Combine(_baseRoot, "artifacts", "bin", "coreclr", buildDirName);
                                 if (!Directory.Exists(tryBasePath))
                                 {
                                     continue;
@@ -443,7 +443,7 @@ namespace ManagedCodeGen
 
                             if (needDiffPath && (_diffRoot != null))
                             {
-                                tryDiffPath = Path.Combine(_diffRoot, "bin", "Product", buildDirName);
+                                tryDiffPath = Path.Combine(_diffRoot, "artifacts", "bin", "coreclr", buildDirName);
                                 if (!Directory.Exists(tryDiffPath))
                                 {
                                     continue;
@@ -492,7 +492,7 @@ namespace ManagedCodeGen
 
                             if (needCoreRoot && (_diffRoot != null))
                             {
-                                tryPlatformPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName, "Tests", "Core_Root");
+                                tryPlatformPath = Path.Combine(_diffRoot, "artifacts", "tests", "coreclr", buildDirName, "Tests", "Core_Root");
                                 if (!Directory.Exists(tryPlatformPath))
                                 {
                                     continue;
@@ -501,7 +501,7 @@ namespace ManagedCodeGen
 
                             if (needCrossgen && (_diffRoot != null))
                             {
-                                tryCrossgen = Path.Combine(_diffRoot, "bin", "Product", buildDirName, GetCrossgenExecutableName(PlatformMoniker));
+                                tryCrossgen = Path.Combine(_diffRoot, "artifacts", "bin", "coreclr", buildDirName, GetCrossgenExecutableName(PlatformMoniker));
                                 if (!File.Exists(tryCrossgen))
                                 {
                                     continue;
@@ -510,7 +510,7 @@ namespace ManagedCodeGen
 
                             if (needTestTree && (_diffRoot != null))
                             {
-                                tryTestPath = Path.Combine(_diffRoot, "bin", "tests", buildDirName);
+                                tryTestPath = Path.Combine(_diffRoot, "artifacts", "tests", "coreclr", buildDirName);
                                 if (!Directory.Exists(tryTestPath))
                                 {
                                     continue;
@@ -733,26 +733,26 @@ namespace ManagedCodeGen
                     string[] diffExampleText = {
                     @"Examples:",
                     @"",
-                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.Release\Tests\Core_Root --base c:\coreclr_base\bin\Product\Windows_NT.x64.Checked --diff c:\coreclr\bin\Product\Windows_NT.x86.Checked",
+                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\runtime\artifacts\tests\coreclr\Windows_NT.x64.Release\Tests\Core_Root --base c:\runtime_base\artifacts\bin\coreclr\Windows_NT.x64.Checked --diff c:\runtime\artifacts\bin\coreclr\Windows_NT.x86.Checked",
                     @"      Generate diffs of prejitted code for System.Private.CoreLib.dll by specifying baseline and",
                     @"      diff compiler directories explicitly.",
                     @"",
-                    @"  jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.Checked --diff",
-                    @"      If run within the c:\coreclr git clone of dotnet/coreclr, does the same",
+                    @"  jit-diff diff --output c:\diffs --base c:\runtime_base\artifacts\bin\coreclr\Windows_NT.x64.Checked --diff",
+                    @"      If run within the c:\runtime git clone of dotnet/runtime, does the same",
                     @"      as the prevous example, using defaults.",
                     @"",
-                    @"  jit-diff diff --output c:\diffs --base --base_root c:\coreclr_base --diff",
+                    @"  jit-diff diff --output c:\diffs --base --base_root c:\runtime_base --diff",
                     @"      Does the same as the prevous example, using -base_root to find the base",
-                    @"      directory (if run from c:\coreclr tree).",
+                    @"      directory (if run from c:\runtime tree).",
                     @"",
                     @"  jit-diff diff --base --diff",
-                    @"      Does the same as the prevous example (if run from c:\coreclr tree), but uses",
-                    @"      default c:\coreclr\bin\diffs output directory, and `base_root` must be specified",
+                    @"      Does the same as the prevous example (if run from c:\runtime tree), but uses",
+                    @"      default c:\runtime\artifacts\diffs output directory, and `base_root` must be specified",
                     @"      in the config.json file in the directory pointed to by the JIT_UTILS_ROOT",
                     @"      environment variable.",
                     @"",
                     @"  jit-diff diff --base --diff --pmi",
-                    @"      Does the same as the prevous example (if run from c:\coreclr tree)",
+                    @"      Does the same as the prevous example (if run from c:\runtime tree)",
                     @"      but shows diffs for jitted code, via PMI",
                     @"",
                     @"  jit-diff diff --diff",
@@ -801,12 +801,12 @@ namespace ManagedCodeGen
 
                 if (_benchmarks && (_testPath == null))
                 {
-                    DisplayErrorMessage("--benchmarks requires specifying --test_root or --diff_root or running in the coreclr tree");
+                    DisplayErrorMessage("--benchmarks requires specifying --test_root or --diff_root or running in the runtime tree");
                 }
 
                 if (_tests && (_testPath == null))
                 {
-                    DisplayErrorMessage("--tests requires specifying --test_root or --diff_root or running in the coreclr tree");
+                    DisplayErrorMessage("--tests requires specifying --test_root or --diff_root or running in the runtime tree");
                 }
 
                 if (_outputPath == null)

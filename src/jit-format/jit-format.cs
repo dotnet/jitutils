@@ -60,7 +60,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: x64, x86)");
                     syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Ubuntu, Fedora, etc.)");
                     syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
-                    syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base coreclr directory");
+                    syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base runtime directory");
                     syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
@@ -198,11 +198,11 @@ namespace ManagedCodeGen
                 if (!Directory.Exists(_rootPath))
                 {
                     // If _rootPath doesn't exist, it is an invalid path
-                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
+                    _syntaxResult.ReportError("Invalid path to runtime directory. Specify with --coreclr");
                 }
                 else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")))
                 {
-                    // If _rootPath\build.cmd or _rootPath\build.sh do not exist, it is an invalid path to a coreclr repo
+                    // If _rootPath\build.cmd or _rootPath\build.sh do not exist, it is an invalid path to a runtime repo
                     _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
                 }
 

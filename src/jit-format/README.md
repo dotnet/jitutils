@@ -13,7 +13,7 @@ To build/setup:
 * Issue a 'dotnet build' command.  This will create a jit-format in the bin
   directory that you can use to check the formatting of your changes.
 * Invoke jit-format -a `<arch>` -b `<build>` -p `<platform>` 
-  --coreclr `<path to coreclr root>`
+  --coreclr `<path to runtime root>`
 * jit-format can be installed by running the project build script in the root of this repo 
 via
 
