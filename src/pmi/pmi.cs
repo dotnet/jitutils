@@ -122,7 +122,38 @@ public class Resolver
     }
 }
 
-#if NETCOREAPP3_0 || NETCOREAPP3_1 || NETCOREAPP5_0
+#if NETFRAMEWORK || NETCOREAPP1_0 || NETCOREAPP1_1 || NETCOREAPP2_0 || NETCOREAPP2_1 || NETCOREAPP2_2
+// Full Fx and older NETCOREAPP: via the assembly resolve event
+public class CustomLoadContext : AssemblyLoadContext
+{
+    readonly static string s_pmiPath;
+
+    public string PmiPath => s_pmiPath;
+
+    public CustomLoadContext(string ignored)
+    {
+    }
+
+    // Use .cctor to install the resolve handler and set PmiPath
+    static CustomLoadContext()
+    {
+        AppDomain currentDomain = AppDomain.CurrentDomain;
+        currentDomain.AssemblyResolve += new ResolveEventHandler(Resolver.ResolveEventHandler);
+        s_pmiPath = Environment.GetEnvironmentVariable("PMIPATH");
+    }
+
+    public Assembly LoadAssembly(string assemblyPath)
+    {
+        return Assembly.LoadFrom(assemblyPath);
+    }
+
+    protected override Assembly Load(AssemblyName assemblyName)
+    {
+        return Resolver.Resolve(assemblyName.Name + ".dll", this);
+    }
+}
+#else
+// NETCOREAPP3+: via a true custom load context
 public class CustomLoadContext : AssemblyLoadContext
 {
     public string PmiPath { get; }
@@ -151,35 +182,6 @@ public class CustomLoadContext : AssemblyLoadContext
     public Assembly LoadAssembly(string assemblyPath)
     {
         return LoadFromAssemblyPath(assemblyPath);
-    }
-
-    protected override Assembly Load(AssemblyName assemblyName)
-    {
-        return Resolver.Resolve(assemblyName.Name + ".dll", this);
-    }
-}
-#else
-public class CustomLoadContext : AssemblyLoadContext
-{
-    readonly static string s_pmiPath;
-
-    public string PmiPath => s_pmiPath;
-
-    public CustomLoadContext(string ignored)
-    {
-    }
-
-    // Use .cctor to install the resolve handler and set PmiPath
-    static CustomLoadContext()
-    {
-        AppDomain currentDomain = AppDomain.CurrentDomain;
-        currentDomain.AssemblyResolve += new ResolveEventHandler(Resolver.ResolveEventHandler);
-        s_pmiPath = Environment.GetEnvironmentVariable("PMIPATH");
-    }
-
-    public Assembly LoadAssembly(string assemblyPath)
-    {
-        return Assembly.LoadFrom(assemblyPath);
     }
 
     protected override Assembly Load(AssemblyName assemblyName)
