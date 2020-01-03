@@ -1291,14 +1291,19 @@ class PrepareMethodinator
             + "      The same as PrepAll, but is more robust. While PrepAll will stop at the first JIT assert, DriveAll will\n"
             + "      continue by skipping that method.\n"
             + "\n"
-            + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\n"
-            + "\n"
             + "Optional suffixes on the command will change behavior:\n"
             + "   -CCtors will jit and run cctors before jitting other methods\n"
             + "   -Quiet will suppress in-progress messages for type and method exploration\n"
             + "   -Time will always show elapsed times, even in -Quiet mode\n"
             + "\n"
             + "    for example: " + exeName + " PrepAll-Quiet-Time PATH_TO_ASSEMBLY\n"
+            + "\n"
+            + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\n"
+#if NETCOREAPP
+            + "\n"
+            + "PATH_TO_ASSEMBLY can optionally be a directory; if so the tool will process all .exe and .dll files\n"
+            + "   in the directory tree.\n"
+#endif
         );
 
         return 101;
