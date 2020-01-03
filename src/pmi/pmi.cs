@@ -122,7 +122,7 @@ public class Resolver
     }
 }
 
-#if NETCOREAPP3_0 || NETCOREAPP3_1
+#if NETCOREAPP3_0 || NETCOREAPP3_1 || NETCOREAPP5_0
 public class CustomLoadContext : AssemblyLoadContext
 {
     public string PmiPath { get; }
@@ -497,6 +497,11 @@ abstract class PrepareBase : CounterBase
         {
             Console.WriteLine();
             Console.WriteLine($"InvalidProgramException {type.FullName}::{method.Name}");
+        }
+        catch (System.InvalidOperationException)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"InvalidOperationException {type.FullName}::{method.Name}");
         }
         catch (Exception e)
         {
@@ -1270,28 +1275,30 @@ class PrepareMethodinator
         }
 
         Console.WriteLine(
-            "Usage:\r\n"
-            + "\r\n"
-            + "  " + exeName + " Count PATH_TO_ASSEMBLY\r\n"
-            + "      Count the number of types and methods in an assembly.\r\n"
-            + "\r\n"
-            + "  " + exeName + " PrepOne PATH_TO_ASSEMBLY INDEX_OF_TARGET_METHOD\r\n"
-            + "      JIT a single method, specified by a method number.\r\n"
-            + "\r\n"
-            + "  " + exeName + " PrepAll PATH_TO_ASSEMBLY [INDEX_OF_FIRST_METHOD_TO_PROCESS]\r\n"
-            + "      JIT all the methods in an assembly. If INDEX_OF_FIRST_METHOD_TO_PROCESS is specified, it is the first\r\n"
-            + "      method compiled, followed by all subsequent methods.\r\n"
-            + "\r\n"
-            + "  " + exeName + " DriveAll PATH_TO_ASSEMBLY\r\n"
-            + "      The same as PrepAll, but is more robust. While PrepAll will stop at the first JIT assert, DriveAll will\r\n"
-            + "      continue by skipping that method.\r\n"
-            + "\r\n"
-            + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\r\n"
-            + "\r\n"
-            + "Optional suffixes will change behavior:\r\n"
-            + "   -CCtors will jit and run cctors before jitting other methods\r\n"
-            + "   -Quiet will suppress in-progress messages for type and method exploration\r\n"
-            + "   -Time will always show elapsed times, even in -Quiet mode"
+            "Usage:\n"
+            + "\n"
+            + "  " + exeName + " Count PATH_TO_ASSEMBLY\n"
+            + "      Count the number of types and methods in an assembly.\n"
+            + "\n"
+            + "  " + exeName + " PrepOne PATH_TO_ASSEMBLY INDEX_OF_TARGET_METHOD\n"
+            + "      JIT a single method, specified by a method number.\n"
+            + "\n"
+            + "  " + exeName + " PrepAll PATH_TO_ASSEMBLY [INDEX_OF_FIRST_METHOD_TO_PROCESS]\n"
+            + "      JIT all the methods in an assembly. If INDEX_OF_FIRST_METHOD_TO_PROCESS is specified, it is the first\n"
+            + "      method compiled, followed by all subsequent methods.\n"
+            + "\n"
+            + "  " + exeName + " DriveAll PATH_TO_ASSEMBLY\n"
+            + "      The same as PrepAll, but is more robust. While PrepAll will stop at the first JIT assert, DriveAll will\n"
+            + "      continue by skipping that method.\n"
+            + "\n"
+            + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\n"
+            + "\n"
+            + "Optional suffixes on the command will change behavior:\n"
+            + "   -CCtors will jit and run cctors before jitting other methods\n"
+            + "   -Quiet will suppress in-progress messages for type and method exploration\n"
+            + "   -Time will always show elapsed times, even in -Quiet mode\n"
+            + "\n"
+            + "    for example: " + exeName + " PrepAll-Quiet-Time PATH_TO_ASSEMBLY\n"
         );
 
         return 101;
@@ -1346,6 +1353,7 @@ class PrepareMethodinator
 
         int dashIndex = command.IndexOf('-');
         string rootCommand = dashIndex < 0 ? command : command.Substring(0, dashIndex);
+        bool verbose = !(command.IndexOf("QUIET") > 0);
         switch (rootCommand)
         {
             case "DRIVEALL":
@@ -1363,7 +1371,7 @@ class PrepareMethodinator
 
                 if (rootCommand == "DRIVEALL")
                 {
-                    return PMIDriver.PMIDriver.Drive(assemblyName);
+                    return PMIDriver.PMIDriver.Drive(assemblyName, verbose);
                 }
 
                 v = new Counter();
@@ -1394,7 +1402,6 @@ class PrepareMethodinator
                 }
 
                 bool all = command.IndexOf("ALL") > 0;
-                bool verbose = !(command.IndexOf("QUIET") > 0);
                 bool time = verbose || command.IndexOf("TIME") > 0;
 
                 if (all)
@@ -1434,7 +1441,7 @@ class PrepareMethodinator
         int result = 0;
         string msg = "a file";
 
-#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NETCOREAPP3_1
+#if NETCOREAPP
         msg += " or a directory";
         if (Directory.Exists(assemblyName))
         {
