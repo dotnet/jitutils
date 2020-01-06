@@ -22,7 +22,7 @@ namespace PMIDriver
         const int PREPALL_TIMEOUT = 1800000; //30 minutes
         const int PREPALL_MAX_RETRY_COUNT = 5;
 
-        public static int Drive(string assemblyName)
+        public static int Drive(string assemblyName, bool verbose)
         {
             string assemblyPath = Path.GetFullPath(assemblyName);
             string assemblyPathAsFile = Util.MapPathToFileName(assemblyPath);
@@ -167,7 +167,7 @@ namespace PMIDriver
                 p.StartInfo.RedirectStandardError = true;
 
                 // Fetch our command line. Split off the arguments.
-#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NETCOREAPP3_1
+#if NETCOREAPP
                 // For .Net Core the PMI assembly is an argument to dotnet.
                 string newCommandLine = Environment.CommandLine.Replace("DRIVEALL", "PREPALL");
 #else
@@ -182,6 +182,8 @@ namespace PMIDriver
 
                 p.StartInfo.FileName = driverName;
                 p.StartInfo.Arguments = newCommandLine;
+
+                Console.WriteLine($"DRIVEALL: Invoking {driverName} {newCommandLine}");
 
                 p.Start();
                 szOutput = p.StandardOutput.ReadToEnd();
