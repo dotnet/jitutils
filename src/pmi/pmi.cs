@@ -1166,33 +1166,45 @@ class Worker
             }
         }
 
-        // Special case the core async method UnsafeAwaitOnCompleted. This method requires a number
-        // of jit optimizations to remove boxing and limit allocations for async awaits.
+        // Special case some core async methods.
         //
-        // The method has two generic type arguments that are constrained to IAsyncStateMachine and
+        // These method have generic type arguments that are constrained to IAsyncStateMachine and
         // ICriticalNotifyCompletion. We use helper types (defined above) and a few framework types
         // to form a set of types that implement these interfaces.
+        //
+        Type helperType = typeof(AsyncHelper).Assembly.GetType("AsyncHelper+<V>d__0", false);
+
+        // Special case the key async method UnsafeAwaitOnCompleted. This method requires a number
+        // of jit optimizations to remove boxing and limit allocations for async awaits.
         if (type.Name.Contains("AsyncTaskMethodBuilder") && method.Name.Contains("AwaitUnsafeOnCompleted"))
         {
             // Awaiter types that implement ICriticalNotifyCompletion
             Type[] awaiterTypes = new Type[] { typeof(TaskAwaiter), typeof(ConfiguredTaskAwaitable.ConfiguredTaskAwaiter),
-                typeof(YieldAwaitable.YieldAwaiter), typeof(RefAwaiter), typeof(StructAwaiter) };
-            // The nested type in the AsyncHelper that implements IAsyncStateMachine
-            Type helperType = typeof(AsyncHelper).Assembly.GetType("AsyncHelper+<V>d__0", false);
-            if (helperType != null)
+                                               typeof(YieldAwaitable.YieldAwaiter), typeof(RefAwaiter), typeof(StructAwaiter) };
+            foreach (Type awaiterType in awaiterTypes)
             {
-                foreach (Type awaiterType in awaiterTypes)
+                try
                 {
-                    try
-                    {
-                        MethodInfo newMethod = methodInfo.MakeGenericMethod(awaiterType, helperType);
-                        results.Add(newMethod);
-                        instantiationCount++;
-                    }
-                    catch (Exception)
-                    {
-                    }
+                    MethodInfo newMethod = methodInfo.MakeGenericMethod(awaiterType, helperType);
+                    results.Add(newMethod);
+                    instantiationCount++;
                 }
+                catch (Exception)
+                {
+                }
+            }
+        }
+
+        if (type.Name.Contains("AsyncMethodBuilderCore") && method.Name.Contains("Start"))
+        {
+            try
+            {
+                MethodInfo newMethod = methodInfo.MakeGenericMethod(helperType);
+                results.Add(newMethod);
+                instantiationCount++;
+            }
+            catch (Exception)
+            {
             }
         }
 
