@@ -60,8 +60,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: x64, x86)");
                     syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Ubuntu, Fedora, etc.)");
                     syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
-                    syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base runtime directory. Exists for back-compat; use --runtime");
-                    syntax.DefineOption("r|runtime", ref _rootPath, "Full path to base runtime directory");
+                    syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base runtime/src/coreclr directory");
                     syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
@@ -82,6 +81,12 @@ namespace ManagedCodeGen
             {
                 // Extract system RID from dotnet cli
                 List<string> commandArgs = new List<string> { "--info" };
+
+                if (_verbose)
+                {
+                    Console.WriteLine("Running: {0} {1}", "dotnet", String.Join(" ", commandArgs));
+                }
+
                 CommandResult result = Utility.TryCommand("dotnet", commandArgs, true);
 
                 if (result.ExitCode != 0)
@@ -183,28 +188,29 @@ namespace ManagedCodeGen
                 {
                     if (_verbose)
                     {
-                        Console.WriteLine("Discovering --runtime.");
+                        Console.WriteLine("Discovering --coreclr.");
                     }
                     _rootPath = Utility.GetRepoRoot(_verbose);
+                    _rootPath = Path.Combine(_rootPath, "src", "coreclr");
                     if (_rootPath == null)
                     {
-                        _syntaxResult.ReportError("Specify --runtime");
+                        _syntaxResult.ReportError("Specify --coreclr");
                     }
                     else
                     {
-                        Console.WriteLine("Using --runtime={0}", _rootPath);
+                        Console.WriteLine("Using --coreclr={0}", _rootPath);
                     }
                 }
 
                 if (!Directory.Exists(_rootPath))
                 {
                     // If _rootPath doesn't exist, it is an invalid path
-                    _syntaxResult.ReportError("Invalid path to runtime directory. Specify with --runtime");
+                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
                 }
-                else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")))
+                else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")) || !File.Exists(Path.Combine(_rootPath, "clr.featuredefines.props")))
                 {
-                    // If _rootPath\build.cmd or _rootPath\build.sh do not exist, it is an invalid path to a runtime repo
-                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --runtime");
+                    // Doesn't look like the coreclr directory.
+                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
                 }
 
                 // Check that we can find compile_commands.json on windows
@@ -227,6 +233,12 @@ namespace ManagedCodeGen
 
                             string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
                             string buildPath = Path.Combine(_rootPath, "build.cmd");
+
+                            if (_verbose)
+                            {
+                                Console.WriteLine("Running: {0} {1}", buildPath, String.Join(" ", commandArgs));
+                            }
+
                             CommandResult result = Utility.TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
 
                             if (result.ExitCode != 0)
@@ -253,6 +265,12 @@ namespace ManagedCodeGen
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
                             string[] commandArgs = { _arch, _build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
                             string buildPath = Path.Combine(_rootPath, "build.sh");
+
+                            if (_verbose)
+                            {
+                                Console.WriteLine("Running: {0} {1}", buildPath, String.Join(" ", commandArgs));
+                            }
+
                             CommandResult result = Utility.TryCommand(buildPath, commandArgs, true, _rootPath);
 
                             if (result.ExitCode != 0)
@@ -296,7 +314,7 @@ namespace ManagedCodeGen
                             var os = ExtractDefault<string>("os", out found);
                             _os = (found) ? os : _os;
 
-                            // Set up core_root.
+                            // Set up _rootPath.
                             var rootPath = ExtractDefault<string>("coreclr", out found);
                             _rootPath = (found) ? rootPath : _rootPath;
 
@@ -586,11 +604,6 @@ namespace ManagedCodeGen
             bool formatOk = true;
             string checks = "readability-braces*,modernize-use-nullptr";
 
-            if (verbose)
-            {
-                Console.WriteLine("Running: ");
-            }
-
             if (fix)
             {
                 foreach (string filename in filenames)
@@ -618,12 +631,13 @@ namespace ManagedCodeGen
 
             if (filename.EndsWith(".cpp"))
             {
+                List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
+
                 if (verbose)
                 {
-                    Console.WriteLine("\tclang-tidy {0} -checks=-*,{1} {2} -header-filter=src/jit/.* -p={3} {4}", tidyFix, checks, fixErrors, compileCommands, filename);
+                    Console.WriteLine("Running: {0} {1}", "clang-tidy", String.Join(" ", commandArgs));
                 }
 
-                List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
                 CommandResult result = Utility.TryCommand("clang-tidy", commandArgs, true);
 
                 if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && (result.StdOut.Contains("error:") || result.StdOut.Contains("Error")))))
@@ -665,13 +679,14 @@ namespace ManagedCodeGen
                 {
                     Process process = new Process();
 
-                    if (verbose)
-                    {
-                        Console.WriteLine("Running: clang-format {0} -style=file {1}", formatFix, filename);
-                    }
-
                     // Run clang-format
                     List<string> commandArgs = new List<string> { formatFix, "-style=file", outputReplacementXml, filename };
+
+                    if (verbose)
+                    {
+                        Console.WriteLine("Running: {0} {1}", "clang-format", String.Join(" ", commandArgs));
+                    }
+
                     CommandResult result = Utility.TryCommand("clang-format", commandArgs, true);
 
                     if (result.StdOut.Contains("<replacement ") && !fix)
