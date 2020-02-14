@@ -441,8 +441,8 @@ namespace ManagedCodeGen
                 }
 
                 methodDeltaList = methodDeltaList.Concat(reconciles);
-                deltaMetrics.Add(reconciledBaseMetrics);
-                deltaMetrics.Sub(reconciledDiffMetrics);
+                deltaMetrics.Sub(reconciledBaseMetrics);
+                deltaMetrics.Add(reconciledDiffMetrics);
             }
         }
 
