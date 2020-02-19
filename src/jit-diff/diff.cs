@@ -390,6 +390,39 @@ namespace ManagedCodeGen
                 }
             }
 
+            private static int CompareFrameworkAssemblies(AssemblyInfo assemblyInfo1, AssemblyInfo assemblyInfo2)
+            {
+                string assembly1 = assemblyInfo1.Path;
+
+                if (assembly1 == s_CoreLibAssembly)
+                {
+                    return -1;
+                }
+
+                string assembly2 = assemblyInfo2.Path;
+
+                if (assembly2 == s_CoreLibAssembly)
+                {
+                    return 1;
+                }
+
+                long length1 = new FileInfo(assembly1).Length;
+                long length2 = new FileInfo(assembly2).Length;
+
+                if (length2 < length1)
+                {
+                    return -1;
+                }
+                else if (length1 < length2)
+                {
+                    return 1;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+
             public static List<AssemblyInfo> GenerateAssemblyWorklist(Config config)
             {
                 List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
@@ -398,7 +431,9 @@ namespace ManagedCodeGen
                 {
                     if (Directory.Exists(assembly))
                     {
-                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(assembly, assembly, config);
+                        const bool recursive = true;
+                        const string searchPattern = "*";
+                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(assembly, assembly, config, recursive, searchPattern);
                         assemblyInfoList.AddRange(directoryAssemblyInfoList);
                     }
                     else if (File.Exists(assembly))
@@ -423,24 +458,13 @@ namespace ManagedCodeGen
                 // source directory already.
                 if (config.CoreLib || config.DoFrameworks)
                 {
-                    foreach (var assembly in config.CoreLib ? s_CoreLibAssembly : s_frameworkAssemblies)
-                    {
-                        string fullPathAssembly = Path.Combine(config.CoreRoot, assembly);
+                    const bool recursive = false;
+                    string searchPattern = config.DoFrameworks ? "*" : s_CoreLibAssembly;
+                    List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(config.CoreRoot, config.CoreRoot, config, recursive, searchPattern);
+                    directoryAssemblyInfoList.Sort(CompareFrameworkAssemblies);
 
-                        if (!File.Exists(fullPathAssembly))
-                        {
-                            Console.Error.WriteLine("Warning: can't find framework assembly {0}", fullPathAssembly);
-                            continue;
-                        }
-
-                        AssemblyInfo info = new AssemblyInfo
-                        {
-                            Path = fullPathAssembly,
-                            OutputPath = ""
-                        };
-
-                        assemblyInfoList.Add(info);
-                    }
+                    // Add info generated at this directory
+                    assemblyInfoList.AddRange(directoryAssemblyInfoList);
                 }
 
                 // The tests are in a tree hierarchy of directories. We will output these to a tree
@@ -460,7 +484,9 @@ namespace ManagedCodeGen
 
                         // For the directory case create a stack and recursively find any
                         // assemblies for compilation.
-                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(basepath, fullPathDir, config);
+                        const bool recursive = true;
+                        const string searchPattern = "*";
+                        List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(basepath, fullPathDir, config, recursive, searchPattern);
 
                         // Add info generated at this directory
                         assemblyInfoList.AddRange(directoryAssemblyInfoList);
@@ -473,14 +499,15 @@ namespace ManagedCodeGen
             // Recursively search for assemblies from a path given by `rootPath`.
             // `basePath` specifies the root directory for the purpose of constructing a relative output path.
             //      It must be a prefix of `rootPath`.
-            private static List<AssemblyInfo> IdentifyAssemblies(string basePath, string rootPath, Config config)
+            private static List<AssemblyInfo> IdentifyAssemblies(string basePath, string rootPath, Config config, bool recursive, string searchPattern)
             {
                 List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
                 string fullBasePath = Path.GetFullPath(basePath);
                 string fullRootPath = Path.GetFullPath(rootPath);
 
                 // Get files that could be assemblies, but discard currently ngen'd assemblies.
-                var subFiles = Directory.EnumerateFiles(fullRootPath, "*", SearchOption.AllDirectories)
+                SearchOption searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+                var subFiles = Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
                     .Where(s => (s.EndsWith(".exe") || s.EndsWith(".dll")) && !s.Contains(".ni."));
 
                 foreach (var filePath in subFiles)
@@ -490,7 +517,14 @@ namespace ManagedCodeGen
                         Console.WriteLine("Scanning: {0}", filePath);
                     }
 
-                    // skip if not an assembly
+                    // Skip assembly with broken references; this can be removed once we eliminate
+                    // this obsolete assembly from the build.
+                    if (Path.GetFileName(filePath).ToLower() == "xunit.performance.api.dll")
+                    {
+                        continue;
+                    }
+
+                    // Skip if not an assembly
                     if (!Utility.IsAssembly(filePath))
                     {
                         continue;
