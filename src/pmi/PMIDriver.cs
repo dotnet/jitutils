@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Management;
 using System.Text;
+using System.Text.RegularExpressions;
 
 // Drive PMI through jitting all the methods in an assembly.
 //
@@ -22,7 +23,7 @@ namespace PMIDriver
         const int PREPALL_TIMEOUT = 1800000; //30 minutes
         const int PREPALL_MAX_RETRY_COUNT = 5;
 
-        public static int Drive(string assemblyName, bool verbose)
+        public static int Drive(string assemblyName, bool verbose, Dictionary<string, string> environment)
         {
             string assemblyPath = Path.GetFullPath(assemblyName);
             string assemblyPathAsFile = Util.MapPathToFileName(assemblyPath);
@@ -41,6 +42,7 @@ namespace PMIDriver
             PrepAllInfo pi = new PrepAllInfo();
             pi.assemblyName = assemblyName;
             pi.methodToPrep = 0;
+            pi.environment = environment;
 
             bool isFileCompleted = false;
             int prepallRetryCount = 0;
@@ -165,6 +167,13 @@ namespace PMIDriver
                 p.StartInfo.UseShellExecute = false;
                 p.StartInfo.RedirectStandardOutput = true;
                 p.StartInfo.RedirectStandardError = true;
+                p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) =>
+                                            { szError += e.Data; });
+
+                foreach (var pair in pi.environment)
+                {
+                    p.StartInfo.EnvironmentVariables[pair.Key] = pair.Value;
+                }
 
                 // Fetch our command line. Split off the arguments.
 #if NETCOREAPP
@@ -186,8 +195,8 @@ namespace PMIDriver
                 Console.WriteLine($"DRIVEALL: Invoking {driverName} {newCommandLine}");
 
                 p.Start();
+                p.BeginErrorReadLine();
                 szOutput = p.StandardOutput.ReadToEnd();
-                szError = p.StandardError.ReadToEnd();
 
                 if (!p.WaitForExit(PREPALL_TIMEOUT))
                 {
@@ -311,6 +320,7 @@ namespace PMIDriver
     {
         public string assemblyName;
         public int methodToPrep;
+        public Dictionary<string, string> environment;
 
         public override string ToString()
         {

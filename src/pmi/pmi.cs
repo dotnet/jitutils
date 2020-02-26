@@ -1313,6 +1313,9 @@ class PrepareMethodinator
             + "    for example: " + exeName + " PrepAll-Quiet-Time PATH_TO_ASSEMBLY\n"
             + "\n"
             + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\n"
+            + "Environment variable PMIENV is a semicolon-separated list of name=value pairs used to set the environment"
+            + "    when running pmi in a subprocess. This only affects DRIVEALL mode.\n"
+            + "   "
 #if NETCOREAPP
             + "\n"
             + "PATH_TO_ASSEMBLY can optionally be a directory; if so the tool will process all .exe and .dll files\n"
@@ -1390,7 +1393,27 @@ class PrepareMethodinator
 
                 if (rootCommand == "DRIVEALL")
                 {
-                    return PMIDriver.PMIDriver.Drive(assemblyName, verbose);
+                    string pmiEnv = Environment.GetEnvironmentVariable("PMIENV");
+                    Dictionary<string, string> environment = new Dictionary<string, string>();
+                    if ((pmiEnv != null) && (pmiEnv.Length != 0))
+                    {
+                        Regex rx = new Regex(@"^(?:(?<name>[\w_]+)=(?<value>[^;]+);)*(?<lastname>[\w_]+)=(?<lastvalue>[^$]+)$");
+                        MatchCollection matches = rx.Matches(pmiEnv);
+                        if (matches.Count != 1)
+                        {
+                            Console.WriteLine("ERROR: PMIENV format is incorrect");
+                            return Usage();
+                        }
+                        Match match = matches[0];
+                        GroupCollection groups = match.Groups;
+                        for (int i = 0; i < groups["name"].Captures.Count; ++i)
+                        {
+                            environment[groups["name"].Captures[i].Value] = groups["value"].Captures[i].Value;
+                        }
+                        environment[groups["lastname"].Captures[0].Value] = groups["lastvalue"].Captures[0].Value;
+                    }
+
+                    return PMIDriver.PMIDriver.Drive(assemblyName, verbose, environment);
                 }
 
                 v = new Counter();
