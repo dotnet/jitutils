@@ -14,6 +14,7 @@ using System.Runtime.Loader;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Buffers;
 
 class Util
 {
@@ -1350,6 +1351,15 @@ class PrepareMethodinator
         }
     }
 
+    private static void EnsureGen2GcCallbackFuncIsJitted()
+    {
+#if NETCOREAPP
+        ReadOnlyMemory<char>[] array = ArrayPool<ReadOnlyMemory<char>>.Shared.Rent(5);
+        ArrayPool<ReadOnlyMemory<char>>.Shared.Return(array);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+#endif
+    }
 
     // Return values:
     // 0 - success
@@ -1366,6 +1376,12 @@ class PrepareMethodinator
         // we may get corrupted disasm output. To prevent that, force jitting of Timer callback infrastructure
         // before we PMI any method.
         EnsureTimerCallbackIsJitted();
+
+        // TlsOverPerCoreLockedStacksArrayPool.Return registers Gen2GcCallbackFunc on Gen2GcCallback.
+        // Gen2GcCallbackFunc is then called from Gen2GcCallback finalizer after a gc.
+        // For output determinism we force the registration of Gen2GcCallbackFunc and then force a gc
+        // so that Gen2GcCallbackFunc is jitted.
+        EnsureGen2GcCallbackFuncIsJitted();
 
         string command = args[0].ToUpper();
         string assemblyName = args[1];
