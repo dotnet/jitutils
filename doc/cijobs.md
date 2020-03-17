@@ -65,7 +65,7 @@ The "cijobs copy" command has the following help message:
 
 ## Using cijobs
 
-A common question for a developer might be "what is the last successful  checked build?"
+A common question for a developer might be "what is the last successful OSX  checked build?"
 
 ```
 $ cijobs list --match "osx"

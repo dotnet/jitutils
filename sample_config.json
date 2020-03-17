@@ -11,19 +11,19 @@
         "tools": [
             {
                 "tag": "checked_osx-1439",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1439/Product/.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1439/Product/osx.x64.Checked"
             },
             {
                 "tag": "checked_osx-1442",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1442/Product/.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1442/Product/osx.x64.Checked"
             },
             {
                 "tag": "checked_osx-1443",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1443/Product/.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1443/Product/osx.x64.Checked"
             },
             {
                 "tag": "checked_osx-1526",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1526/Product/.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1526/Product/osx.x64.Checked"
             }
         ]
     },
