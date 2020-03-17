@@ -12,32 +12,32 @@ function get_host_os {
     OSName=$(uname -s)
     case $OSName in
         Linux)
-            __HostOS=Linux
+            __HostOS=linux
             ;;
 
         Darwin)
-            __HostOS=OSX
+            __HostOS=osx
             ;;
 
         FreeBSD)
-            __HostOS=FreeBSD
+            __HostOS=freebsd
             ;;
 
         OpenBSD)
-            __HostOS=OpenBSD
+            __HostOS=openbsd
             ;;
 
         NetBSD)
-            __HostOS=NetBSD
+            __HostOS=netbsd
             ;;
 
         SunOS)
-            __HostOS=SunOS
+            __HostOS=sunos
             ;;
 
         *)
             echo "Unsupported OS $OSName detected, configuring as if for Linux"
-            __HostOS=Linux
+            __HostOS=linux
             ;;
     esac
 }
@@ -57,7 +57,7 @@ function download_tools {
 
     if ! hash wget 2>/dev/null; then
         echo "Error: wget not found; not downloading clang-format and clang-tidy."
-        if [ "$__HostOS" == "OSX" ]; then
+        if [ "$__HostOS" == "osx" ]; then
             echo "On OSX, install wget using Homebrew (https://brew.sh/) using 'brew install wget'."
         fi
         return 1

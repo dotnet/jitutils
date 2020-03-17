@@ -104,16 +104,16 @@ namespace ManagedCodeGen
                     {
                         if (match.Groups[1].Value.Trim() == "Windows")
                         {
-                            _os = "Windows_NT";
+                            _os = "win";
                         }
                         else if (match.Groups[1].Value.Trim() == "Darwin")
                         {
-                            _os = "OSX";
+                            _os = "osx";
                         }
                         else if (match.Groups[1].Value.Trim() == "Linux")
                         {
                             // Assuming anything other than Windows or OSX is a Linux flavor
-                            _os = "Linux";
+                            _os = "linux";
                         }
                         else
                         {
@@ -162,7 +162,7 @@ namespace ManagedCodeGen
 
                 if (_os == "Windows")
                 {
-                    _os = "Windows_NT";
+                    _os = "win";
                 }
 
                 if (_srcDirectory == null)
@@ -214,12 +214,12 @@ namespace ManagedCodeGen
                 }
 
                 // Check that we can find compile_commands.json on windows
-                if (_os == "Windows_NT")
+                if (_os == "win")
                 {
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
                     if (!_untidy && _compileCommands == null)
                     {
-                        string[] compileCommandsPath = { _rootPath, "..", "..", "artifacts", "nmakeobj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
+                        string[] compileCommandsPath = { _rootPath, "..", "..", "artifacts", "nmakeobj", "win" + _arch + "." + _build, "compile_commands.json" };
                         _compileCommands = Path.Combine(compileCommandsPath);
                         _rewriteCompileCommands = true;
 
@@ -370,7 +370,7 @@ namespace ManagedCodeGen
                 return default(T);
             }
 
-            public bool IsWindows { get { return (_os == "Windows_NT"); } }
+            public bool IsWindows { get { return (_os == "win"); } }
             public bool DoVerboseOutput { get { return _verbose; } }
             public bool DoClangTidy { get { return !_untidy; } }
             public bool DoClangFormat { get { return !_noformat; } }
