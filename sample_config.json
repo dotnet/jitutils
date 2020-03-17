@@ -1,29 +1,29 @@
 {
     "asmdiff" : {
         "default": {
-            "base": "e:\\gh\\coreclr2\\bin\\Product\\Windows_NT.x86.checked",
-            "diff": "c:\\gh\\coreclr\\bin\\Product\\Windows_NT.x86.checked",
+            "base": "e:\\gh\\coreclr2\\bin\\Product\\win.x86.checked",
+            "diff": "c:\\gh\\coreclr\\bin\\Product\\win.x86.checked",
             "frameworks": "true",
             "output": "c:\\diffs",
-            "core_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.checked\\Tests\\Core_Root",
-            "test_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.Release"
+            "core_root": "c:\\gh\\coreclr\\bin\\tests\\win.x86.checked\\Tests\\Core_Root",
+            "test_root": "c:\\gh\\coreclr\\bin\\tests\\win.x86.Release"
         },
         "tools": [
             {
                 "tag": "checked_osx-1439",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1439/Product/OSX.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1439/Product/.x64.Checked"
             },
             {
                 "tag": "checked_osx-1442",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1442/Product/OSX.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1442/Product/.x64.Checked"
             },
             {
                 "tag": "checked_osx-1443",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1443/Product/OSX.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1443/Product/.x64.Checked"
             },
             {
                 "tag": "checked_osx-1526",
-                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1526/Product/OSX.x64.Checked"
+                "path": "/Users/russellhadley/Work/glue/output/tools/checked_osx-1526/Product/.x64.Checked"
             }
         ]
     },
@@ -31,7 +31,7 @@
         "default": {
             "arch": "x64",
             "build": "Checked",
-            "os": "Windows_NT",
+            "os": "win",
             "coreclr": "C:\\gh\\coreclr",
             "verbose": "true",
             "fix": "true",

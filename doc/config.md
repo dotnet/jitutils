@@ -52,7 +52,7 @@ Sample config.json:
     "default": {
       "arch": "x64",
       "build": "Checked",
-      "os": "Windows_NT",
+      "os": "win",
       "coreclr": "C:\\michelm\\coreclr",
       "verbose": "true",
       "fix": "true"
@@ -61,7 +61,7 @@ Sample config.json:
   "asmdiff": {
     "default": {
       "base": "checked_osx-1526",
-      "diff": "/Users/russellhadley/Work/dotnet/coreclr/bin/Product/OSX.x64.Checked",
+      "diff": "/Users/russellhadley/Work/dotnet/coreclr/bin/Product/.x64.Checked",
       "frameworks": "true",
       "output": "/Users/russellhadley/Work/dotnet/output",
       "core_root": "/Users/russellhadley/Work/dotnet/jitutils/fx"
@@ -69,19 +69,19 @@ Sample config.json:
     "tools": [
       {
         "tag": "checked_osx-1439",
-        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1439/Product/OSX.x64.Checked"
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1439/Product/.x64.Checked"
       },
       {
         "tag": "checked_osx-1442",
-        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1442/Product/OSX.x64.Checked"
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1442/Product/.x64.Checked"
       },
       {
         "tag": "checked_osx-1443",
-        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1443/Product/OSX.x64.Checked"
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1443/Product/.x64.Checked"
       },
       {
         "tag": "checked_osx-1526",
-        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1526/Product/OSX.x64.Checked"
+        "path": "/Users/russellhadley/Work/dotnet/output/tools/checked_osx-1526/Product/.x64.Checked"
       }
     ]
   }
@@ -99,7 +99,7 @@ $ jit-diff list
 
 Defaults:
 	base: checked_osx-1526
-	diff: /Users/russellhadley/Work/dotnet/coreclr/bin/Product/OSX.x64.Checked
+	diff: /Users/russellhadley/Work/dotnet/coreclr/bin/Product/.x64.Checked
 	output: /Users/russellhadley/Work/dotnet/output
 	core_root: /Users/russellhadley/Work/dotnet/jitutils/fx
 	frameworks: true
