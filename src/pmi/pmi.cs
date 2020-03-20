@@ -12,7 +12,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Buffers;
 
@@ -1327,28 +1326,13 @@ class PrepareMethodinator
         return 101;
     }
 
-    private static Timer timer;
-    private static int flag = 0;
-
-    private static void DummyTimerCallback(object state)
+    private static void EnsureGetCurrentProcessorIdIsDeterministic()
     {
-        timer.Change(Timeout.Infinite, Timeout.Infinite);
-        flag = 1;
-    }
-
-    private static void EnsureTimerCallbackIsJitted()
-    {
-        Thread.Sleep(1);
-        timer = new Timer(
-            callback: new TimerCallback(DummyTimerCallback),
-            state: null,
-            dueTime: Timeout.Infinite,
-            period: Timeout.Infinite);
-        timer.Change(10, Timeout.Infinite);
-        while (flag == 0)
-        {
-            Thread.Sleep(1);
-        }
+#if NETCOREAPP
+        var type = typeof(System.Threading.Thread);
+        var field = type.GetField("s_isProcessorNumberReallyFast", BindingFlags.NonPublic | BindingFlags.Static);
+        field.SetValue(null, true);
+#endif
     }
 
     private static void EnsureGen2GcCallbackFuncIsJitted()
@@ -1371,11 +1355,12 @@ class PrepareMethodinator
             return Usage();
         }
 
-        // Tracing infrastructure unconditionally creates a Timer and uses it for checking
-        // whether tracing has been enabled. Since the Timer callback is called on a worker thread,
-        // we may get corrupted disasm output. To prevent that, force jitting of Timer callback infrastructure
-        // before we PMI any method.
-        EnsureTimerCallbackIsJitted();
+        // System.Threading.Thread.s_isProcessorNumberReallyFast can have different
+        // values on two invocations of the process on the same machine. That causes
+        // non-determinism in generated code in methods inlining System.Threading.Thread.GetCurrentProcessorId().
+        // This methods uses reflection to set the value of System.Threading.Thread.s_isProcessorNumberReallyFast
+        // to true.
+        EnsureGetCurrentProcessorIdIsDeterministic();
 
         // TlsOverPerCoreLockedStacksArrayPool.Return registers Gen2GcCallbackFunc on Gen2GcCallback.
         // Gen2GcCallbackFunc is then called from Gen2GcCallback finalizer after a gc.
