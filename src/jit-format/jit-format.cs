@@ -615,7 +615,10 @@ namespace ManagedCodeGen
             {
                 Parallel.ForEach(filenames, (filename) =>
                     {
-                        formatOk &= DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
+                        if (!DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose))
+                        {
+                            formatOk = false;
+                        }
                     });
             }
 
