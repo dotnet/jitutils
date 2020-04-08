@@ -207,7 +207,7 @@ namespace ManagedCodeGen
                     // If _rootPath doesn't exist, it is an invalid path
                     _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
                 }
-                else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")) || !File.Exists(Path.Combine(_rootPath, "clr.featuredefines.props")))
+                else if (!File.Exists(Path.Combine(_rootPath, "build-runtime.cmd")) || !File.Exists(Path.Combine(_rootPath, "build-runtime.sh")) || !File.Exists(Path.Combine(_rootPath, "clr.featuredefines.props")))
                 {
                     // Doesn't look like the coreclr directory.
                     _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
@@ -232,7 +232,7 @@ namespace ManagedCodeGen
                             }
 
                             string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
-                            string buildPath = Path.Combine(_rootPath, "build.cmd");
+                            string buildPath = Path.Combine(_rootPath, "build-runtime.cmd");
 
                             if (_verbose)
                             {
@@ -264,7 +264,7 @@ namespace ManagedCodeGen
                         {
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
                             string[] commandArgs = { _arch, _build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
-                            string buildPath = Path.Combine(_rootPath, "build.sh");
+                            string buildPath = Path.Combine(_rootPath, "build-runtime.sh");
 
                             if (_verbose)
                             {
@@ -275,7 +275,7 @@ namespace ManagedCodeGen
 
                             if (result.ExitCode != 0)
                             {
-                                Console.WriteLine("There was an error running CMake to generate compile_commands.json. Please run build.sh configureonly");
+                                Console.WriteLine("There was an error running CMake to generate compile_commands.json. Please run build-runtime.sh configureonly");
                                 Environment.Exit(-1);
                             }
                         }
