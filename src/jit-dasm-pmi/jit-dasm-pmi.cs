@@ -44,6 +44,7 @@ namespace ManagedCodeGen
         private bool _dumpDebugInfo = false;
         private bool _noCopyJit = false;
         private bool _verbose = false;
+        private bool _noDiffable = false;
         private bool _tier0 = false;
         private bool _cctors = false;
 
@@ -59,6 +60,7 @@ namespace ManagedCodeGen
                 syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
                 syntax.DefineOption("debuginfo", ref _dumpDebugInfo, "Add Debug info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
+                syntax.DefineOption("nodiffable", ref _noDiffable, "Generate non-diffable asm (pointer values will be left in output).");
                 syntax.DefineOption("tier0", ref this._tier0, "Generate tier0 code.");
                 syntax.DefineOption("cctors", ref _cctors, "Jit and run cctors before jitting other methods");
                 syntax.DefineOption("r|recursive", ref _recursive, "Scan directories recursively.");
@@ -147,6 +149,7 @@ namespace ManagedCodeGen
         public bool DumpGCInfo { get { return _dumpGCInfo; } }
         public bool DumpDebugInfo { get { return _dumpDebugInfo; } }
         public bool DoVerboseOutput { get { return _verbose; } }
+        public bool NoDiffable { get { return _noDiffable; } }
         public bool CopyJit { get { return !_noCopyJit; } }
         public string CorerunExecutable { get { return _corerunExe; } }
         public string JitPath { get { return _jitPath; } }
@@ -511,7 +514,10 @@ namespace ManagedCodeGen
                     AppendEnvironmentVariableToPmiEnv("COMPlus_JitDisasmAssemblies", Path.GetFileNameWithoutExtension(assembly.Name));
                     AppendEnvironmentVariableToPmiEnv("COMPlus_JitUnwindDump", "*");
                     AppendEnvironmentVariableToPmiEnv("COMPlus_JitEHDump", "*");
-                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitDiffableDasm", "1");
+                    if (!this._config.NoDiffable)
+                    {
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_JitDiffableDasm", "1");
+                    }
                     AppendEnvironmentVariableToPmiEnv("COMPlus_ReadyToRun", "0");
                     AppendEnvironmentVariableToPmiEnv("COMPlus_ZapDisable", "1");
                     AppendEnvironmentVariableToPmiEnv("COMPlus_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).

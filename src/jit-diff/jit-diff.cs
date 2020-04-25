@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-//using System.Diagnostics;
 using System.CommandLine;
 using System.IO;
 using System.Collections.Generic;
@@ -11,9 +10,7 @@ using System.Text.RegularExpressions;
 using System.Linq;
 using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Tools.Common;
-//using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-//using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 
@@ -137,6 +134,7 @@ namespace ManagedCodeGen
             private bool _gcinfo = false;
             private bool _debuginfo = false;
             private bool _verbose = false;
+            private bool _noDiffable = false;
             private bool _tier0 = false;
             private string _jobName = null;
             private string _number = null;
@@ -185,6 +183,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("gcinfo", ref _gcinfo, "Add GC info to the disasm output.");
                     syntax.DefineOption("debuginfo", ref _debuginfo, "Add Debug info to the disasm output.");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
+                    syntax.DefineOption("nodiffable", ref _noDiffable, "Generate non-diffable asm (pointer values will be left in output).");
                     syntax.DefineOption("core_root", ref _platformPath, "Path to test CORE_ROOT.");
                     syntax.DefineOption("test_root", ref _testPath, "Path to test tree. Use with --benchmarks or --tests.");
                     syntax.DefineOption("base_root", ref _baseRoot, "Path to root of base dotnet/runtime repo.");
@@ -278,6 +277,24 @@ namespace ManagedCodeGen
                         _platformName = platMatch.Groups[1].Value;
                         continue;
                     }
+                }
+
+                if (_rid == null)
+                {
+                    Console.WriteLine("Couldn't find RID in 'dotnet --info' output:");
+                    Console.WriteLine("stdout:");
+                    Console.WriteLine("{0}", result.StdOut);
+                    Console.WriteLine("stderr:");
+                    Console.WriteLine("{0}", result.StdErr);
+                }
+
+                if (_platformName == null)
+                {
+                    Console.WriteLine("Couldn't find Platform in 'dotnet --info' output:");
+                    Console.WriteLine("stdout:");
+                    Console.WriteLine("{0}", result.StdOut);
+                    Console.WriteLine("stderr:");
+                    Console.WriteLine("{0}", result.StdErr);
                 }
             }
 
@@ -1244,6 +1261,7 @@ namespace ManagedCodeGen
             public bool GenerateGCInfo { get { return _gcinfo; } }
             public bool GenerateDebugInfo { get { return _debuginfo; } }
             public bool Verbose { get { return _verbose; } }
+            public bool NoDiffable { get { return _noDiffable; } }
             public bool Tier0 { get { return _tier0; } }
             public bool DoAnalyze { get { return !_noanalyze; } }
             public Commands DoCommand { get { return _command; } }

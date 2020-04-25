@@ -55,6 +55,7 @@ namespace ManagedCodeGen
         private bool _dumpGCInfo = false;
         private bool _dumpDebugInfo = false;
         private bool _verbose = false;
+        private bool _noDiffable = false;
         private CodeGenerator _codeGenerator;
 
         public Config(string[] args)
@@ -69,6 +70,7 @@ namespace ManagedCodeGen
                 syntax.DefineOption("gcinfo", ref _dumpGCInfo, "Add GC info to the disasm output.");
                 syntax.DefineOption("debuginfo", ref _dumpDebugInfo, "Add Debug info to the disasm output.");
                 syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
+                syntax.DefineOption("nodiffable", ref _noDiffable, "Generate non-diffable asm (pointer values will be left in output).");
                 var waitArg = syntax.DefineOption("w|wait", ref _wait, "Wait for debugger to attach.");
                 waitArg.IsHidden = true;
 
@@ -165,6 +167,7 @@ namespace ManagedCodeGen
         public bool DumpGCInfo { get { return _dumpGCInfo; } }
         public bool DumpDebugInfo { get { return _dumpDebugInfo; } }
         public bool DoVerboseOutput { get { return _verbose; } }
+        public bool NoDiffable { get { return _noDiffable; } }
         public string CrossgenExecutable { get { return _crossgenExe; } }
         public string JitPath { get { return _jitPath; } }
         public string AltJit { get { return _altjit; } }
@@ -483,7 +486,10 @@ namespace ManagedCodeGen
                     AddEnvironmentVariable("COMPlus_NgenDisasm", "*");
                     AddEnvironmentVariable("COMPlus_NgenUnwindDump", "*");
                     AddEnvironmentVariable("COMPlus_NgenEHDump", "*");
-                    AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
+                    if (!this._config.NoDiffable)
+                    {
+                        AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
+                    }
                     AddEnvironmentVariable("COMPlus_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
                     AddEnvironmentVariable("COMPlus_JitNoForceFallback", "1");      // Don't stress noway fallback path.
                     AddEnvironmentVariable("COMPlus_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
