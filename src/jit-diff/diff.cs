@@ -594,6 +594,11 @@ namespace ManagedCodeGen
                 dasmArgs.Add("--jit");
                 dasmArgs.Add(jitPath);
 
+                if (m_config.NoDiffable)
+                {
+                    dasmArgs.Add("--nodiffable");
+                }
+
                 return dasmArgs;
             }
         }
@@ -645,6 +650,11 @@ namespace ManagedCodeGen
 
                 // jit-diffs will handle installing the right jit
                 dasmArgs.Add("--nocopy");
+
+                if (m_config.NoDiffable)
+                {
+                    dasmArgs.Add("--nodiffable");
+                }
 
                 return dasmArgs;
             }
