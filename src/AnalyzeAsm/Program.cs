@@ -77,6 +77,7 @@ namespace AnalyzeAsm
             //FindLdrLdrToMovGroups($@"{workingFolder}\ldr_to_mov.asm");
             //FindPostIndexAddrMode1($@"{workingFolder}\post-index-1.asm");
             //FindPreIndexAddrMode1($@"{workingFolder}\pre-index-1.asm");
+            FindPreIndexAddrMode2($@"{workingFolder}\pre-index-2.asm");
             //AdrpAddPairs($@"{workingFolder}\adrp-add.asm");
             //PrologEpilogInx64($@"{workingFolder}\pro-epi-x64.asm");
             //PrologEpilogInx64($@"{workingFolder}\temp.asm");
@@ -946,6 +947,123 @@ namespace AnalyzeAsm
                     else
                     {
                         prevWasLdr = false;
+                    }
+                    lineNum++;
+                    localLineNum++;
+                }
+            }
+            resultBuilder.AppendLine($"Processed {total} methods. Found {hasStrWzrPair} methods containing {totalMovGroups} groups.");
+            WriteResults(fileName, resultBuilder.ToString());
+        }
+
+        /// <summary>
+        ///     add x2, x2, #4
+        ///     ldr x0, [x2, #4]
+        ///       ; becomes
+        ///     ldr x0, [x2, #4]!
+        /// </summary>
+        /// <param name="fileName"></param>
+        static void FindPreIndexAddrMode2(string fileName)
+        {
+            Regex ldrRegEx = new Regex("ldr     ((w|x)\\d+), \\[((x|w)\\d+),#([0-9a-fx]*)\\]");
+            Regex addRegEx = new Regex("add     ((w|x)\\d+), ((w|x)\\d+), #([0-9a-fx]*)");
+            string ldrToFind = "ldr     ";
+            string addToFind = "add     ";
+            bool foundStrWzr = false;
+            int total = 0;
+            int hasStrWzrPair = 0;
+            int totalMovGroups = 0;
+            string header = "";
+
+            bool prevWasAdd = false;
+            string prevDestReg = "";
+            string prevSrcReg = "";
+            string prevImm = "";
+            int prevAddLineNum = 0;
+            int localLineNum = 0;
+            string prevAddInstr = string.Empty;
+            StringBuilder resultBuilder = new StringBuilder();
+
+            using (FileStream fs = File.Open(armFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string line;
+                int lineNum = 1;
+                StringBuilder strBuilder = new StringBuilder();
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (line.StartsWith("; Assembly listing for method"))
+                    {
+                        if (foundStrWzr)
+                        {
+                            hasStrWzrPair++;
+                            resultBuilder.AppendLine("####################################################################################");
+                            resultBuilder.AppendLine(header);
+                            resultBuilder.AppendLine(strBuilder.ToString());
+                            //Console.WriteLine("####################################################################################");
+                            //Console.WriteLine(header);
+                            //Console.WriteLine(strBuilder.ToString());
+                        }
+
+                        strBuilder.Clear();
+                        foundStrWzr = false;
+
+                        //header = line.Replace("; Assembly listing for method ", "");
+                        header = line;
+                        localLineNum = 1;
+                        total++;
+                    }
+
+
+                    if (line.Contains(addToFind))
+                    {
+                        var match = addRegEx.Match(line);
+                        if (match.Success && match.Groups.Count == 6) // make sure we got the immediate as well
+                        {
+                            prevDestReg = match.Groups[1].Value;
+                            prevSrcReg = match.Groups[3].Value;
+                            prevImm = match.Groups[5].Value;
+
+                            if (prevDestReg == prevSrcReg)
+                            {
+                                prevAddInstr = line;
+                                prevAddLineNum = lineNum;
+                                prevWasAdd = true;
+                            }
+
+                            
+                        }
+                    }
+                    else if (line.Contains(ldrToFind))
+                    {
+                        if (prevWasAdd)
+                        {
+                            var match = ldrRegEx.Match(line);
+                            if (match.Success)
+                            {
+                                string currDstReg = match.Groups[1].Value;
+                                string currSrcReg = match.Groups[3].Value;
+                                string currImm = match.Groups[5].Value;
+
+                                // 1. curr src != curr dst
+                                // 2. prev src == curr src
+                                // 3. prev imm = curr imm
+                                if (currDstReg != currSrcReg && currSrcReg == prevSrcReg && currImm == prevImm && prevAddLineNum + 1 == lineNum)
+                                {
+                                    strBuilder.AppendLine($"[{localLineNum - 1:0000}]{prevAddInstr}");
+                                    strBuilder.AppendLine($"[{localLineNum:0000}]{line}");
+                                    strBuilder.AppendLine("...................................................");
+                                    totalMovGroups++;
+                                    foundStrWzr = true;
+                                }
+                            }
+                            prevWasAdd = false;
+                        }
+                    }
+                    else
+                    {
+                        prevWasAdd = false;
                     }
                     lineNum++;
                     localLineNum++;
