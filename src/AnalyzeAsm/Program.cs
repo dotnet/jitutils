@@ -19,10 +19,15 @@ namespace AnalyzeAsm
         //static string ngenFile = @"D:\git\runtime\ngen_out.txt";
         static string workingFolder = @"E:\armcompare\movz_movk";
         static Regex regex = new Regex(@"; Total bytes of code (\d+), prolog size (\d+),");
-        static string armFile = $@"{workingFolder}\ngen__arm64_out.txt";
-        static string x64File = $@"{workingFolder}\ngen__amd64_out.txt";
-        static Regex arm64InstrRegex = new Regex("^        [0-9A-F]{8}          (\\w*) ");
-        static Regex x64InstrRegex = new Regex("^       ([0-9A-F])+\\s+(\\w*)");
+        static string armFile = Path.Combine(workingFolder, "ngen__arm64_out.txt");
+        static string x64File = Path.Combine(workingFolder, "ngen__amd64_out.txt");
+        static string workingFolderForJit = @"E:\armcompare\movz_movk\pmi";
+        static string armFolderForJit = Path.Combine(workingFolderForJit, "arm64");
+        static string x64FolderForJit = Path.Combine(workingFolderForJit, "x64");
+        static Regex arm64InstrRegexForCrossGen = new Regex("^        [0-9A-F]{8}          (\\w*) ");
+        static Regex x64InstrRegexForCrossGen = new Regex("^       ([0-9A-F])+\\s+(\\w*)");
+        static Regex arm64InstrRegexForJit = new Regex("^            (\\w+) ");
+        static Regex x64InstrRegexForJit = new Regex("^       (\\w+) ");
 
         static void PrintSyntax()
         {
@@ -34,6 +39,8 @@ namespace AnalyzeAsm
 
         static void Main(string[] args)
         {
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
             #region Custom tool for GetAsm
             //if (args.Length != 2 || args[0] == "-?" || args[0] == "--?" || args[0] == "-help" || args[0] == "--help")
             //{
@@ -66,7 +73,7 @@ namespace AnalyzeAsm
             //PrintAssembly(x64File, args[0]);
             //}
             //CalculateTotalSize();
-            //Distribution();
+            Distribution();
             //GetLoadStores();
             //OptimizeDmbs();
             //FindStrGroups_wzr($@"{workingFolder}\str_str_wzr_to_str_xzr-1.asm");
@@ -88,7 +95,9 @@ namespace AnalyzeAsm
             //RedundantMovs1($@"{workingFolder}\redundant-mov-1.asm");
             //RedundantMovs2($@"{workingFolder}\redundant-mov-2.asm");
             //RedundantMovs3($@"{workingFolder}\redundant-mov-3.asm");
-            Console.WriteLine("Hello World!");
+
+            watch.Stop();
+            Console.WriteLine($"Hello World! took {watch.Elapsed.TotalSeconds} secs.");
         }
 
         static void PrintAssembly(string fileName, string name)
@@ -208,7 +217,7 @@ namespace AnalyzeAsm
                     }
                     else
                     {
-                        var instrMatch = arm64InstrRegex.Match(line);
+                        var instrMatch = arm64InstrRegexForCrossGen.Match(line);
                         if (instrMatch.Success)
                         {
                             string instr = instrMatch.Groups[1].Value;
@@ -252,11 +261,21 @@ namespace AnalyzeAsm
         /// </summary>
         static void Distribution()
         {
+            string sep = "|#|";
             Dictionary<string, Numbers> sizes = new Dictionary<string, Numbers>();
 
-            GetSize(armFile, sizes, false);
-            GetSize(x64File, sizes, true);
-            Console.WriteLine("MethodName$ARM64-CodeSize$x64-CodeSize$Diff-CodeSize$RelativeDiff-CodeSize$ARM64-Instr$x64-Instr$Diff-Instr$RelativeDiff-Instr");
+            var dasmFiles = Directory.GetFiles(armFolderForJit, "*.dasm", SearchOption.TopDirectoryOnly);
+            foreach (var dasmFile in dasmFiles)
+            {
+                GetSize(dasmFile, sizes, false);
+            }
+            dasmFiles = Directory.GetFiles(x64FolderForJit, "*.dasm", SearchOption.TopDirectoryOnly);
+            foreach (var dasmFile in dasmFiles)
+            {
+                GetSize(dasmFile, sizes, true);
+            }
+            StringBuilder strBuilder = new StringBuilder();
+            strBuilder.AppendLine($"MethodName{sep}ARM64-CodeSize{sep}x64-CodeSize{sep}Diff-CodeSize{sep}RelativeDiff-CodeSize{sep}ARM64 - Instr{sep}x64-Instr{sep}Diff - Instr{sep}RelativeDiff-Instr{sep}");
             long totalCodeSizeArm64 = 0, totalCodeSizex64 = 0, totalInstrSizeArm64 = 0, totalInstrSizex64 = 0;
             foreach (var entry in sizes)
             {
@@ -271,19 +290,22 @@ namespace AnalyzeAsm
                     int instrDiff = value.ARM64InstrCount - value.x64InstrCount;
                     float sizeDiffRel = (float)sizeDiff / value.x64CodeSize;
                     float instrDiffRel = (float)instrDiff / value.x64InstrCount;
-                    Console.Write($"{entry.Key}$");
-                    Console.Write($"{value.ARM64CodeSize}${value.x64CodeSize}${sizeDiff}${sizeDiffRel}$");
-                    Console.WriteLine($"{value.ARM64InstrCount}${value.x64InstrCount}${instrDiff}${instrDiffRel}$");
+                    strBuilder.Append($"{entry.Key}{sep}");
+                    strBuilder.Append($"{value.ARM64CodeSize}{sep}{value.x64CodeSize}{sep}{sizeDiff}{sep}{sizeDiffRel}{sep}");
+                    strBuilder.AppendLine($"{value.ARM64InstrCount}{sep}{value.x64InstrCount}{sep}{instrDiff}{sep}{instrDiffRel}{sep}");
                 }
             }
-            Console.Write("Total$");
-            Console.Write($"{totalCodeSizeArm64}${totalCodeSizex64}${totalCodeSizeArm64 - totalCodeSizex64}${(totalCodeSizeArm64 - totalCodeSizex64) / totalCodeSizex64}$");
-            Console.WriteLine($"{totalInstrSizeArm64}${totalCodeSizex64}${totalInstrSizeArm64 - totalInstrSizex64}${(totalInstrSizeArm64 - totalInstrSizex64) / totalInstrSizex64}$");
 
+            strBuilder.Append($"Total{sep}");
+            strBuilder.Append($"{totalCodeSizeArm64}{sep}{totalCodeSizex64}{sep}{totalCodeSizeArm64 - totalCodeSizex64}{sep}{(totalCodeSizeArm64 - totalCodeSizex64) / totalCodeSizex64}{sep}");
+            strBuilder.AppendLine($"{totalInstrSizeArm64}{sep}{totalCodeSizex64}{sep}{totalInstrSizeArm64 - totalInstrSizex64}{sep}{(totalInstrSizeArm64 - totalInstrSizex64) / totalInstrSizex64}{sep}");
+
+            File.WriteAllText(Path.Combine(workingFolderForJit, "size-distribition.csv"), strBuilder.ToString());
             static void GetSize(string fileName, Dictionary<string, Numbers> sizeAccum, bool isX64)
             {
                 StringBuilder s = new StringBuilder();
-                var instrRegex = isX64 ? x64InstrRegex : arm64InstrRegex;
+                var instrRegex = isX64 ? x64InstrRegexForJit : arm64InstrRegexForJit;
+                //var instrRegex = isX64 ? x64InstrRegexForCrossGen : arm64InstrRegexForCrossGen;
                 int instrCount = 0;
                 string line;
                 string methodName = null;
