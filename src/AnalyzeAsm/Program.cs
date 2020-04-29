@@ -74,10 +74,12 @@ namespace AnalyzeAsm
             //FindLdrGroups_2($@"{workingFolder}\ldr_ldr_fp_to_ldp.asm");
             //FindStrGroups_1($@"{workingFolder}\str_str_x_to_stp.asm");
             //FindStrGroups_2($@"{workingFolder}\str_str_fp_to_stp.asm");
+            //FindLdrThenStr($@"{workingFolder}\ldr-str.asm");
+            //FindLdrThenStr($@"{workingFolder}\str-ldr.asm");
             //FindLdrLdrToMovGroups($@"{workingFolder}\ldr_to_mov.asm");
             //FindPostIndexAddrMode1($@"{workingFolder}\post-index-1.asm");
             //FindPreIndexAddrMode1($@"{workingFolder}\pre-index-1.asm");
-            FindPreIndexAddrMode2($@"{workingFolder}\pre-index-2.asm");
+            //FindPreIndexAddrMode2($@"{workingFolder}\pre-index-2.asm");
             //AdrpAddPairs($@"{workingFolder}\adrp-add.asm");
             //PrologEpilogInx64($@"{workingFolder}\pro-epi-x64.asm");
             //PrologEpilogInx64($@"{workingFolder}\temp.asm");
@@ -556,6 +558,108 @@ namespace AnalyzeAsm
         {
             Regex strRegEx = new Regex("str     x(\\d+), \\[fp,");
             FindLdrStrGroups(strRegEx, fileName, isLdr: false);
+        }
+
+        /// <summary>
+        /// Find the following where load/store happens from same source and our next to each other.
+        ///     ldr x1, [source]
+        ///     str x1, [source]
+        ///  Also can find other way round by flipping the firstInstr and secondInstr variable values.
+        /// </summary>
+        /// <param name="fileName"></param>
+        static void FindLdrThenStr(string fileName)
+        {
+            Regex secondInstrRegex = new Regex("ldr     ([x|w](\\d+)), \\[(.*)\\]");
+            Regex firstInstrRegex = new Regex("str     ([x|w](\\d+)), \\[(.*)\\]");
+            string secondInstrToFind = "ldr     ";
+            string firstInstrToFind = "str     ";
+            bool foundLdrStrPair = false;
+            int total = 0;
+            int hasStrWzrPair = 0;
+            int totalPairs = 0;
+            string header = "";
+
+            bool prevWasMov = false;
+            string prevDstReg = "";
+            string prevSrcReg = "";
+            int prevMovLineNum = 0;
+            int localLineNum = 0;
+            string prevMovInstr = string.Empty;
+            StringBuilder resultBuilder = new StringBuilder();
+
+            using (FileStream fs = File.Open(armFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string line;
+                int lineNum = 1;
+                StringBuilder strBuilder = new StringBuilder();
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (line.StartsWith("; Assembly listing for method"))
+                    {
+                        if (foundLdrStrPair)
+                        {
+                            hasStrWzrPair++;
+                            resultBuilder.AppendLine("####################################################################################");
+                            resultBuilder.AppendLine(header);
+                            resultBuilder.AppendLine(strBuilder.ToString());
+                            //Console.WriteLine("####################################################################################");
+                            //Console.WriteLine(header);
+                            //Console.WriteLine(strBuilder.ToString());
+                        }
+
+                        strBuilder.Clear();
+                        foundLdrStrPair = false;
+
+                        //header = line.Replace("; Assembly listing for method ", "");
+                        header = line;
+                        localLineNum = 1;
+                        total++;
+                    }
+                    if (line.Contains(firstInstrToFind))
+                    {
+                        var match = firstInstrRegex.Match(line);
+                        if (match.Success)
+                        {
+                            prevSrcReg = match.Groups[1].Value;
+                            prevDstReg = match.Groups[3].Value;
+
+                            if (prevSrcReg != prevDstReg)
+                            {
+                                prevMovInstr = line;
+                                prevMovLineNum = lineNum;
+                                prevWasMov = true;
+                            }
+                        }
+                    }
+                    else if (line.Contains(secondInstrToFind) && prevWasMov)
+                    {
+
+                        var match = secondInstrRegex.Match(line);
+                        if (match.Success)
+                        {
+                            string currentSrcReg = match.Groups[1].Value;
+                            string currentDstReg = match.Groups[3].Value;
+
+                            // Make sure current source and dst are not same.
+                            if (prevSrcReg == currentSrcReg && prevDstReg == currentDstReg && prevMovLineNum + 1 == lineNum)
+                            {
+                                strBuilder.AppendLine($"[{localLineNum - 1:0000}]{prevMovInstr}");
+                                strBuilder.AppendLine($"[{localLineNum:0000}]{line}");
+                                strBuilder.AppendLine("...................................................");
+                                totalPairs++;
+                                foundLdrStrPair = true;
+                            }
+                        }
+                        prevWasMov = false;
+                    }
+                    lineNum++;
+                    localLineNum++;
+                }
+            }
+            resultBuilder.AppendLine($"Processed {total} methods. Found {hasStrWzrPair} methods containing {totalPairs} groups.");
+            WriteResults(fileName, resultBuilder.ToString());
         }
 
         /// <summary>
