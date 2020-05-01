@@ -72,6 +72,14 @@ add x2, x2, #4
 ldr x0, [x2, #4]!
 ```
 
+`FindPreIndexAddrMode2()` finds patterns:
+```asm
+add x2, x2, #4
+ldr x0, [x2, #4]
+;becomes
+ldr x0, [x2, #4]!
+```
+
 `RedundantMovs1()` finds patterns:
 ```asm
 mov x0, x0

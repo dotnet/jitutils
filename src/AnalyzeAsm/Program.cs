@@ -19,10 +19,15 @@ namespace AnalyzeAsm
         //static string ngenFile = @"D:\git\runtime\ngen_out.txt";
         static string workingFolder = @"E:\armcompare\movz_movk";
         static Regex regex = new Regex(@"; Total bytes of code (\d+), prolog size (\d+),");
-        static string armFile = $@"{workingFolder}\ngen__arm64_out.txt";
-        static string x64File = $@"{workingFolder}\ngen__amd64_out.txt";
-        static Regex arm64InstrRegex = new Regex("^        [0-9A-F]{8}          (\\w*) ");
-        static Regex x64InstrRegex = new Regex("^       ([0-9A-F])+\\s+(\\w*)");
+        static string armFile = Path.Combine(workingFolder, "ngen__arm64_out.txt");
+        static string x64File = Path.Combine(workingFolder, "ngen__amd64_out.txt");
+        static string workingFolderForJit = @"E:\armcompare\movz_movk\pmi";
+        static string armFolderForJit = Path.Combine(workingFolderForJit, "arm64");
+        static string x64FolderForJit = Path.Combine(workingFolderForJit, "x64");
+        static Regex arm64InstrRegexForCrossGen = new Regex("^        [0-9A-F]{8}          (\\w*) ");
+        static Regex x64InstrRegexForCrossGen = new Regex("^       ([0-9A-F])+\\s+(\\w*)");
+        static Regex arm64InstrRegexForJit = new Regex("^            (\\w+) ");
+        static Regex x64InstrRegexForJit = new Regex("^       (\\w+) ");
 
         static void PrintSyntax()
         {
@@ -34,6 +39,8 @@ namespace AnalyzeAsm
 
         static void Main(string[] args)
         {
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
             #region Custom tool for GetAsm
             //if (args.Length != 2 || args[0] == "-?" || args[0] == "--?" || args[0] == "-help" || args[0] == "--help")
             //{
@@ -74,9 +81,12 @@ namespace AnalyzeAsm
             //FindLdrGroups_2($@"{workingFolder}\ldr_ldr_fp_to_ldp.asm");
             //FindStrGroups_1($@"{workingFolder}\str_str_x_to_stp.asm");
             //FindStrGroups_2($@"{workingFolder}\str_str_fp_to_stp.asm");
+            //FindLdrThenStr($@"{workingFolder}\ldr-str.asm");
+            //FindLdrThenStr($@"{workingFolder}\str-ldr.asm");
             //FindLdrLdrToMovGroups($@"{workingFolder}\ldr_to_mov.asm");
             //FindPostIndexAddrMode1($@"{workingFolder}\post-index-1.asm");
             //FindPreIndexAddrMode1($@"{workingFolder}\pre-index-1.asm");
+            //FindPreIndexAddrMode2($@"{workingFolder}\pre-index-2.asm");
             //AdrpAddPairs($@"{workingFolder}\adrp-add.asm");
             //PrologEpilogInx64($@"{workingFolder}\pro-epi-x64.asm");
             //PrologEpilogInx64($@"{workingFolder}\temp.asm");
@@ -85,7 +95,60 @@ namespace AnalyzeAsm
             //RedundantMovs1($@"{workingFolder}\redundant-mov-1.asm");
             //RedundantMovs2($@"{workingFolder}\redundant-mov-2.asm");
             //RedundantMovs3($@"{workingFolder}\redundant-mov-3.asm");
-            Console.WriteLine("Hello World!");
+            //PrintAssembly(armFile, "System.Linq.Expressions.Interpreter.ActionCallInstruction:Run(System.Linq.Expressions.Interpreter.InterpretedFrame):int:this");
+            PrintAssembly();
+            // No index
+            //var dasmFiles = Directory.GetFiles(armFolderForJit, "*.dasm", SearchOption.TopDirectoryOnly);
+            //foreach (var dasmFile in dasmFiles)
+            //{
+            //    PrintAssembly(dasmFile, "System.Linq.Expressions.Interpreter.ActionCallInstruction:Run(System.Linq.Expressions.Interpreter.InterpretedFrame):int:this");
+            //}
+
+            watch.Stop();
+            Console.WriteLine($"Hello World! took {watch.Elapsed.TotalSeconds} secs.");
+        }
+
+        static void PrintAssembly()
+        {
+            MethodIndex[] indexes = new MethodIndex[2];
+            indexes[0] = Indexer.GetIndex(armFolderForJit);
+            indexes[1] = Indexer.GetIndex(x64FolderForJit);
+
+            while (true)
+            {
+                Console.Write(">>");
+                string methodName = Console.ReadLine().Trim();
+                if (string.IsNullOrEmpty(methodName))
+                {
+                    continue;
+                }
+
+                foreach (var index in indexes)
+                {
+                    var occurances = index.GetOccurances(methodName);
+
+                    foreach (var occurance in occurances)
+                    {
+                        string fileName = occurance.Key;
+                        var positions = occurance.Value;
+
+                        var lines = File.ReadLines(fileName);
+                        foreach (var position in positions)
+                        {
+                            var contents = lines.Skip(position.s - 1).Take(position.l);
+                            foreach (var line in contents)
+                            {
+                                Console.WriteLine(line);
+                            }
+                        }
+                    }
+                    if (occurances.Count > 0)
+                    {
+                        Console.WriteLine("****************************************************");
+                        Console.WriteLine("****************************************************");
+                    }
+                }
+            }
         }
 
         static void PrintAssembly(string fileName, string name)
@@ -205,7 +268,7 @@ namespace AnalyzeAsm
                     }
                     else
                     {
-                        var instrMatch = arm64InstrRegex.Match(line);
+                        var instrMatch = arm64InstrRegexForCrossGen.Match(line);
                         if (instrMatch.Success)
                         {
                             string instr = instrMatch.Groups[1].Value;
@@ -249,11 +312,21 @@ namespace AnalyzeAsm
         /// </summary>
         static void Distribution()
         {
+            string sep = "|#|";
             Dictionary<string, Numbers> sizes = new Dictionary<string, Numbers>();
 
-            GetSize(armFile, sizes, false);
-            GetSize(x64File, sizes, true);
-            Console.WriteLine("MethodName$ARM64-CodeSize$x64-CodeSize$Diff-CodeSize$RelativeDiff-CodeSize$ARM64-Instr$x64-Instr$Diff-Instr$RelativeDiff-Instr");
+            var dasmFiles = Directory.GetFiles(armFolderForJit, "*.dasm", SearchOption.TopDirectoryOnly);
+            foreach (var dasmFile in dasmFiles)
+            {
+                GetSize(dasmFile, sizes, false);
+            }
+            dasmFiles = Directory.GetFiles(x64FolderForJit, "*.dasm", SearchOption.TopDirectoryOnly);
+            foreach (var dasmFile in dasmFiles)
+            {
+                GetSize(dasmFile, sizes, true);
+            }
+            StringBuilder strBuilder = new StringBuilder();
+            strBuilder.AppendLine($"MethodName{sep}ARM64-CodeSize{sep}x64-CodeSize{sep}Diff-CodeSize{sep}RelativeDiff-CodeSize{sep}ARM64 - Instr{sep}x64-Instr{sep}Diff - Instr{sep}RelativeDiff-Instr{sep}");
             long totalCodeSizeArm64 = 0, totalCodeSizex64 = 0, totalInstrSizeArm64 = 0, totalInstrSizex64 = 0;
             foreach (var entry in sizes)
             {
@@ -268,19 +341,22 @@ namespace AnalyzeAsm
                     int instrDiff = value.ARM64InstrCount - value.x64InstrCount;
                     float sizeDiffRel = (float)sizeDiff / value.x64CodeSize;
                     float instrDiffRel = (float)instrDiff / value.x64InstrCount;
-                    Console.Write($"{entry.Key}$");
-                    Console.Write($"{value.ARM64CodeSize}${value.x64CodeSize}${sizeDiff}${sizeDiffRel}$");
-                    Console.WriteLine($"{value.ARM64InstrCount}${value.x64InstrCount}${instrDiff}${instrDiffRel}$");
+                    strBuilder.Append($"{entry.Key}{sep}");
+                    strBuilder.Append($"{value.ARM64CodeSize}{sep}{value.x64CodeSize}{sep}{sizeDiff}{sep}{sizeDiffRel}{sep}");
+                    strBuilder.AppendLine($"{value.ARM64InstrCount}{sep}{value.x64InstrCount}{sep}{instrDiff}{sep}{instrDiffRel}{sep}");
                 }
             }
-            Console.Write("Total$");
-            Console.Write($"{totalCodeSizeArm64}${totalCodeSizex64}${totalCodeSizeArm64 - totalCodeSizex64}${(totalCodeSizeArm64 - totalCodeSizex64) / totalCodeSizex64}$");
-            Console.WriteLine($"{totalInstrSizeArm64}${totalCodeSizex64}${totalInstrSizeArm64 - totalInstrSizex64}${(totalInstrSizeArm64 - totalInstrSizex64) / totalInstrSizex64}$");
 
+            strBuilder.Append($"Total{sep}");
+            strBuilder.Append($"{totalCodeSizeArm64}{sep}{totalCodeSizex64}{sep}{totalCodeSizeArm64 - totalCodeSizex64}{sep}{(totalCodeSizeArm64 - totalCodeSizex64) / totalCodeSizex64}{sep}");
+            strBuilder.AppendLine($"{totalInstrSizeArm64}{sep}{totalCodeSizex64}{sep}{totalInstrSizeArm64 - totalInstrSizex64}{sep}{(totalInstrSizeArm64 - totalInstrSizex64) / totalInstrSizex64}{sep}");
+
+            File.WriteAllText(Path.Combine(workingFolderForJit, "size-distribition.csv"), strBuilder.ToString());
             static void GetSize(string fileName, Dictionary<string, Numbers> sizeAccum, bool isX64)
             {
                 StringBuilder s = new StringBuilder();
-                var instrRegex = isX64 ? x64InstrRegex : arm64InstrRegex;
+                var instrRegex = isX64 ? x64InstrRegexForJit : arm64InstrRegexForJit;
+                //var instrRegex = isX64 ? x64InstrRegexForCrossGen : arm64InstrRegexForCrossGen;
                 int instrCount = 0;
                 string line;
                 string methodName = null;
@@ -555,6 +631,108 @@ namespace AnalyzeAsm
         {
             Regex strRegEx = new Regex("str     x(\\d+), \\[fp,");
             FindLdrStrGroups(strRegEx, fileName, isLdr: false);
+        }
+
+        /// <summary>
+        /// Find the following where load/store happens from same source and our next to each other.
+        ///     ldr x1, [source]
+        ///     str x1, [source]
+        ///  Also can find other way round by flipping the firstInstr and secondInstr variable values.
+        /// </summary>
+        /// <param name="fileName"></param>
+        static void FindLdrThenStr(string fileName)
+        {
+            Regex secondInstrRegex = new Regex("ldr     ([x|w](\\d+)), \\[(.*)\\]");
+            Regex firstInstrRegex = new Regex("str     ([x|w](\\d+)), \\[(.*)\\]");
+            string secondInstrToFind = "ldr     ";
+            string firstInstrToFind = "str     ";
+            bool foundLdrStrPair = false;
+            int total = 0;
+            int hasStrWzrPair = 0;
+            int totalPairs = 0;
+            string header = "";
+
+            bool prevWasMov = false;
+            string prevDstReg = "";
+            string prevSrcReg = "";
+            int prevMovLineNum = 0;
+            int localLineNum = 0;
+            string prevMovInstr = string.Empty;
+            StringBuilder resultBuilder = new StringBuilder();
+
+            using (FileStream fs = File.Open(armFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string line;
+                int lineNum = 1;
+                StringBuilder strBuilder = new StringBuilder();
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (line.StartsWith("; Assembly listing for method"))
+                    {
+                        if (foundLdrStrPair)
+                        {
+                            hasStrWzrPair++;
+                            resultBuilder.AppendLine("####################################################################################");
+                            resultBuilder.AppendLine(header);
+                            resultBuilder.AppendLine(strBuilder.ToString());
+                            //Console.WriteLine("####################################################################################");
+                            //Console.WriteLine(header);
+                            //Console.WriteLine(strBuilder.ToString());
+                        }
+
+                        strBuilder.Clear();
+                        foundLdrStrPair = false;
+
+                        //header = line.Replace("; Assembly listing for method ", "");
+                        header = line;
+                        localLineNum = 1;
+                        total++;
+                    }
+                    if (line.Contains(firstInstrToFind))
+                    {
+                        var match = firstInstrRegex.Match(line);
+                        if (match.Success)
+                        {
+                            prevSrcReg = match.Groups[1].Value;
+                            prevDstReg = match.Groups[3].Value;
+
+                            if (prevSrcReg != prevDstReg)
+                            {
+                                prevMovInstr = line;
+                                prevMovLineNum = lineNum;
+                                prevWasMov = true;
+                            }
+                        }
+                    }
+                    else if (line.Contains(secondInstrToFind) && prevWasMov)
+                    {
+
+                        var match = secondInstrRegex.Match(line);
+                        if (match.Success)
+                        {
+                            string currentSrcReg = match.Groups[1].Value;
+                            string currentDstReg = match.Groups[3].Value;
+
+                            // Make sure current source and dst are not same.
+                            if (prevSrcReg == currentSrcReg && prevDstReg == currentDstReg && prevMovLineNum + 1 == lineNum)
+                            {
+                                strBuilder.AppendLine($"[{localLineNum - 1:0000}]{prevMovInstr}");
+                                strBuilder.AppendLine($"[{localLineNum:0000}]{line}");
+                                strBuilder.AppendLine("...................................................");
+                                totalPairs++;
+                                foundLdrStrPair = true;
+                            }
+                        }
+                        prevWasMov = false;
+                    }
+                    lineNum++;
+                    localLineNum++;
+                }
+            }
+            resultBuilder.AppendLine($"Processed {total} methods. Found {hasStrWzrPair} methods containing {totalPairs} groups.");
+            WriteResults(fileName, resultBuilder.ToString());
         }
 
         /// <summary>
@@ -946,6 +1124,123 @@ namespace AnalyzeAsm
                     else
                     {
                         prevWasLdr = false;
+                    }
+                    lineNum++;
+                    localLineNum++;
+                }
+            }
+            resultBuilder.AppendLine($"Processed {total} methods. Found {hasStrWzrPair} methods containing {totalMovGroups} groups.");
+            WriteResults(fileName, resultBuilder.ToString());
+        }
+
+        /// <summary>
+        ///     add x2, x2, #4
+        ///     ldr x0, [x2, #4]
+        ///       ; becomes
+        ///     ldr x0, [x2, #4]!
+        /// </summary>
+        /// <param name="fileName"></param>
+        static void FindPreIndexAddrMode2(string fileName)
+        {
+            Regex ldrRegEx = new Regex("ldr     ((w|x)\\d+), \\[((x|w)\\d+),#([0-9a-fx]*)\\]");
+            Regex addRegEx = new Regex("add     ((w|x)\\d+), ((w|x)\\d+), #([0-9a-fx]*)");
+            string ldrToFind = "ldr     ";
+            string addToFind = "add     ";
+            bool foundStrWzr = false;
+            int total = 0;
+            int hasStrWzrPair = 0;
+            int totalMovGroups = 0;
+            string header = "";
+
+            bool prevWasAdd = false;
+            string prevDestReg = "";
+            string prevSrcReg = "";
+            string prevImm = "";
+            int prevAddLineNum = 0;
+            int localLineNum = 0;
+            string prevAddInstr = string.Empty;
+            StringBuilder resultBuilder = new StringBuilder();
+
+            using (FileStream fs = File.Open(armFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string line;
+                int lineNum = 1;
+                StringBuilder strBuilder = new StringBuilder();
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (line.StartsWith("; Assembly listing for method"))
+                    {
+                        if (foundStrWzr)
+                        {
+                            hasStrWzrPair++;
+                            resultBuilder.AppendLine("####################################################################################");
+                            resultBuilder.AppendLine(header);
+                            resultBuilder.AppendLine(strBuilder.ToString());
+                            //Console.WriteLine("####################################################################################");
+                            //Console.WriteLine(header);
+                            //Console.WriteLine(strBuilder.ToString());
+                        }
+
+                        strBuilder.Clear();
+                        foundStrWzr = false;
+
+                        //header = line.Replace("; Assembly listing for method ", "");
+                        header = line;
+                        localLineNum = 1;
+                        total++;
+                    }
+
+
+                    if (line.Contains(addToFind))
+                    {
+                        var match = addRegEx.Match(line);
+                        if (match.Success && match.Groups.Count == 6) // make sure we got the immediate as well
+                        {
+                            prevDestReg = match.Groups[1].Value;
+                            prevSrcReg = match.Groups[3].Value;
+                            prevImm = match.Groups[5].Value;
+
+                            if (prevDestReg == prevSrcReg)
+                            {
+                                prevAddInstr = line;
+                                prevAddLineNum = lineNum;
+                                prevWasAdd = true;
+                            }
+
+                            
+                        }
+                    }
+                    else if (line.Contains(ldrToFind))
+                    {
+                        if (prevWasAdd)
+                        {
+                            var match = ldrRegEx.Match(line);
+                            if (match.Success)
+                            {
+                                string currDstReg = match.Groups[1].Value;
+                                string currSrcReg = match.Groups[3].Value;
+                                string currImm = match.Groups[5].Value;
+
+                                // 1. curr src != curr dst
+                                // 2. prev src == curr src
+                                // 3. prev imm = curr imm
+                                if (currDstReg != currSrcReg && currSrcReg == prevSrcReg && currImm == prevImm && prevAddLineNum + 1 == lineNum)
+                                {
+                                    strBuilder.AppendLine($"[{localLineNum - 1:0000}]{prevAddInstr}");
+                                    strBuilder.AppendLine($"[{localLineNum:0000}]{line}");
+                                    strBuilder.AppendLine("...................................................");
+                                    totalMovGroups++;
+                                    foundStrWzr = true;
+                                }
+                            }
+                            prevWasAdd = false;
+                        }
+                    }
+                    else
+                    {
+                        prevWasAdd = false;
                     }
                     lineNum++;
                     localLineNum++;
