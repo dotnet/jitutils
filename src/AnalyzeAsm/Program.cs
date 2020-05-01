@@ -125,12 +125,12 @@ namespace AnalyzeAsm
 
                 foreach (var index in indexes)
                 {
-                    var occurances = index.GetOccurances(methodName);
+                    var occurences = index.GetOccurences(methodName);
 
-                    foreach (var occurance in occurances)
+                    foreach (var occurence in occurences)
                     {
-                        string fileName = occurance.Key;
-                        var positions = occurance.Value;
+                        string fileName = occurence.Key;
+                        var positions = occurence.Value;
 
                         var lines = File.ReadLines(fileName);
                         foreach (var position in positions)
@@ -142,7 +142,7 @@ namespace AnalyzeAsm
                             }
                         }
                     }
-                    if (occurances.Count > 0)
+                    if (occurences.Count > 0)
                     {
                         Console.WriteLine("****************************************************");
                         Console.WriteLine("****************************************************");

@@ -50,11 +50,11 @@ namespace AnalyzeAsm
         }
 
         /// <summary>
-        ///     Search for occurances of <paramref name="methodName"/>.
+        ///     Search for occurences of <paramref name="methodName"/>.
         /// </summary>
         /// <param name="methodName"></param>
         /// <returns></returns>
-        internal Dictionary<string, List<PositionInfo>> GetOccurances(string methodName)
+        internal Dictionary<string, List<PositionInfo>> GetOccurences(string methodName)
         {
             if (MethodDatabase.TryGetValue(methodName, out Dictionary<string, List<PositionInfo>> result))
             {
