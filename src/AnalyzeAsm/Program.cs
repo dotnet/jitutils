@@ -73,7 +73,7 @@ namespace AnalyzeAsm
             //PrintAssembly(x64File, args[0]);
             //}
             //CalculateTotalSize();
-            Distribution();
+            //Distribution();
             //GetLoadStores();
             //OptimizeDmbs();
             //FindStrGroups_wzr($@"{workingFolder}\str_str_wzr_to_str_xzr-1.asm");
@@ -95,9 +95,60 @@ namespace AnalyzeAsm
             //RedundantMovs1($@"{workingFolder}\redundant-mov-1.asm");
             //RedundantMovs2($@"{workingFolder}\redundant-mov-2.asm");
             //RedundantMovs3($@"{workingFolder}\redundant-mov-3.asm");
+            //PrintAssembly(armFile, "System.Linq.Expressions.Interpreter.ActionCallInstruction:Run(System.Linq.Expressions.Interpreter.InterpretedFrame):int:this");
+            PrintAssembly();
+            // No index
+            //var dasmFiles = Directory.GetFiles(armFolderForJit, "*.dasm", SearchOption.TopDirectoryOnly);
+            //foreach (var dasmFile in dasmFiles)
+            //{
+            //    PrintAssembly(dasmFile, "System.Linq.Expressions.Interpreter.ActionCallInstruction:Run(System.Linq.Expressions.Interpreter.InterpretedFrame):int:this");
+            //}
 
             watch.Stop();
             Console.WriteLine($"Hello World! took {watch.Elapsed.TotalSeconds} secs.");
+        }
+
+        static void PrintAssembly()
+        {
+            MethodIndex[] indexes = new MethodIndex[2];
+            indexes[0] = Indexer.GetIndex(armFolderForJit);
+            indexes[1] = Indexer.GetIndex(x64FolderForJit);
+
+            while (true)
+            {
+                Console.Write(">>");
+                string methodName = Console.ReadLine().Trim();
+                if (string.IsNullOrEmpty(methodName))
+                {
+                    continue;
+                }
+
+                foreach (var index in indexes)
+                {
+                    var occurances = index.GetOccurances(methodName);
+
+                    foreach (var occurance in occurances)
+                    {
+                        string fileName = occurance.Key;
+                        var positions = occurance.Value;
+
+                        var lines = File.ReadLines(fileName);
+                        foreach (var position in positions)
+                        {
+                            var contents = lines.Skip(position.s - 1).Take(position.l);
+                            foreach (var line in contents)
+                            {
+                                Console.WriteLine(line);
+                            }
+                        }
+                    }
+                    if (occurances.Count > 0)
+                    {
+                        Console.WriteLine("****************************************************");
+                        Console.WriteLine("****************************************************");
+                    }
+                }
+            }
         }
 
         static void PrintAssembly(string fileName, string name)
