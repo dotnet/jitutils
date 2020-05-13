@@ -207,7 +207,7 @@ namespace ManagedCodeGen
                     // If _rootPath doesn't exist, it is an invalid path
                     _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
                 }
-                else if (!File.Exists(Path.Combine(_rootPath, "build.cmd")) || !File.Exists(Path.Combine(_rootPath, "build.sh")) || !File.Exists(Path.Combine(_rootPath, "clr.featuredefines.props")))
+                else if (!File.Exists(Path.Combine(_rootPath, "clr.featuredefines.props")))
                 {
                     // Doesn't look like the coreclr directory.
                     _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --coreclr");
