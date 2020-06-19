@@ -1326,15 +1326,6 @@ class PrepareMethodinator
         return 101;
     }
 
-    private static void EnsureGetCurrentProcessorIdIsDeterministic()
-    {
-#if NETCOREAPP
-        var type = typeof(System.Threading.Thread);
-        var field = type.GetField("s_isProcessorNumberReallyFast", BindingFlags.NonPublic | BindingFlags.Static);
-        field.SetValue(null, true);
-#endif
-    }
-
     private static void EnsureGen2GcCallbackFuncIsJitted()
     {
 #if NETCOREAPP
@@ -1354,13 +1345,6 @@ class PrepareMethodinator
         {
             return Usage();
         }
-
-        // System.Threading.Thread.s_isProcessorNumberReallyFast can have different
-        // values on two invocations of the process on the same machine. That causes
-        // non-determinism in generated code in methods inlining System.Threading.Thread.GetCurrentProcessorId().
-        // This methods uses reflection to set the value of System.Threading.Thread.s_isProcessorNumberReallyFast
-        // to true.
-        EnsureGetCurrentProcessorIdIsDeterministic();
 
         // TlsOverPerCoreLockedStacksArrayPool.Return registers Gen2GcCallbackFunc on Gen2GcCallback.
         // Gen2GcCallbackFunc is then called from Gen2GcCallback finalizer after a gc.
