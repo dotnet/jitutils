@@ -88,6 +88,7 @@ namespace AnalyzeAsm
             //FindPreIndexAddrMode1($@"{workingFolder}\pre-index-1.asm");
             //FindPreIndexAddrMode2($@"{workingFolder}\pre-index-2.asm");
             //AdrpAddPairs($@"{workingFolder}\adrp-add.asm");
+            //CSEForAdrpAddAddresses(armFile, @"E:\armcompare\movz_movk\cse-candidates.txt");
             //PrologEpilogInx64($@"{workingFolder}\pro-epi-x64.asm");
             //PrologEpilogInx64($@"{workingFolder}\temp.asm");
             //ArrayAccess($@"{workingFolder}\array-access.asm");
@@ -1819,6 +1820,96 @@ namespace AnalyzeAsm
             resultBuilder.AppendLine($"Processed {total} methods. Found {ldrWithRegOffsetCount} groups.");
             Console.WriteLine($"Processed {total} methods. Found {ldrWithRegOffsetCount} groups.");
             WriteResults(fileName, resultBuilder.ToString());
+        }
+
+        /// <summary>
+        ///       Finds adrp instructions whose address can be CSE.
+        /// </summary>
+        /// <param name="fileName"></param>
+        static void CSEForAdrpAddAddresses(string inputFile, string outputFile)
+        {
+            Regex adrp = new Regex("adrp    (x11), \\[RELOC #(0x[0-9a-f]+)\\]");
+
+            bool foundInstrGroup = false;
+            int total = 0;
+            int hasAdrpAddGroup = 0;
+            int totalAdrpAddGroups = 0;
+            string header = "";
+
+            int localLineNum = 0;
+            StringBuilder resultBuilder = new StringBuilder();
+            Dictionary<string, List<string>> localAddrCounts = new Dictionary<string, List<string>>();
+
+            using (FileStream fs = File.Open(inputFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (line.StartsWith("; Assembly listing for method"))
+                    {
+                        if (foundInstrGroup)
+                        {
+                            hasAdrpAddGroup++;
+                            resultBuilder.AppendLine("####################################################################################");
+                            resultBuilder.AppendLine(header);
+                            foreach (var entry in localAddrCounts)
+                            {
+                                if (entry.Value.Count > 1)
+                                {
+                                    foreach (var csegroups in entry.Value)
+                                    {
+                                        totalAdrpAddGroups++;
+                                        resultBuilder.AppendLine(csegroups);
+                                    }
+                                }
+                            }
+                            //Console.WriteLine("####################################################################################");
+                            //Console.WriteLine(header);
+                            //Console.WriteLine(strBuilder.ToString());
+                        }
+
+                        foundInstrGroup = false;
+                        localAddrCounts.Clear();
+
+                        header = line;
+                        localLineNum = 1;
+                        total++;
+                    }
+
+                    if (line.Contains("adrp    x11,"))
+                    {
+                        StringBuilder localBuilder = new StringBuilder();
+
+                        // adrp x11, [reloc address]
+                        var match = adrp.Match(line);
+                        if (!match.Success) break;
+
+                        localBuilder.AppendLine($"[{localLineNum++:0000}]{line}");
+                        string relocAddr = match.Groups[2].Value;
+
+                        if (!localAddrCounts.ContainsKey(relocAddr))
+                        {
+                            localAddrCounts[relocAddr] = new List<string>();
+                        }
+                        else
+                        {
+                            foundInstrGroup = true;
+                        }
+                        localAddrCounts[relocAddr].Add($"[{localLineNum:0000}]{line}");
+                    }
+                    localLineNum++;
+                }
+            }
+
+            if (hasAdrpAddGroup > 0)
+            {
+                resultBuilder.AppendLine($"Processed {total} methods. Found {hasAdrpAddGroup} methods containing {totalAdrpAddGroups} groups.");
+                Console.WriteLine($"Processed {total} methods. Found {hasAdrpAddGroup} methods containing {totalAdrpAddGroups} groups.");
+            }
+
+            WriteResults(outputFile, resultBuilder.ToString());
         }
 
         private static void WriteResults(string fileName, string contents)
