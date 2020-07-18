@@ -58,7 +58,7 @@ namespace ManagedCodeGen
                 _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
                 {
                     syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: x64, x86)");
-                    syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Ubuntu, Fedora, etc.)");
+                    syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Linux etc.)");
                     syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
                     syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base runtime/src/coreclr directory");
                     syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
@@ -181,7 +181,7 @@ namespace ManagedCodeGen
 
                 if (!_untidy && ( (_arch == null) || (_os == null) || (_build == null)))
                 {
-                    _syntaxResult.ReportError("Specify --arch, --plaform, and --build for clang-tidy run.");
+                    _syntaxResult.ReportError("Specify --arch, --os, and --build for clang-tidy run.");
                 }
 
                 if (_rootPath == null)
