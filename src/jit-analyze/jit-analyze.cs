@@ -214,6 +214,26 @@ namespace ManagedCodeGen
             public override string ValueString => $"{Value:F2}";
         }
 
+        public class DebugClauseMetric : Metric
+        {
+            public override string Name => "DebugClauseCount";
+            public override string DisplayName => "Debug Clause Count";
+            public override string Unit => "Clause";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new DebugClauseMetric();
+            public override string ValueString => $"{Value}";
+        }
+
+        public class DebugVarMetric : Metric
+        {
+            public override string Name => "DebugVarCount";
+            public override string DisplayName => "Debug Variable Count";
+            public override string Unit => "Variable";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new DebugVarMetric();
+            public override string ValueString => $"{Value}";
+        }
+
         public class MetricCollection
         {
             private static Dictionary<string, int> s_metricNameToIndex;
@@ -221,7 +241,7 @@ namespace ManagedCodeGen
 
             static MetricCollection()
             {
-                s_metrics = new Metric[] { new CodeSizeMetric(), new PrologSizeMetric(), new PerfScoreMetric() };
+                s_metrics = new Metric[] { new CodeSizeMetric(), new PrologSizeMetric(), new PerfScoreMetric(), new DebugClauseMetric(), new DebugVarMetric() };
                 s_metricNameToIndex = new Dictionary<string, int>(s_metrics.Length);
 
                 for (int i = 0; i < s_metrics.Length; i++)
@@ -508,17 +528,20 @@ namespace ManagedCodeGen
             Regex dataPattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
             // use new regex for perf score so we can still parse older files that did not have it.
             Regex dataPattern2 = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
+            Regex debugPattern = new Regex(@"Variable debug info: ([0-9]{1,}) live ranges, ([0-9]{1,}) vars");
 
             var result = 
              File.ReadLines(filePath)
                              .Select((x, i) => new { line = x, index = i })
                              .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
-                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal))
+                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal)
+                                        || l.line.StartsWith(@"; Variable debug info:", StringComparison.Ordinal))
                              .Select((x) =>
                              {
                                  var nameMatch = namePattern.Match(x.line);
                                  var dataMatch = dataPattern.Match(x.line);
                                  var dataMatch2 = dataPattern2.Match(x.line);
+                                 var debugMatch = debugPattern.Match(x.line);
                                  return new
                                  {
                                      name = nameMatch.Groups[1].Value,
@@ -531,7 +554,11 @@ namespace ManagedCodeGen
                                         Double.Parse(dataMatch2.Groups[2].Value) : 0,
                                      // Use function index only from non-data lines (the name line)
                                      functionOffset = dataMatch.Success ?
-                                        0 : x.index
+                                        0 : x.index,
+                                     debugClauseCount = debugMatch.Success ?
+                                        Int32.Parse(debugMatch.Groups[1].Value): 0,
+                                     debugVarCount = debugMatch.Success ?
+                                        Int32.Parse(debugMatch.Groups[2].Value): 0
                                  };
                              })
                              .GroupBy(x => x.name)
@@ -550,6 +577,8 @@ namespace ManagedCodeGen
                                  mi.Metrics.Add("CodeSize", x.Sum(z => z.totalBytes));
                                  mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
                                  mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
+                                 mi.Metrics.Add("DebugClauseCount", x.Sum(z => z.debugClauseCount));
+                                 mi.Metrics.Add("DebugVarCount", x.Sum(z => z.debugVarCount));
 
                                  return mi;
                              }).ToList();
