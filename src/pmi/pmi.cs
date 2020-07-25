@@ -514,6 +514,31 @@ abstract class PrepareBase : CounterBase
 
         return elapsedFunc;
     }
+
+    protected string GetGenericArgumentsString(MethodBase method)
+    {
+        if (method.IsGenericMethod)
+        {
+            Type[] args = method.GetGenericArguments();
+            string argString = "<";
+            bool first = true;
+            foreach (Type t in args)
+            {
+                if (!first)
+                {
+                    argString += ",";
+                }
+                argString += t.ToString();
+                first = false;
+            }
+            argString += ">";
+            return argString;
+        }
+        else
+        {
+            return "";
+        }
+    }
 }
 
 // Invoke the jit on all methods starting from an initial method.
@@ -564,22 +589,25 @@ class PrepareAll : PrepareBase
             {
                 if (_verbose)
                 {
-                    Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}  - skipping (generic parameters)");
+                    Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (generic parameters)");
                 }
                 UninstantiableMethod(method);
             }
             else
             {
+                string genericArgString = "";
+
                 if (_verbose)
                 {
-                    Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
+                    genericArgString = GetGenericArgumentsString(method);
+                    Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
                 }
 
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
 
                 if (_verbose)
                 {
-                    Console.Write($"Completed method {type.FullName}::{method.Name}");
+                    Console.Write($"Completed method {type.FullName}::{method.Name}{genericArgString}");
                     if (elapsedFunc != TimeSpan.MinValue)
                     {
                         Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
@@ -637,13 +665,14 @@ class PrepareOne : PrepareBase
             }
             else if (method.ContainsGenericParameters)
             {
-                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}  - skipping (generic parameters)");
+                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (generic parameters)");
             }
             else
             {
-                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}");
+                string genericArgString = GetGenericArgumentsString(method);
+                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
                 TimeSpan elapsedFunc = PrepareMethod(type, method);
-                Console.WriteLine($"Completed method {type.FullName}::{method.Name}");
+                Console.Write($"Completed method {type.FullName}::{method.Name}{genericArgString}");
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
                     Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
