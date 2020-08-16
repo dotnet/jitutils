@@ -6,7 +6,7 @@
 
   <PropertyGroup>
     <TargetFramework Condition="$(_UseNetCoreApp3) == true">netcoreapp3.1</TargetFramework>
-    <TargetFramework Condition="$(_UseNetCoreApp3) != true">netcoreapp5.0</TargetFramework>   
+    <TargetFramework Condition="$(_UseNetCoreApp3) != true">net5.0</TargetFramework>   
   </PropertyGroup>
 
 </Project>
