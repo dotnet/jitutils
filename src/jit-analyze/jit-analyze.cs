@@ -72,7 +72,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
-                    syntax.DefineOption("m|metric", ref _metric, "metric to summarize (default is CodeSize)");
+                    syntax.DefineOption("m|metric", ref _metric, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize");
                     syntax.DefineOption("note", ref _note,
                         "Descriptive note to add to summary output");
                     syntax.DefineOption("noreconcile", ref _noreconcile,
@@ -612,6 +612,7 @@ namespace ManagedCodeGen
         {
             var totalDeltaMetrics = fileDeltaList.Sum(x => x.deltaMetrics);
             var totalBaseMetrics = fileDeltaList.Sum(x => x.baseMetrics);
+            var totalDiffMetrics = fileDeltaList.Sum(x => x.diffMetrics);
 
             if (config.Note != null)
             {
@@ -619,6 +620,7 @@ namespace ManagedCodeGen
             }
 
             Metric totalBaseMetric = totalBaseMetrics.GetMetric(config.Metric);
+            Metric totalDiffMetric = totalDiffMetrics.GetMetric(config.Metric);
             Metric totalDeltaMetric = totalDeltaMetrics.GetMetric(config.Metric);
             string unitName = totalBaseMetrics.GetMetric(config.Metric).Unit;
             string metricName = totalBaseMetrics.GetMetric(config.Metric).DisplayName;
@@ -632,12 +634,14 @@ namespace ManagedCodeGen
 
             if (totalBaseMetric.Value != 0)
             {
-                Console.WriteLine("Total {0}s of diff: {1} ({2:P} of base)", unitName, totalDeltaMetric.ValueString, totalDeltaMetric.Value / totalBaseMetric.Value);
+                Console.WriteLine("Total {0}s of base: {1}", unitName, totalBaseMetric.Value);
+                Console.WriteLine("Total {0}s of diff: {1}", unitName, totalDiffMetric.Value);
+                Console.WriteLine("Total {0}s of delta: {1} ({2:P} of base)", unitName, totalDeltaMetric.ValueString, totalDeltaMetric.Value / totalBaseMetric.Value);
+
             }
             else 
             {
-                var totalDiffMetric = fileDeltaList.Sum(x => x.diffMetrics);
-                Console.WriteLine("Warning: the base metric is 0, the diff metric is {0}, have you used a release version?", totalDiffMetric.GetMetric(config.Metric).ValueString);
+                Console.WriteLine("Warning: the base metric is 0, the diff metric is {0}, have you used a release version?", totalDiffMetrics.GetMetric(config.Metric).ValueString);
             }
 
             if (totalDeltaMetric.Value != 0)
