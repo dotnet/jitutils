@@ -531,7 +531,7 @@ namespace ManagedCodeGen
                                         Double.Parse(dataMatch2.Groups[2].Value) : 0,
                                      // Use function index only from non-data lines (the name line)
                                      functionOffset = dataMatch.Success ?
-                                        0 : x.index
+                                        -1 : x.index
                                  };
                              })
                              .GroupBy(x => x.name)
@@ -543,7 +543,7 @@ namespace ManagedCodeGen
                                      functionCount = x.Select(z => z).Where(z => z.totalBytes == 0).Count(),
                                      // for all non-zero function offsets create list.
                                      functionOffsets = x.Select(z => z)
-                                                    .Where(z => z.functionOffset != 0)
+                                                    .Where(z => z.functionOffset != -1)
                                                     .Select(z => z.functionOffset).ToList()
                                  };
 
