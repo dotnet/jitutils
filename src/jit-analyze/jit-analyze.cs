@@ -72,7 +72,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
-                    syntax.DefineOption("m|metric", ref _metric, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount");
+                    syntax.DefineOption("m|metric", ref _metric, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount, DebugClauseCount, DebugVarCount");
                     syntax.DefineOption("note", ref _note,
                         "Descriptive note to add to summary output");
                     syntax.DefineOption("noreconcile", ref _noreconcile,
@@ -224,6 +224,26 @@ namespace ManagedCodeGen
             public override string ValueString => $"{Value}";
         }
 
+        public class DebugClauseMetric : Metric
+        {
+            public override string Name => "DebugClauseCount";
+            public override string DisplayName => "Debug Clause Count";
+            public override string Unit => "Clause";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new DebugClauseMetric();
+            public override string ValueString => $"{Value}";
+        }
+
+        public class DebugVarMetric : Metric
+        {
+            public override string Name => "DebugVarCount";
+            public override string DisplayName => "Debug Variable Count";
+            public override string Unit => "Variable";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new DebugVarMetric();
+            public override string ValueString => $"{Value}";
+        }
+
         public class MetricCollection
         {
             private static Dictionary<string, int> s_metricNameToIndex;
@@ -231,7 +251,7 @@ namespace ManagedCodeGen
 
             static MetricCollection()
             {
-                s_metrics = new Metric[] { new CodeSizeMetric(), new PrologSizeMetric(), new PerfScoreMetric(), new InstrCountMetric() };
+                s_metrics = new Metric[] { new CodeSizeMetric(), new PrologSizeMetric(), new PerfScoreMetric(), new InstrCountMetric(), new DebugClauseMetric(), new DebugVarMetric() };
                 s_metricNameToIndex = new Dictionary<string, int>(s_metrics.Length);
 
                 for (int i = 0; i < s_metrics.Length; i++)
@@ -519,18 +539,21 @@ namespace ManagedCodeGen
             // use new regex for perf score so we can still parse older files that did not have it.
             Regex perfScorePattern = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
             Regex instrCountPattern = new Regex(@"instruction count ([0-9]{1,})");
+            Regex debugInfoPattern = new Regex(@"Variable debug info: ([0-9]{1,}) live range\(s\), ([0-9]{1,}) var\(s\)");
 
             var result =
              File.ReadLines(filePath)
                              .Select((x, i) => new { line = x, index = i })
                              .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
-                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal))
+                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal)
+                                        || l.line.StartsWith(@"; Variable debug info:", StringComparison.Ordinal))
                              .Select((x) =>
                              {
                                  var nameMatch = namePattern.Match(x.line);
                                  var codeAndPrologSizeMatch = codeAndPrologSizePattern.Match(x.line);
                                  var perfScoreMatch = perfScorePattern.Match(x.line);
                                  var instrCountMatch = instrCountPattern.Match(x.line);
+                                 var debugInfoMatch = debugInfoPattern.Match(x.line);
                                  return new
                                  {
                                      name = nameMatch.Groups[1].Value,
@@ -543,6 +566,10 @@ namespace ManagedCodeGen
                                         Double.Parse(perfScoreMatch.Groups[2].Value) : 0,
                                      instrCount = instrCountMatch.Success ?
                                         Int32.Parse(instrCountMatch.Groups[1].Value) : 0,
+                                     debugClauseCount = debugInfoMatch.Success ?
+                                        Int32.Parse(debugInfoMatch.Groups[1].Value) : 0,
+                                     debugVarCount = debugInfoMatch.Success ?
+                                        Int32.Parse(debugInfoMatch.Groups[2].Value) : 0,
                                      // Use function index only from non-data lines (the name line)
                                      functionOffset = codeAndPrologSizeMatch.Success ?
                                         0 : x.index
@@ -565,6 +592,8 @@ namespace ManagedCodeGen
                                  mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
                                  mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
                                  mi.Metrics.Add("InstrCount", x.Sum(z => z.instrCount));
+                                 mi.Metrics.Add("DebugClauseCount", x.Sum(z => z.debugClauseCount));
+                                 mi.Metrics.Add("DebugVarCount", x.Sum(z => z.debugVarCount));
 
                                  return mi;
                              }).ToList();
