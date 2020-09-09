@@ -515,83 +515,61 @@ namespace ManagedCodeGen
         public static IEnumerable<MethodInfo> ExtractMethodInfo(string filePath)
         {
             Regex namePattern = new Regex(@"for method (.*)$");
-            Regex dataPattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
+            Regex codeAndPrologSizePattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
             // use new regex for perf score so we can still parse older files that did not have it.
-            Regex dataPattern2 = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
+            Regex perfScorePattern = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
+            Regex instrCountPattern = new Regex(@"instruction count ([0-9]{1,})");
 
-            var lines = File.ReadLines(filePath);
-            int currInstrCount = 0;
-            int index = 0;
-            string _methodName = null;
-            int _functionOffset = 0;
+            var result =
+             File.ReadLines(filePath)
+                             .Select((x, i) => new { line = x, index = i })
+                             .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
+                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal))
+                             .Select((x) =>
+                             {
+                                 var nameMatch = namePattern.Match(x.line);
+                                 var codeAndPrologSizeMatch = codeAndPrologSizePattern.Match(x.line);
+                                 var perfScoreMatch = perfScorePattern.Match(x.line);
+                                 var instrCountMatch = instrCountPattern.Match(x.line);
+                                 return new
+                                 {
+                                     name = nameMatch.Groups[1].Value,
+                                     // Use matched data or default to 0
+                                     totalBytes = codeAndPrologSizeMatch.Success ?
+                                        Int32.Parse(codeAndPrologSizeMatch.Groups[1].Value) : 0,
+                                     prologBytes = codeAndPrologSizeMatch.Success ?
+                                        Int32.Parse(codeAndPrologSizeMatch.Groups[2].Value) : 0,
+                                     perfScore = perfScoreMatch.Success ?
+                                        Double.Parse(perfScoreMatch.Groups[2].Value) : 0,
+                                     instrCount = instrCountMatch.Success ?
+                                        Int32.Parse(instrCountMatch.Groups[1].Value) : 0,
+                                     // Use function index only from non-data lines (the name line)
+                                     functionOffset = codeAndPrologSizeMatch.Success ?
+                                        0 : x.index
+                                 };
+                             })
+                             .GroupBy(x => x.name)
+                             .Select(x =>
+                             {
+                                 MethodInfo mi = new MethodInfo
+                                 {
+                                     name = x.Key,
+                                     functionCount = x.Select(z => z).Where(z => z.totalBytes == 0).Count(),
+                                     // for all non-zero function offsets create list.
+                                     functionOffsets = x.Select(z => z)
+                                                    .Where(z => z.functionOffset != 0)
+                                                    .Select(z => z.functionOffset).ToList()
+                                 };
 
-            // Create a list of anonymous type and clear it immediately so we still have type information of list element
-            var methodsList = new[] { new { name = "", totalBytes = 0, prologBytes = 0, perfScore = 0.0, instrCount = 0, functionOffset = 0 } }.ToList();
-            methodsList.Clear();
+                                 mi.Metrics.Add("CodeSize", x.Sum(z => z.totalBytes));
+                                 mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
+                                 mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
+                                 mi.Metrics.Add("InstrCount", x.Sum(z => z.instrCount));
 
-            foreach (string line in lines)
-            {
-                if (line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal))
-                {
-                    var nameMatch = namePattern.Match(line);
-                    var dataMatch = dataPattern.Match(line);
-                    var dataMatch2 = dataPattern2.Match(line);
-                    var methodName = nameMatch.Groups[1].Value;
-                    Debug.Assert(_methodName == methodName);
-                    methodsList.Add(new
-                    {
-                        name = methodName,
-                        // Use matched data or default to 0
-                        totalBytes = dataMatch.Success ?
-                           Int32.Parse(dataMatch.Groups[1].Value) : 0,
-                        prologBytes = dataMatch.Success ?
-                           Int32.Parse(dataMatch.Groups[2].Value) : 0,
-                        perfScore = dataMatch2.Success ?
-                           Double.Parse(dataMatch2.Groups[2].Value) : 0,
-                        instrCount = currInstrCount,
-                        functionOffset = _functionOffset
-                    });
-                }
-                else if (line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal))
-                {
-                    currInstrCount = 0;
-                    _functionOffset = index;
-#if DEBUG
-                    _methodName = namePattern.Match(line).Groups[1].Value;
-#endif
-                }
-                else
-                {
-                    string trimmedLine = line.Trim();
-                    if (!                                                         // filter:
-                        (string.IsNullOrEmpty(trimmedLine) ||                     //   empty lines
-                        trimmedLine.StartsWith(";", StringComparison.Ordinal) ||  //   comments
-                        trimmedLine.StartsWith("G_M")))                           //   basic blocks
-                    {
-                        currInstrCount++;
-                    }
-                }
-                index++;
-            }
+                                 return mi;
+                             }).ToList();
 
-            return methodsList
-                .GroupBy(x => x.name)
-                .Select(x =>
-                {
-                    MethodInfo mi = new MethodInfo
-                    {
-                        name = x.Key,
-                        functionCount = x.Select(z => z).Where(z => z.totalBytes == 0).Count(),
-                        // for all non-zero function offsets create list.
-                        functionOffsets = x.Select(z => z.functionOffset).ToList()
-                    };
-
-                    mi.Metrics.Add("CodeSize", x.Sum(z => z.totalBytes));
-                    mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
-                    mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
-                    mi.Metrics.Add("InstrCount", x.Sum(z => z.instrCount));
-                    return mi;
-                }).ToList();
+            return result;
         }
 
         // Compare base and diff file lists and produce a sorted list of method
