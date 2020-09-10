@@ -193,7 +193,7 @@ The "jit-diff diff" command has this help message:
         --diff_root <arg>     Path to root of diff dotnet/coreclr repo.
         --arch <arg>          Architecture to diff (x86, x64).
         --build <arg>         Build flavor to diff (Checked, Debug).
-        --altjit <arg>        If set, the name of the altjit to use (e.g., protononjit.dll).
+        --altjit <arg>        If set, the name of the altjit to use (e.g., clrjit_win_arm64_x64.dll).
         --pmi                 Generate diffs via jitting instead of running crossgen
         --assembly <arg>      Look at diffs for methods in the specified assembly
     
@@ -505,7 +505,7 @@ Sample help command line:
                 <assembly>...
 
     --altjit <arg>             If set, the name of the altjit to use
-                               (e.g., protononjit.dll).
+                               (e.g., clrjit_win_arm64_x64.dll).
     -c, --crossgen <arg>       The crossgen or crossgen2 compiler exe.
     -j, --jit <arg>            The full path to the jit library.
     -o, --output <arg>         The output path.

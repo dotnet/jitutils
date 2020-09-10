@@ -190,7 +190,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("diff_root", ref _diffRoot, "Path to root of diff dotnet/runtime repo.");
                     syntax.DefineOption("arch", ref _arch, "Architecture to diff (x86, x64).");
                     syntax.DefineOption("build", ref _build, "Build flavor to diff (Checked, Debug).");
-                    syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
+                    syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., clrjit_win_arm64_x64.dll).");
                     var pmiOption = syntax.DefineOption("pmi", ref _pmi, "Run asm diffs via pmi.");
                     syntax.DefineOption("cctors", ref _cctors, "With --pmi, jit and run cctors before jitting other methods");
                     syntax.DefineOptionList("assembly", ref _assemblyList, "Run asm diffs on a given set of assemblies. An individual item can be an assembly or a directory tree containing assemblies.");
