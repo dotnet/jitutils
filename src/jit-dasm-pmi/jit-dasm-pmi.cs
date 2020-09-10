@@ -52,7 +52,7 @@ namespace ManagedCodeGen
         {
             _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
             {
-                syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., protononjit.dll).");
+                syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., clrjit_win_arm64_x64.dll).");
                 syntax.DefineOption("c|corerun", ref _corerunExe, "The corerun compiler exe.");
                 syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
                 syntax.DefineOption("o|output", ref _rootPath, "The output path.");
