@@ -177,7 +177,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("t|tag", ref _tag, "Name of root in output directory. Allows for many sets of output.");
                     syntax.DefineOption("c|corelib", ref _corelib, "Diff System.Private.CoreLib.dll.");
                     syntax.DefineOption("f|frameworks", ref _frameworks, "Diff frameworks.");
-                    syntax.DefineOption("m|metric", ref _metric, false, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize");
+                    syntax.DefineOption("m|metric", ref _metric, false, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount, DebugClauseCount, DebugVarCount");
                     syntax.DefineOption("benchmarks", ref _benchmarks, "Diff core benchmarks.");
                     syntax.DefineOption("tests", ref _tests, "Diff all tests.");
                     syntax.DefineOption("gcinfo", ref _gcinfo, "Add GC info to the disasm output.");
