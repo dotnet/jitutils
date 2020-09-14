@@ -386,6 +386,7 @@ namespace ManagedCodeGen
             public bool verbose = false;
             private int _errorCount = 0;
             protected Dictionary<string, string> _environmentVariables;
+            protected Random _rand = new Random();
 
             public int ErrorCount { get { return _errorCount; } }
 
@@ -544,7 +545,9 @@ namespace ManagedCodeGen
 
                     if (_rootPath != null)
                     {
-                        var logPath = Path.ChangeExtension(dasmPath, ".log");
+                        // Append a random id to the log files so they don't get picked up by "git diff"
+                        string randomId = _rand.Next(0, 5000).ToString();
+                        var logPath = Path.ChangeExtension(dasmPath, $".{randomId}.log");
 
                         // Redirect stdout/stderr to log file and run command.
                         using (var outputStreamWriter = File.CreateText(logPath))
