@@ -972,6 +972,8 @@ namespace ManagedCodeGen
             List<string> commandArgs = new List<string>();
             commandArgs.Add("diff");
             commandArgs.Add("--no-index");
+            // only diff files that are present in both base and diff.
+            commandArgs.Add("--diff-filter=M");
             commandArgs.Add("--exit-code");
             commandArgs.Add("--numstat");
             commandArgs.Add(diffPath);
@@ -1068,7 +1070,7 @@ namespace ManagedCodeGen
 
                     if (fields.Length != numFields)
                     {
-                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : {fields.Length} fields");
+                        Console.WriteLine($"Couldn't parse output '{line}`.");
                         continue;
                     }
 
@@ -1076,7 +1078,7 @@ namespace ManagedCodeGen
                     string fullBaseFilePath = Path.GetFullPath(fields[2]);
                     if (!File.Exists(fullBaseFilePath))
                     {
-                        Console.WriteLine($"Couldn't parse --numstat output '{line}` : '{fullBaseFilePath}' does not exist");
+                        Console.WriteLine($"Couldn't parse output '{line}'.");
                         continue;
                     }
 
