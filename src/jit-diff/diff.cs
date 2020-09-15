@@ -332,7 +332,12 @@ namespace ManagedCodeGen
                 List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
                 DasmResult dasmResult = diffTool.RunDasmTool(commandArgs, assemblyWorkList);
                 Console.WriteLine($"Completed {diffString} in {(DateTime.Now - startTime).TotalSeconds:F2}s");
-                Console.WriteLine($"Diffs (if any) can be viewed by comparing: {Path.Combine(config.OutputPath, "base")} {Path.Combine(config.OutputPath, "diff")}");
+                string basePath = Path.Combine(config.OutputPath, "base");
+                string diffPath = Path.Combine(config.OutputPath, "diff");
+                Console.WriteLine($"Diffs (if any) can be viewed by comparing: {basePath} {diffPath}");
+                Console.WriteLine("");
+                Console.WriteLine($"git diff --no-index --diff-filter=M --exit-code --numstat {diffPath} {basePath}");
+                Console.WriteLine("");
 
                 // Analyze completed run.
 
