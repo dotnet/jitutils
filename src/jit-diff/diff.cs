@@ -7,7 +7,6 @@ using System.CommandLine;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.DotNet.Cli.Utils;
 using System.Threading.Tasks;
 
 namespace ManagedCodeGen
@@ -150,7 +149,7 @@ namespace ManagedCodeGen
                 {
                     Console.WriteLine("Dasm command: {0}", command);
                 }
-                CommandResult result = Utility.TryCommand(CommandName, item.DasmArgs);
+                ProcessResult result = Utility.ExecuteProcess(CommandName, item.DasmArgs);
                 if (result.ExitCode != 0)
                 {
                     Console.Error.WriteLine("Dasm command \"{0}\" returned with {1} failures", command, result.ExitCode);
@@ -369,7 +368,7 @@ namespace ManagedCodeGen
 
                     Console.WriteLine($"Analyzing {config.Metric} diffs...");
                     startTime = DateTime.Now;
-                    CommandResult analyzeResult = Utility.TryCommand(s_analysisTool, analysisArgs);
+                    ProcessResult analyzeResult = Utility.ExecuteProcess(s_analysisTool, analysisArgs);
                     Console.WriteLine($"Completed analysis in {(DateTime.Now - startTime).TotalSeconds:F2}s");
                 }
 

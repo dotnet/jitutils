@@ -3,19 +3,11 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-//using System.Diagnostics;
 using System.CommandLine;
 using System.IO;
-//using System.Collections.Generic;
-//using System.Text.RegularExpressions;
 using System.Linq;
-//using Microsoft.DotNet.Cli.Utils;
-//using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-//using System.Collections.Concurrent;
-//using System.Threading.Tasks;
-//using System.Runtime.InteropServices;
 
 namespace ManagedCodeGen
 {

@@ -33,10 +33,7 @@ using System.CommandLine;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.IO.Compression;
-//using Microsoft.DotNet.Cli.Utils;
-//using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
-//using Newtonsoft.Json.Linq;
 
 namespace ManagedCodeGen
 {

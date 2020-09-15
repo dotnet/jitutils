@@ -21,8 +21,6 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
 using System.Text;
-using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Tools.Common;
 
 namespace ManagedCodeGen
 {
@@ -385,11 +383,6 @@ namespace ManagedCodeGen
                 this.verbose = config.DoVerboseOutput;
             }
 
-            class ScriptResolverPolicyWrapper : ICommandResolverPolicy
-            {
-                public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
-            }
-
             public void GenerateAsm()
             {
                 string testOverlayDir = Path.GetDirectoryName(_config.CorerunExecutable);
@@ -459,13 +452,13 @@ namespace ManagedCodeGen
                         command += "-CCTORS";
                     }
                     List<string> commandArgs = new List<string>() { Path.Combine(binDir, "pmi.dll"), command, fullPathAssembly };
-                    Command generateCmd = null;
 
+                    Dictionary<string, string> _environmentVariables = new Dictionary<string, string>();
                     // Add environment variables to the environment of the command we are going to execute, and
                     // display them to the user in verbose mode.
                     void AddEnvironmentVariable(string varName, string varValue)
                     {
-                        generateCmd.EnvironmentVariable(varName, varValue);
+                        _environmentVariables[varName] = varValue;
                         if (this.verbose)
                         {
                             Console.WriteLine("Setting: {0}={1}", varName, varValue);
@@ -486,17 +479,6 @@ namespace ManagedCodeGen
                         {
                             Console.WriteLine("Appending: {0}={1} to PMIENV", varName, varValue);
                         }
-                    }
-                    
-                    try 
-                    {
-                        generateCmd = Command.Create(new ScriptResolverPolicyWrapper(), _executablePath, commandArgs);
-                    }
-                    catch (CommandUnknownException e)
-                    {
-                        Console.Error.WriteLine("\nError: {0} command not found!\n", e);
-                        _errorCount++;
-                        return;
                     }
 
                     // Pick up ambient COMPlus settings.
@@ -566,7 +548,7 @@ namespace ManagedCodeGen
                         Console.WriteLine("Running: {0} {1}", _executablePath, String.Join(" ", commandArgs));
                     }
 
-                    CommandResult result;
+                    ProcessResult result;
 
                     if (_rootPath != null)
                     {
@@ -575,19 +557,29 @@ namespace ManagedCodeGen
                         var dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
                         var logPath = Path.ChangeExtension(dasmPath, ".log");
 
-                        PathUtility.EnsureParentDirectoryExists(dasmPath);
+                        Utility.EnsureParentDirectoryExists(dasmPath);
 
                         AppendEnvironmentVariableToPmiEnv("COMPlus_JitStdOutFile", dasmPath);
 
                         AddEnvironmentVariable("PMIENV", pmiEnv.ToString());
 
+                        result = Utility.ExecuteProcess(_executablePath, commandArgs, true, environmentVariables: _environmentVariables);
+
                         // Redirect stdout/stderr to log file and run command.
-                        using (var outputStreamWriter = File.CreateText(logPath))
+                        StringBuilder output = new StringBuilder();
+                        if (!string.IsNullOrEmpty(result.StdOut))
                         {
-                            // Forward output and error to file.
-                            generateCmd.ForwardStdOut(outputStreamWriter);
-                            generateCmd.ForwardStdErr(outputStreamWriter);
-                            result = generateCmd.Execute();
+                            output.AppendLine("Standard output:");
+                            output.AppendLine(result.StdOut);
+                        }
+                        if (!string.IsNullOrEmpty(result.StdErr))
+                        {
+                            output.AppendLine("Standard error:");
+                            output.AppendLine(result.StdErr);
+                        }
+                        if (output.Length > 0)
+                        {
+                            File.WriteAllText(logPath, output.ToString());
                         }
 
                         bool hasOutput = true;
@@ -624,9 +616,7 @@ namespace ManagedCodeGen
                         AddEnvironmentVariable("PMIENV", pmiEnv.ToString());
 
                         // By default forward to output to stdout/stderr.
-                        generateCmd.ForwardStdOut();
-                        generateCmd.ForwardStdErr();
-                        result = generateCmd.Execute();
+                        result = Utility.ExecuteProcess(_executablePath, commandArgs, environmentVariables: _environmentVariables);
 
                         if (result.ExitCode != 0)
                         {

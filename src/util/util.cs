@@ -5,10 +5,19 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
-using Microsoft.DotNet.Cli.Utils;
+using System.Diagnostics;
+using System.Text;
 
 namespace ManagedCodeGen
 {
+
+    public class ProcessResult
+    {
+        public int ExitCode;
+        public string StdOut;
+        public string StdErr;
+    }
+
     public class Utility
     {
         public static string CombinePath(string basePath, string[] pathComponents)
@@ -27,7 +36,7 @@ namespace ManagedCodeGen
         {
             // git rev-parse --show-toplevel
             List<string> commandArgs = new List<string> { "rev-parse", "--show-toplevel" };
-            CommandResult result = TryCommand("git", commandArgs, true);
+            ProcessResult result = ExecuteProcess("git", commandArgs, true);
             if (result.ExitCode != 0)
             {
                 if (verbose)
@@ -43,7 +52,7 @@ namespace ManagedCodeGen
 
             // Is it actually the dotnet/runtime repo?
             commandArgs = new List<string> { "remote", "-v" };
-            result = TryCommand("git", commandArgs, true);
+            result = ExecuteProcess("git", commandArgs, true);
             if (result.ExitCode != 0)
             {
                 if (verbose)
@@ -71,43 +80,98 @@ namespace ManagedCodeGen
             return repo_root;
         }
 
-        class ScriptResolverPolicyWrapper : ICommandResolverPolicy
+        public static ProcessResult ExecuteProcess(string name, IEnumerable<string> commandArgs, bool capture = false, string workingDirectory = "", Dictionary<string, string> environmentVariables = null)
         {
-            public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
-        }
-
-        public static CommandResult TryCommand(string name, IEnumerable<string> commandArgs, bool capture = false, string workingDirectory = null)
-        {
-            try
+            var startInfo = new ProcessStartInfo
             {
-                Command command = Command.Create(new ScriptResolverPolicyWrapper(), name, commandArgs);
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = capture,
+                RedirectStandardOutput = capture,
+                WorkingDirectory = workingDirectory,
+                FileName = name,
+                Arguments = string.Join(" ", commandArgs)
+            };
 
-                if (!string.IsNullOrEmpty(workingDirectory))
-                {
-                    command.WorkingDirectory(workingDirectory);
-                }
-
-                if (capture)
-                {
-                    // Capture stdout/stderr for consumption within tool.
-                    command.CaptureStdOut();
-                    command.CaptureStdErr();
-                }
-                else
-                {
-                    // Wireup stdout/stderr so we can see output.
-                    command.ForwardStdOut();
-                    command.ForwardStdErr();
-                }
-
-                return command.Execute();
-            }
-            catch (CommandUnknownException e)
+            if (environmentVariables != null)
             {
-                Console.Error.WriteLine("\nerror: {0} command not found!  Add {0} to the path.", name, e);
-                Environment.Exit(-1);
-                return CommandResult.Empty;
+                foreach (var envVar in environmentVariables)
+                {
+                    startInfo.EnvironmentVariables[envVar.Key] = envVar.Value;
+                }
             }
+
+            // set up the pipe for the stdout and builder for stderr
+            StringBuilder _errorDataStringBuilder = new StringBuilder();
+            StringBuilder _outputDataStringBuilder = new StringBuilder();
+
+            Process process = new Process
+            {
+                EnableRaisingEvents = true,
+                StartInfo = startInfo
+            };
+
+
+            if (capture)
+            {
+                // Handle output from the process
+                process.OutputDataReceived += (object sender, DataReceivedEventArgs args) => {
+                    if (args.Data == null)
+                    {
+                        return;
+                    }
+                    lock (_outputDataStringBuilder)
+                    {
+                        _outputDataStringBuilder.AppendLine(args.Data);
+                    }
+                };
+
+                // Handle errors from the process
+                process.ErrorDataReceived += (object sender, DataReceivedEventArgs args) => {
+                    if (args.Data == null)
+                    {
+                        return;
+                    }
+                    lock (_errorDataStringBuilder)
+                    {
+                        _errorDataStringBuilder.AppendLine(args.Data);
+                    }
+                };
+            }
+
+            // Finally, start the process.
+            process.Start();
+
+            if (capture)
+            {
+                // Set up async reads for stderr and stdout
+                process.BeginErrorReadLine();
+                process.BeginOutputReadLine();
+            }
+            else
+            {
+                string stdout = process.StandardOutput.ReadToEnd();
+                string stderr = process.StandardError.ReadToEnd();
+                if (!string.IsNullOrEmpty(stdout))
+                {
+                    Console.WriteLine("Standard output:");
+                    Console.WriteLine(stdout);
+                }
+                if (!string.IsNullOrEmpty(stderr))
+                {
+                    Console.WriteLine("Standard error:");
+                    Console.WriteLine(stderr);
+                }
+            }
+
+            process.WaitForExit();
+
+            return new ProcessResult()
+            {
+                ExitCode = process.ExitCode,
+                StdOut = capture ? _outputDataStringBuilder.ToString() : string.Empty,
+                StdErr = capture ? _errorDataStringBuilder.ToString() : string.Empty
+            };
         }
 
         // Check to see if the passed filePath is to an assembly.
@@ -137,6 +201,22 @@ namespace ManagedCodeGen
             }
 
             return true;
+        }
+
+        // Ensures parent directory of filePath exists. If not, creates one.
+        public static void EnsureParentDirectoryExists(string filePath)
+        {
+            string directoryPath = Path.GetDirectoryName(filePath);
+
+            EnsureDirectoryExists(directoryPath);
+        }
+
+        public static void EnsureDirectoryExists(string directoryPath)
+        {
+            if (!Directory.Exists(directoryPath))
+            {
+                Directory.CreateDirectory(directoryPath);
+            }
         }
     }
 }
