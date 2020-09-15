@@ -550,11 +550,17 @@ namespace ManagedCodeGen
                         AppendEnvironmentVariableToPmiEnv("COMPlus_AltJit", "*");
                         AppendEnvironmentVariableToPmiEnv("COMPlus_AltJitName", _altjit);
 
-                        // If this looks like a cross-targeting altjit, fix the SIMD size.
-                        // Here's one place where rationalized jit naming would be nice.
-                        if (_altjit.IndexOf("nonjit") > 0)
+                        const string arm64AsTarget = "_arm64_";
+                        int targetArm64 = _altjit.IndexOf(arm64AsTarget);
+                        if (targetArm64 > 0)
                         {
-                            AppendEnvironmentVariableToPmiEnv("COMPlus_SIMD16ByteOnly", "1");
+                            bool isHostArm64 = (_altjit.IndexOf("arm64", targetArm64 + arm64AsTarget.Length) > 0);
+                            if (!isHostArm64)
+                            {
+                                // If this looks like a cross-targeting altjit with a arm64 target and a different host
+                                // then fix the SIMD size.
+                                AppendEnvironmentVariableToPmiEnv("COMPlus_SIMD16ByteOnly", "1");
+                            }
                         }
                     }
 
