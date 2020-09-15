@@ -569,12 +569,10 @@ namespace ManagedCodeGen
                         StringBuilder output = new StringBuilder();
                         if (!string.IsNullOrEmpty(result.StdOut))
                         {
-                            output.AppendLine("Standard output:");
                             output.AppendLine(result.StdOut);
                         }
-                        if (!string.IsNullOrEmpty(result.StdErr))
+                        if (!string.IsNullOrEmpty(result.StdErr) && (result.StdOut != result.StdErr))
                         {
-                            output.AppendLine("Standard error:");
                             output.AppendLine(result.StdErr);
                         }
                         if (output.Length > 0)

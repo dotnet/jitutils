@@ -18,6 +18,97 @@ namespace ManagedCodeGen
         public string StdErr;
     }
 
+    public class ProcessManager : IDisposable
+    {
+        private List<Process> ProcessesList = new List<Process>();
+        private static ProcessManager processManager;
+
+        private ProcessManager()
+        {
+            Console.CancelKeyPress += new ConsoleCancelEventHandler(CancelKeyPress);
+        }
+
+        // Ctrl+Cancel and Ctrl+Break event
+        static void CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        {
+            Console.WriteLine("Cancelling");
+            if (e.SpecialKey == ConsoleSpecialKey.ControlC || e.SpecialKey == ConsoleSpecialKey.ControlBreak)
+            {
+                ProcessManager.Instance.KillAllProcesses(true);
+            }
+        }
+
+        public static ProcessManager Instance  
+        {
+            get
+            {
+                if (processManager == null)
+                {
+                    processManager = new ProcessManager();
+                }
+                return processManager;
+            }
+        }
+
+        // Creates a Process object and set the appropriate exitHandler
+        public Process Start(ProcessStartInfo startInfo)
+        {
+            Process process = new Process
+            {
+                EnableRaisingEvents = true,
+                StartInfo = startInfo
+            };
+            RegisterProcess(process);
+            process.Exited += (sender, e) => UnregisterProcess(process);
+            return process;
+        }
+
+        public void Dispose()
+        {
+            KillAllProcesses(false);
+            GC.SuppressFinalize(this);
+        }
+
+        private void RegisterProcess(Process p)
+        {
+            lock (ProcessesList)
+            {
+                ProcessesList.Add(p);
+            }
+        }
+
+        private void UnregisterProcess(Process p)
+        {
+            lock (ProcessesList)
+            {
+                ProcessesList.Remove(p);
+            }
+        }
+
+        // Kills all the associated processes
+        private void KillAllProcesses(bool printPid)
+        {
+            lock (ProcessesList)
+            {
+                foreach (var process in ProcessesList)
+                {
+                    try
+                    {
+                        if (!process.HasExited)
+                        {
+                            if (printPid)
+                            {
+                                Console.WriteLine($"Killing {process.Id}");
+                            }
+                            process.Kill(entireProcessTree: true);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+    }
+
     public class Utility
     {
         public static string CombinePath(string basePath, string[] pathComponents)
@@ -86,8 +177,8 @@ namespace ManagedCodeGen
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardError = capture,
-                RedirectStandardOutput = capture,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
                 WorkingDirectory = workingDirectory,
                 FileName = name,
                 Arguments = string.Join(" ", commandArgs)
@@ -105,12 +196,7 @@ namespace ManagedCodeGen
             StringBuilder _errorDataStringBuilder = new StringBuilder();
             StringBuilder _outputDataStringBuilder = new StringBuilder();
 
-            Process process = new Process
-            {
-                EnableRaisingEvents = true,
-                StartInfo = startInfo
-            };
-
+            Process process = ProcessManager.Instance.Start(startInfo);
 
             if (capture)
             {
@@ -152,14 +238,13 @@ namespace ManagedCodeGen
             {
                 string stdout = process.StandardOutput.ReadToEnd();
                 string stderr = process.StandardError.ReadToEnd();
+
                 if (!string.IsNullOrEmpty(stdout))
                 {
-                    Console.WriteLine("Standard output:");
                     Console.WriteLine(stdout);
                 }
-                if (!string.IsNullOrEmpty(stderr))
+                if (!string.IsNullOrEmpty(stderr) && (stdout != stderr))
                 {
-                    Console.WriteLine("Standard error:");
                     Console.WriteLine(stderr);
                 }
             }

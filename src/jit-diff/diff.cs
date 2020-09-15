@@ -352,7 +352,7 @@ namespace ManagedCodeGen
                     analysisArgs.Add("--note");
 
                     string jitName = config.AltJit ?? "default jit";
-                    analysisArgs.Add($"{diffString} for {config.Arch} {jitName}");
+                    analysisArgs.Add($"\"{diffString} for {config.Arch} {jitName}\"");
 
                     if (config.tsv)
                     {
