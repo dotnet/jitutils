@@ -241,11 +241,11 @@ namespace ManagedCodeGen
 
                 if (!string.IsNullOrEmpty(stdout))
                 {
-                    Console.WriteLine(stdout);
+                    Console.Write(stdout);
                 }
                 if (!string.IsNullOrEmpty(stderr) && (stdout != stderr))
                 {
-                    Console.WriteLine(stderr);
+                    Console.Write(stderr);
                 }
             }
 

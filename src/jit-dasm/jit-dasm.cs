@@ -606,7 +606,7 @@ namespace ManagedCodeGen
                 _environmentVariables[varName] = varValue;
                 if (this.verbose)
                 {
-                    Console.WriteLine("Setting: {0}={1}", varName, varValue);
+                    Console.WriteLine("set {0}={1}", varName, varValue);
                 }
             }
 
