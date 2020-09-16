@@ -386,7 +386,6 @@ namespace ManagedCodeGen
             public bool verbose = false;
             private int _errorCount = 0;
             protected Dictionary<string, string> _environmentVariables;
-            protected Random _rand = new Random();
 
             public int ErrorCount { get { return _errorCount; } }
 
@@ -513,13 +512,19 @@ namespace ManagedCodeGen
                     }
 
                     string dasmPath = null;
+                    string logPath = null;
                     if (_rootPath != null)
                     {
                         // Generate path to the output file
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
 
+                        // Create logs in seperate folder so they don't get picked up by "git diff"
+                        logPath = Path.Combine(Path.GetDirectoryName(dasmPath) + "logs", assemblyFileName);
+                        logPath = Path.ChangeExtension(logPath, ".log");
+
                         PathUtility.EnsureParentDirectoryExists(dasmPath);
+                        PathUtility.EnsureParentDirectoryExists(logPath);
 
                         AddEnvironmentVariable("COMPlus_JitStdOutFile", dasmPath);
                     }
@@ -545,10 +550,6 @@ namespace ManagedCodeGen
 
                     if (_rootPath != null)
                     {
-                        // Append a random id to the log files so they don't get picked up by "git diff"
-                        string randomId = _rand.Next(0, 5000).ToString();
-                        var logPath = Path.ChangeExtension(dasmPath, $".{randomId}.log");
-
                         // Redirect stdout/stderr to log file and run command.
                         using (var outputStreamWriter = File.CreateText(logPath))
                         {

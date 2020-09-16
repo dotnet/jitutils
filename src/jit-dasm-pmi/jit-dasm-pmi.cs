@@ -359,7 +359,6 @@ namespace ManagedCodeGen
             public bool doDebugDump = false;
             public bool verbose = false;
             private int _errorCount = 0;
-            private Random _rand = new Random();
 
             public int ErrorCount { get { return _errorCount; } }
 
@@ -575,11 +574,12 @@ namespace ManagedCodeGen
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         var dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
 
-                        // Append a random id to the log files so they don't get picked up by "git diff"
-                        string randomId = _rand.Next(0, 5000).ToString();
-                        var logPath = Path.ChangeExtension(dasmPath, $".{randomId}.log");
+                        // Create logs in seperate folder so they don't get picked up by "git diff"
+                        var logPath = Path.Combine(Path.GetDirectoryName(dasmPath) + "logs", assemblyFileName);
+                        logPath = Path.ChangeExtension(logPath, ".log");
 
                         PathUtility.EnsureParentDirectoryExists(dasmPath);
+                        PathUtility.EnsureParentDirectoryExists(logPath);
 
                         AppendEnvironmentVariableToPmiEnv("COMPlus_JitStdOutFile", dasmPath);
 
