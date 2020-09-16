@@ -332,7 +332,7 @@ namespace ManagedCodeGen
         }
 
         // Wrap CI httpClient with focused APIs for product, job, and build.
-        // This logic is seperate from listing/copying and just extracts data.
+        // This logic is separate from listing/copying and just extracts data.
         private class CIClient
         {
             private HttpClient _client;

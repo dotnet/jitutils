@@ -574,7 +574,7 @@ namespace ManagedCodeGen
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         var dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
 
-                        // Create logs in seperate folder so they don't get picked up by "git diff"
+                        // Create logs in separate folder so they don't get picked up by "git diff"
                         var logPath = Path.Combine(Path.GetDirectoryName(dasmPath) + "logs", assemblyFileName);
                         logPath = Path.ChangeExtension(logPath, ".log");
 
