@@ -579,9 +579,13 @@ namespace ManagedCodeGen
                         // Generate path to the output file
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         var dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
-                        var logPath = Path.ChangeExtension(dasmPath, ".log");
+
+                        // Create logs in separate folder so they don't get picked up by "git diff"
+                        var logPath = Path.Combine(Path.GetDirectoryName(dasmPath) + "logs", assemblyFileName);
+                        logPath = Path.ChangeExtension(logPath, ".log");
 
                         PathUtility.EnsureParentDirectoryExists(dasmPath);
+                        PathUtility.EnsureParentDirectoryExists(logPath);
 
                         AppendEnvironmentVariableToPmiEnv("COMPlus_JitStdOutFile", dasmPath);
 

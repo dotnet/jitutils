@@ -955,7 +955,7 @@ namespace ManagedCodeGen
         // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
         // Use "git diff" to do the analysis for us, then parse that output.
         //
-        // "git diff --no-index --exit-code --numstat" output shows added/deleted lines:
+        // "git diff --no-index --diff-filter=M --exit-code --numstat" output shows added/deleted lines:
         //
         //   <added> <removed> <base-path> => <diff-path>
         //

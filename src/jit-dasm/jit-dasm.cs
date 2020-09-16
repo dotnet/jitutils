@@ -10,7 +10,7 @@
 //  tools to validate ongoing development.
 //
 //  Scenario 1: Pass A and B compilers to jitdasm.  Using the --base and --diff
-//  arguments pass two seperate compilers and a passed set of assemblies.  This 
+//  arguments pass two separate compilers and a passed set of assemblies.  This
 //  is the most common scenario.
 //
 //  Scenario 2: Iterativly call jitdasm with a series of compilers tagging
@@ -512,13 +512,19 @@ namespace ManagedCodeGen
                     }
 
                     string dasmPath = null;
+                    string logPath = null;
                     if (_rootPath != null)
                     {
                         // Generate path to the output file
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
 
+                        // Create logs in separate folder so they don't get picked up by "git diff"
+                        logPath = Path.Combine(Path.GetDirectoryName(dasmPath) + "logs", assemblyFileName);
+                        logPath = Path.ChangeExtension(logPath, ".log");
+
                         PathUtility.EnsureParentDirectoryExists(dasmPath);
+                        PathUtility.EnsureParentDirectoryExists(logPath);
 
                         AddEnvironmentVariable("COMPlus_JitStdOutFile", dasmPath);
                     }
@@ -544,8 +550,6 @@ namespace ManagedCodeGen
 
                     if (_rootPath != null)
                     {
-                        var logPath = Path.ChangeExtension(dasmPath, ".log");
-
                         // Redirect stdout/stderr to log file and run command.
                         using (var outputStreamWriter = File.CreateText(logPath))
                         {
