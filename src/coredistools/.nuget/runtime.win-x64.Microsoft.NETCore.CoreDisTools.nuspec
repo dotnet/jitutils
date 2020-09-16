@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>runtime.win-x64.Microsoft.NETCore.CoreDisTools</id>
+    <version>1.0.1-prerelease-00005</version>
+    <title>Microsoft.NETCore Instruction-wise Disassembler</title>
+    <authors>Microsoft</authors>
+    <owners>Microsoft</owners>
+    <licenseUrl>http://go.microsoft.com/fwlink/?LinkId=329770</licenseUrl>
+    <projectUrl>https://github.com/dotnet/coreclr</projectUrl>
+    <iconUrl>http://go.microsoft.com/fwlink/?LinkID=288859</iconUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <description>Disassembly Tools for CoreCLR</description>
+    <releaseNotes>Initial release</releaseNotes>
+    <copyright>Copyright &#169; Microsoft Corporation</copyright>
+  </metadata>
+  <files>
+    <file src="..\coredistools.dll" target="runtimes\win-x64\native\coredistools.dll" />
+  </files>
+</package>
