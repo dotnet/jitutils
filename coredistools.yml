@@ -1,0 +1,189 @@
+resources:
+  containers:
+  - container: ubuntu-16.04-arm
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-20200413125008-09ec757
+  - container: ubuntu-16.04-arm64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-arm64-20200413125008-cfdd435
+
+variables:
+  LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
+  LLVMSourceBundle: llvm-project.bundle
+  LLVMSourceVersion: llvmorg-9.0.1
+
+jobs:
+- job: checkout_llvm
+  displayName: Checkout LLVM
+
+  pool:
+    vmImage: macOS-latest
+
+  workspace:
+    clean: all
+
+  steps:
+  - checkout: none
+
+  - script: git clone --depth 1 --branch $(LLVMSourceVersion) $(LLVMRepositoryUri) $(Build.SourcesDirectory)
+    displayName: Checkout LLVM from Git
+
+  - script: git bundle create $(Build.StagingDirectory)/$(LLVMSourceBundle) HEAD
+    displayName: Create bundle
+
+  - publish: $(Build.StagingDirectory)/$(LLVMSourceBundle)
+    artifact: $(LLVMSourceBundle)
+    displayName: Publish LLVM bundle
+
+- job: crossbuild_coredistools_linux
+  dependsOn: checkout_llvm
+  displayName: Build coredistools Linux
+
+  container: $[ variables['ContainerImage'] ]
+
+  pool:
+    vmImage: ubuntu-latest
+
+  strategy:
+    matrix:
+      arm:
+        ContainerImage: ubuntu-16.04-arm
+        CrossRootfsDirectory: /crossrootfs/arm
+        TargetOSArchitecture: linux-arm
+
+      arm64:
+        ContainerImage: ubuntu-16.04-arm64
+        CrossRootfsDirectory: /crossrootfs/arm64
+        TargetOSArchitecture: linux-arm64
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  - template: /eng/download-llvm-release.yml
+    parameters:
+      os: linux
+      release: $(LLVMSourceVersion)
+
+  - script: ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
+    displayName: Build coredistools
+
+  - publish: $(Build.SourcesDirectory)/bin/libcoredistools.so
+    artifact: coredistools-$(TargetOSArchitecture)
+    displayName: Publish coredistools
+
+- job: build_coredistools_linux_x64
+  dependsOn: checkout_llvm
+  displayName: Build coredistools Linux x64
+
+  pool:
+    vmImage: ubuntu-16.04
+
+  variables:
+    TargetOSArchitecture: linux-x64
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  - template: /eng/download-llvm-release.yml
+    parameters:
+      os: linux
+      release: $(LLVMSourceVersion)
+
+  - script: ./build-coredistools.sh $(TargetOSArchitecture)
+    displayName: Build coredistools
+
+  - publish: $(Build.SourcesDirectory)/bin/libcoredistools.so
+    artifact: coredistools-$(TargetOSArchitecture)
+    displayName: Publish coredistools
+
+- job: build_coredistools_macos_x64
+  dependsOn: checkout_llvm
+  displayName: Build coredistools macOS x64
+
+  pool:
+    vmImage: macOS-10.14
+
+  variables:
+    TargetOSArchitecture: macos-x64
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  - template: /eng/download-llvm-release.yml
+    parameters:
+      os: macos
+      release: $(LLVMSourceVersion)
+
+  - script: ./build-coredistools.sh $(TargetOSArchitecture)
+    displayName: Build coredistools
+
+  - publish: $(Build.SourcesDirectory)/bin/libcoredistools.dylib
+    artifact: coredistools-$(TargetOSArchitecture)
+    displayName: Publish coredistools
+
+- job: build_tblgen_windows
+  dependsOn: checkout_llvm
+  displayName: Build llvm-tblgen Windows
+
+  pool:
+    vmImage: windows-latest
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  - script: build-tblgen.cmd
+    displayName: Build llvm-tblgen
+
+  - publish: $(Build.SourcesDirectory)\bin\llvm-tblgen.exe
+    artifact: tblgen-windows
+    displayName: Publish llvm-tblgen
+
+- job: build_coredistools_windows
+  dependsOn:
+  - checkout_llvm
+  - build_tblgen_windows
+  displayName: Build coredistools Windows
+
+  pool:
+    vmImage: windows-latest
+
+  strategy:
+    matrix:
+      x64:
+        TargetOSArchitecture: windows-x64
+      x86:
+        TargetOSArchitecture: windows-x86
+      arm:
+        TargetOSArchitecture: windows-arm
+      arm64:
+        TargetOSArchitecture: windows-arm64
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  - download: current
+    artifact: tblgen-windows
+    displayName: Download llvm-tblgen
+
+  - script: 'echo ##vso[task.prependpath]$(Pipeline.Workspace)\tblgen-windows'
+    displayName: Add llvm-tblgen to the PATH
+
+  - script: build-coredistools.cmd $(TargetOSArchitecture)
+    displayName: Build coredistools
+
+  - publish: $(Build.SourcesDirectory)\bin\coredistools.dll
+    artifact: coredistools-$(TargetOSArchitecture)
+    displayName: Publish coredistools
