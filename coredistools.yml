@@ -1,3 +1,21 @@
+pr:
+  branches:
+    include:
+    - master
+  paths:
+    include:
+    - eng/*
+    - src/coredistools/*
+
+trigger:
+  branches:
+    include:
+    - master
+  paths:
+    include:
+    - eng/*
+    - src/coredistools/*
+
 resources:
   containers:
   - container: ubuntu-16.04-arm
