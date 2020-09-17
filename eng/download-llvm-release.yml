@@ -1,0 +1,12 @@
+parameters:
+- name: os
+  type: string
+- name: release
+  type: string
+
+steps:
+- script: python3 $(Build.SourcesDirectory)/eng/download-llvm-release.py -os ${{ parameters.os }} -release ${{ parameters.release }} -output-dir $(Pipeline.Workspace)
+  displayName: Download LLVM release from GitHub
+
+- script: echo '##vso[task.prependpath]'$(find $(Pipeline.Workspace) -name "clang+llvm-*" -type d)/bin
+  displayName: Add Clang and LLVM to the PATH

@@ -1,0 +1,12 @@
+steps:
+- download: current
+  artifact: $(LLVMSourceBundle)
+  displayName: Download LLVM bundle
+
+- script: git clone $(Pipeline.Workspace)\$(LLVMSourceBundle)\$(LLVMSourceBundle) $(Build.SourcesDirectory)\src\llvm-project
+  displayName: Checkout LLVM from bundle (Windows)
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
+
+- script: git clone $(Pipeline.Workspace)/$(LLVMSourceBundle)/$(LLVMSourceBundle) $(Build.SourcesDirectory)/src/llvm-project
+  displayName: Checkout LLVM from bundle (Linux or macOS)
+  condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
