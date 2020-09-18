@@ -8,12 +8,16 @@ set TargetOSArchitecture=%1
 
 if /i "%TargetOSArchitecture%" == "windows-arm" (
     set GeneratorPlatform=ARM
+    set LLVMHostTriple=arm-pc-windows-msvc
 ) else if /i "%TargetOSArchitecture%" == "windows-arm64" (
     set GeneratorPlatform=ARM64
+    set LLVMHostTriple=aarch64-pc-windows-msvc
 ) else if /i "%TargetOSArchitecture%" == "windows-x64" (
     set GeneratorPlatform=x64
+    set LLVMHostTriple=x86_64-pc-windows-msvc
 ) else if /i "%TargetOSArchitecture%" == "windows-x86" (
     set GeneratorPlatform=Win32
+    set LLVMHostTriple=i686-pc-windows-msvc
 ) else (
     echo "Unknown target OS and architecture: %TargetOSArchitecture%"
     exit /b 1
@@ -42,6 +46,7 @@ cmake.exe ^
     -DCMAKE_INSTALL_PREFIX="%RootDirectory%\" ^
     -DLLVM_EXTERNAL_PROJECTS=coredistools ^
     -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR="%SourcesDirectory%\coredistools" ^
+    -DLLVM_HOST_TRIPLE=%LLVMHostTriple% ^
     -DLLVM_TABLEGEN="%LLVMTableGen%" ^
     -DLLVM_TARGETS_TO_BUILD=AArch64;ARM;X86 ^
     -DLLVM_TOOL_COREDISTOOLS_BUILD=ON ^
