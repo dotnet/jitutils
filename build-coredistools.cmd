@@ -60,6 +60,8 @@ cmake.exe ^
     -DLLVM_TABLEGEN="%LLVMTableGen%" ^
     -DLLVM_TARGETS_TO_BUILD=%LLVMTargetsToBuild% ^
     -DLLVM_TOOL_COREDISTOOLS_BUILD=ON ^
+    -DLLVM_USE_CRT_DEBUG=MTd ^
+    -DLLVM_USE_CRT_RELEASE=MT ^
     "%SourcesDirectory%\llvm-project\llvm"
 
 popd
