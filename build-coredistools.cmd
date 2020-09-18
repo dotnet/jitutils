@@ -8,6 +8,7 @@ set TargetOSArchitecture=%1
 
 if /i "%TargetOSArchitecture%" == "windows-arm" (
     set GeneratorPlatform=ARM
+    set LLVMDefaultTargetTriple=thumbv7-pc-windows-msvc
     set LLVMHostTriple=arm-pc-windows-msvc
 ) else if /i "%TargetOSArchitecture%" == "windows-arm64" (
     set GeneratorPlatform=ARM64
@@ -21,6 +22,10 @@ if /i "%TargetOSArchitecture%" == "windows-arm" (
 ) else (
     echo "Unknown target OS and architecture: %TargetOSArchitecture%"
     exit /b 1
+)
+
+if not defined LLVMDefaultTargetTriple (
+    set LLVMDefaultTargetTriple=%LLVMHostTriple%
 )
 
 where /q llvm-tblgen.exe
@@ -44,6 +49,7 @@ cmake.exe ^
     -G "Visual Studio 16 2019" ^
     -A %GeneratorPlatform% ^
     -DCMAKE_INSTALL_PREFIX="%RootDirectory%\" ^
+    -DLLVM_DEFAULT_TARGET_TRIPLE=%LLVMDefaultTargetTriple% ^
     -DLLVM_EXTERNAL_PROJECTS=coredistools ^
     -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR="%SourcesDirectory%\coredistools" ^
     -DLLVM_HOST_TRIPLE=%LLVMHostTriple% ^
