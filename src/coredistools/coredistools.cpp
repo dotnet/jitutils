@@ -30,6 +30,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/DataTypes.h"
+#include <inttypes.h>
 #include <stdarg.h>
 
 #define DllInterfaceExporter
@@ -463,7 +464,7 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
   string buffer;
   raw_string_ostream OS(buffer);
 
-  OS << format("%8llx: ", BIter.Addr);
+  OS << format("%" PRIxPTR ": ", BIter.Addr);
   dumpBytes(ArrayRef<uint8_t>(BIter.Ptr, InstSize), OS);
 
   if ((TheTargetArch == Target_X86) || (TheTargetArch == Target_X64)) {
@@ -489,8 +490,8 @@ void CorDisasm::dumpBlock(const BlockInfo &Block) const {
   BlockIterator BIter(Block);
 
   Print->Dump("-----------------------------------------------");
-  Print->Dump("Block:   %s\nSize:    %lu\nAddress: %8llx\nCodePtr: %8llx",
-              BIter.Name, BIter.BlockSize, BIter.Addr, BIter.Ptr);
+  Print->Dump("Block:   %s\nSize:    %" PRIu64 "\nAddress: %" PRIxPTR "\nCodePtr: %" PRIxPTR,
+              BIter.Name, BIter.BlockSize, BIter.Addr, (uintptr_t)BIter.Ptr);
   Print->Dump("-----------------------------------------------");
 
   while (!BIter.isEmpty()) {
@@ -637,7 +638,7 @@ bool BlockIterator::isBitwiseEqual(const BlockIterator &BIter) const {
 
 bool CorAsmDiff::fail(const char *Mesg, const BlockIterator &Left,
                       const BlockIterator &Right) const {
-  Print->Log("%s @[%llx : %llx]", Mesg, Left.Addr, Right.Addr);
+  Print->Log("%s @[%" PRIxPTR " : %" PRIxPTR "]", Mesg, Left.Addr, Right.Addr);
   return false;
 }
 
