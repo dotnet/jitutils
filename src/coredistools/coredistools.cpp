@@ -183,6 +183,8 @@ public:
 protected:
   enum TargetArch TheTargetArch;
   const PrintControl *Print;
+  bool isThumb2MoveImmediateOpcode(unsigned int opcode) const;
+  bool isThumb2MoveTopOpcode(unsigned int opcode) const;
 
 private:
   bool setTarget();
@@ -209,6 +211,11 @@ private:
 
   static const int X86NumPrefixes = 19;
   static const OpcodeMap X86Prefix[X86NumPrefixes];
+
+  // The following constants is a workaround and the opcode numbers
+  // were copied from TableGen-erated lib/Target/ARM/ARMGenInstrInfo.inc
+  static const unsigned int Thumb2MoveImmediateOpcode = 3887; // Corresponds to t2MOVi16
+  static const unsigned int Thumb2MoveTopOpcode = 3885; // Correspond to t2MOVTi16
 };
 
 struct CorAsmDiff : public CorDisasm {
@@ -502,6 +509,14 @@ void CorDisasm::dumpBlock(const BlockInfo &Block) const {
     BIter.advance();
   }
   Print->Dump("-----------------------------------------------");
+}
+
+bool CorDisasm::isThumb2MoveImmediateOpcode(unsigned int Opcode) const {
+  return (Opcode == Thumb2MoveImmediateOpcode);
+}
+
+bool CorDisasm::isThumb2MoveTopOpcode(unsigned int Opcode) const {
+  return (Opcode == Thumb2MoveTopOpcode);
 }
 
 // Compares two code sections for syntactic equality. This is the core of the
