@@ -232,6 +232,8 @@ private:
   bool fail(const char *Mesg, const BlockIterator &Left,
             const BlockIterator &Right) const;
 
+  bool tryDecodeThumb2MoveImm32(const BlockIterator& Iter, unsigned int& Reg, unsigned int& Imm32) const;
+
   OffsetComparator Comparator;
 };
 
@@ -519,6 +521,49 @@ bool CorDisasm::isThumb2MoveTopOpcode(unsigned int Opcode) const {
   return (Opcode == Thumb2MoveTopOpcode);
 }
 
+bool CorAsmDiff::tryDecodeThumb2MoveImm32(const BlockIterator& Curr, unsigned int& Reg, unsigned int& Imm32) const {
+  assert(Curr.isDecoded());
+
+  if (!isThumb2MoveImmediateOpcode(Curr.Inst.getOpcode())) {
+    return false;
+  }
+
+  BlockIterator Next = Curr;
+
+  Next.advance();
+
+  if (Next.isEmpty()) {
+    return false;
+  }
+
+  decodeInstruction(Next);
+
+  if (!Next.isDecoded()) {
+    return false;
+  }
+
+  if (!isThumb2MoveTopOpcode(Next.Inst.getOpcode())) {
+    return false;
+  }
+
+  const MCInst& MovImm = Curr.Inst;
+  const MCInst& MovTop = Next.Inst;
+
+  if (MovImm.getOperand(0).getReg() != MovTop.getOperand(0).getReg()) {
+    return false;
+  }
+
+  Reg = MovImm.getOperand(0).getReg();
+
+  const unsigned Lo16 = (unsigned int)MovImm.getOperand(1).getImm();
+  const unsigned Hi16 = (unsigned int)MovTop.getOperand(2).getImm();
+
+  // Reconstruct 32-bit value that is loaded using movw/movt instruction pair.
+  Imm32 = Lo16 | (Hi16 << 16);
+
+  return true;
+}
+
 // Compares two code sections for syntactic equality. This is the core of the
 // asm diffing logic.
 //
@@ -568,6 +613,34 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
 
     if (Left.InstrSize != Right.InstrSize) {
       return fail("Instruction Size Mismatch", Left, Right);
+    }
+
+    if (TheTargetArch == Target_Thumb) {
+      unsigned int RegL = 0;
+      unsigned int RegR = 0;
+
+      unsigned int Imm32L = 0;
+      unsigned int Imm32R = 0;
+
+      // On Thumb2 movw/movt instruction pair can be used to load a 32-bit value to a register.
+      // If this is the case, we should treat such instruction pair as **one** pseudo-instruction and try decoding them together.
+      if (tryDecodeThumb2MoveImm32(Left, RegL, Imm32L) && tryDecodeThumb2MoveImm32(Right, RegR, Imm32R)) {
+        if ((RegL == RegR) && ((Imm32L == Imm32R) || Comparator(UserData, Left.BlockOffset(), Left.InstrSize, Imm32L, Imm32R))) {
+          // When movw/movt instructions pairs load the same or "equivalent" 32-bit values
+          // to the same register advance both iterators to the positions after movt.
+
+          Left.advance();
+          decodeInstruction(Left);
+          Left.advance();
+
+          Right.advance();
+          decodeInstruction(Right);
+          Right.advance();
+
+          continue;
+        }
+        // Otherwise, do nothing and allow the comparison below to fail.
+      }
     }
 
     // First, check to see if these instructions are actually identical.
@@ -629,8 +702,7 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
             continue;
           }
 
-          if (Comparator(UserData, Left.BlockOffset(), Left.InstrSize, ImmL,
-                         ImmR)) {
+          if (Comparator(UserData, Left.BlockOffset(), Left.InstrSize, ImmL, ImmR)) {
             // The client somehow thinks that these offsets are equivalent
             continue;
           }
