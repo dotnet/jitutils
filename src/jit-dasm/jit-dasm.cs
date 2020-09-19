@@ -527,17 +527,17 @@ namespace ManagedCodeGen
                     if (_rootPath != null)
                     {
                         var logPath = Path.ChangeExtension(dasmPath, ".log");
-                        result = ExecuteProcess(commandArgs);
+                        result = ExecuteProcess(commandArgs, true);
 
                         // Write stdout/stderr to log file.
                         StringBuilder output = new StringBuilder();
                         if (!string.IsNullOrEmpty(result.StdOut))
                         {
-                            output.AppendLine(result.StdOut);
+                            output.Append(result.StdOut);
                         }
                         if (!string.IsNullOrEmpty(result.StdErr) && (result.StdOut != result.StdErr))
                         {
-                            output.AppendLine(result.StdErr);
+                            output.Append(result.StdErr);
                         }
                         if (output.Length > 0)
                         {
