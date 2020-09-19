@@ -17,8 +17,6 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Linq;
-using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -87,7 +85,7 @@ namespace ManagedCodeGen
                     Console.WriteLine("Running: {0} {1}", "dotnet", String.Join(" ", commandArgs));
                 }
 
-                CommandResult result = Utility.TryCommand("dotnet", commandArgs, true);
+                ProcessResult result = Utility.ExecuteProcess("dotnet", commandArgs, true);
 
                 if (result.ExitCode != 0)
                 {
@@ -239,7 +237,7 @@ namespace ManagedCodeGen
                                 Console.WriteLine("Running: {0} {1}", buildPath, String.Join(" ", commandArgs));
                             }
 
-                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, !_verbose, _rootPath);
+                            ProcessResult result = Utility.ExecuteProcess(buildPath, commandArgs, !_verbose, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -271,7 +269,7 @@ namespace ManagedCodeGen
                                 Console.WriteLine("Running: {0} {1}", buildPath, String.Join(" ", commandArgs));
                             }
 
-                            CommandResult result = Utility.TryCommand(buildPath, commandArgs, true, _rootPath);
+                            ProcessResult result = Utility.ExecuteProcess(buildPath, commandArgs, true, _rootPath);
 
                             if (result.ExitCode != 0)
                             {
@@ -641,7 +639,7 @@ namespace ManagedCodeGen
                     Console.WriteLine("Running: {0} {1}", "clang-tidy", String.Join(" ", commandArgs));
                 }
 
-                CommandResult result = Utility.TryCommand("clang-tidy", commandArgs, true);
+                ProcessResult result = Utility.ExecuteProcess("clang-tidy", commandArgs, true);
 
                 if (!fix && (result.StdOut.Contains("warning:") || (!ignoreErrors && (result.StdOut.Contains("error:") || result.StdOut.Contains("Error")))))
                 {
@@ -690,7 +688,7 @@ namespace ManagedCodeGen
                         Console.WriteLine("Running: {0} {1}", "clang-format", String.Join(" ", commandArgs));
                     }
 
-                    CommandResult result = Utility.TryCommand("clang-format", commandArgs, true);
+                    ProcessResult result = Utility.ExecuteProcess("clang-format", commandArgs, true);
 
                     if (result.StdOut.Contains("<replacement ") && !fix)
                     {

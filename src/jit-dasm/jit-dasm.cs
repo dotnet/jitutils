@@ -27,8 +27,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Runtime.Loader;
 using System.Linq;
-using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Tools.Common;
+using System.Text;
 
 namespace ManagedCodeGen
 {
@@ -406,11 +405,6 @@ namespace ManagedCodeGen
                 this.verbose = config.DoVerboseOutput;
             }
 
-            class ScriptResolverPolicyWrapper : ICommandResolverPolicy
-            {
-                public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
-            }
-
             public void GenerateAsm()
             {
                 // Build a command per assembly to generate the asm output.
@@ -463,7 +457,7 @@ namespace ManagedCodeGen
                         nativeOutput = Path.Combine(_rootPath, assembly.OutputPath, assemblyNativeFileName);
                         mapOutput = Path.Combine(_rootPath, assembly.OutputPath, assemblyMapFileName);
 
-                        PathUtility.EnsureParentDirectoryExists(nativeOutput);
+                        Utility.EnsureParentDirectoryExists(nativeOutput);
 
                         AddOutputPathOption(commandArgs, nativeOutput);
                     }
@@ -518,21 +512,9 @@ namespace ManagedCodeGen
                         var assemblyFileName = Path.ChangeExtension(assembly.Name, ".dasm");
                         dasmPath = Path.Combine(_rootPath, assembly.OutputPath, assemblyFileName);
 
-                        PathUtility.EnsureParentDirectoryExists(dasmPath);
+                        Utility.EnsureParentDirectoryExists(dasmPath);
 
                         AddEnvironmentVariable("COMPlus_JitStdOutFile", dasmPath);
-                    }
-
-                    Command generateCmd = null;
-
-                    try
-                    {
-                        generateCmd = CreateCommand(new ScriptResolverPolicyWrapper(), commandArgs);
-                    }
-                    catch (CommandUnknownException e)
-                    {
-                        Console.Error.WriteLine("\nError: {0} command not found!\n", e);
-                        Environment.Exit(-1);
                     }
 
                     if (this.verbose)
@@ -540,19 +522,26 @@ namespace ManagedCodeGen
                         Console.WriteLine("Running: {0} {1}", _executablePath, String.Join(" ", commandArgs));
                     }
 
-                    CommandResult result;
+                    ProcessResult result;
 
                     if (_rootPath != null)
                     {
                         var logPath = Path.ChangeExtension(dasmPath, ".log");
+                        result = ExecuteProcess(commandArgs, true);
 
-                        // Redirect stdout/stderr to log file and run command.
-                        using (var outputStreamWriter = File.CreateText(logPath))
+                        // Write stdout/stderr to log file.
+                        StringBuilder output = new StringBuilder();
+                        if (!string.IsNullOrEmpty(result.StdOut))
                         {
-                            // Forward output and error to file.
-                            generateCmd.ForwardStdOut(outputStreamWriter);
-                            generateCmd.ForwardStdErr(outputStreamWriter);
-                            result = generateCmd.Execute();
+                            output.Append(result.StdOut);
+                        }
+                        if (!string.IsNullOrEmpty(result.StdErr) && (result.StdOut != result.StdErr))
+                        {
+                            output.Append(result.StdErr);
+                        }
+                        if (output.Length > 0)
+                        {
+                            File.WriteAllText(logPath, output.ToString());
                         }
 
                         bool hasOutput = true;
@@ -587,9 +576,7 @@ namespace ManagedCodeGen
                     else
                     {
                         // By default forward to output to stdout/stderr.
-                        generateCmd.ForwardStdOut();
-                        generateCmd.ForwardStdErr();
-                        result = generateCmd.Execute();
+                        result = ExecuteProcess(commandArgs);
 
                         if (result.ExitCode != 0)
                         {
@@ -619,7 +606,7 @@ namespace ManagedCodeGen
                 _environmentVariables[varName] = varValue;
                 if (this.verbose)
                 {
-                    Console.WriteLine("Setting: {0}={1}", varName, varValue);
+                    Console.WriteLine("set {0}={1}", varName, varValue);
                 }
             }
 
@@ -635,7 +622,7 @@ namespace ManagedCodeGen
 
             abstract protected void AddOptimizationOption(List<string> commandArgs);
 
-            abstract protected Command CreateCommand(ICommandResolverPolicy resolverPolicy, List<string> commandArgs);
+            abstract protected ProcessResult ExecuteProcess(List<string> commandArgs, bool capture = false);
         }
 
         sealed private class CrossgenDisasmEngine : DisasmEngine
@@ -677,14 +664,9 @@ namespace ManagedCodeGen
             {
             }
 
-            override protected Command CreateCommand(ICommandResolverPolicy resolverPolicy, List<string> commandArgs)
+            override protected ProcessResult ExecuteProcess(List<string> commandArgs, bool capture)
             {
-                Command command = Command.Create(resolverPolicy, _executablePath, commandArgs);
-                foreach (var envVar in _environmentVariables)
-                {
-                    command.EnvironmentVariable(envVar.Key, envVar.Value);
-                }
-                return command;
+                return Utility.ExecuteProcess(_executablePath, commandArgs, capture, environmentVariables: _environmentVariables);
             }
         }
 
@@ -726,7 +708,7 @@ namespace ManagedCodeGen
                 commandArgs.Add("--optimize");
             }
 
-            override protected Command CreateCommand(ICommandResolverPolicy resolverPolicy, List<string> commandArgs)
+            override protected ProcessResult ExecuteProcess(List<string> commandArgs, bool capture)
             {
                 foreach (var envVar in _environmentVariables)
                 {
@@ -734,8 +716,7 @@ namespace ManagedCodeGen
                     string complusPrefix = "COMPlus_";
                     commandArgs.Add(String.Format("{0}={1}", envVar.Key.Substring(complusPrefix.Length), envVar.Value));
                 }
-                Command command = Command.Create(resolverPolicy, _executablePath, commandArgs);
-                return command;
+                return Utility.ExecuteProcess(_executablePath, commandArgs, capture);
             }
         }
     }

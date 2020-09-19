@@ -9,8 +9,6 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
 using System.Text;
 using System.Runtime.CompilerServices;
@@ -947,11 +945,6 @@ namespace ManagedCodeGen
             }
         }
 
-        class ScriptResolverPolicyWrapper : ICommandResolverPolicy
-        {
-            public CompositeCommandResolver CreateCommandResolver() => ScriptCommandResolverPolicy.Create();
-        }
-
         // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
         // Use "git diff" to do the analysis for us, then parse that output.
         //
@@ -978,22 +971,8 @@ namespace ManagedCodeGen
             commandArgs.Add("--numstat");
             commandArgs.Add(diffPath);
             commandArgs.Add(basePath);
-            Command diffCmd = null;
 
-            try
-            {
-                diffCmd = Command.Create(new ScriptResolverPolicyWrapper(), @"git", commandArgs);
-            }
-            catch (CommandUnknownException e)
-            {
-                Console.Error.WriteLine("\nError: git command not found!  Add git to the environment path.\n", e);
-                Environment.Exit(-1);
-            }
-
-            diffCmd.CaptureStdOut();
-            diffCmd.CaptureStdErr();
-
-            CommandResult result = diffCmd.Execute();
+            ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
             Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>();
 
             if (result.ExitCode != 0)

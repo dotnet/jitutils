@@ -3,19 +3,13 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-//using System.Diagnostics;
 using System.CommandLine;
 using System.IO;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Linq;
-using Microsoft.DotNet.Cli.Utils;
-//using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-//using System.Collections.Concurrent;
-//using System.Threading.Tasks;
-//using System.Runtime.InteropServices;
 
 namespace ManagedCodeGen
 {
@@ -90,7 +84,7 @@ namespace ManagedCodeGen
                 Console.WriteLine("Command: {0} {1}", "cijobs", String.Join(" ", cijobsArgs));
             }
 
-            CommandResult result = Utility.TryCommand("cijobs", cijobsArgs);
+            ProcessResult result = Utility.ExecuteProcess("cijobs", cijobsArgs);
 
             if (result.ExitCode != 0)
             {

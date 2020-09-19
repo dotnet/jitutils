@@ -8,8 +8,6 @@ using System.IO;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Linq;
-using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Tools.Common;
 using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
@@ -250,7 +248,7 @@ namespace ManagedCodeGen
             {
                 // Extract system RID from dotnet cli
                 List<string> commandArgs = new List<string> { "--info" };
-                CommandResult result = Utility.TryCommand("dotnet", commandArgs, true);
+                ProcessResult result = Utility.ExecuteProcess("dotnet", commandArgs, true);
 
                 if (result.ExitCode != 0)
                 {
@@ -258,23 +256,34 @@ namespace ManagedCodeGen
                     Environment.Exit(-1);
                 }
 
-                var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+                var lines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+                Regex ridPattern = new Regex(@"RID:\s*([A-Za-z0-9\.-]*)$");
+                Regex platPattern = new Regex(@"Platform:\s*([A-Za-z0-9]*)$");
 
+                bool isRidFound = false, isPlatFound = false;
                 foreach (var line in lines)
                 {
-                    Regex ridPattern = new Regex(@"RID:\s*([A-Za-z0-9\.-]*)$");
                     Match ridMatch = ridPattern.Match(line);
                     if (ridMatch.Success)
                     {
                         _rid = ridMatch.Groups[1].Value;
+                        isRidFound = true;
+                        if (isPlatFound)
+                        {
+                            break;
+                        }
                         continue;
                     }
 
-                    Regex platPattern = new Regex(@"Platform:\s*([A-Za-z0-9]*)$");
                     Match platMatch = platPattern.Match(line);
                     if (platMatch.Success)
                     {
                         _platformName = platMatch.Groups[1].Value;
+                        isPlatFound = true;
+                        if (isRidFound)
+                        {
+                            break;
+                        }
                         continue;
                     }
                 }
@@ -360,7 +369,7 @@ namespace ManagedCodeGen
                 if (needOutputPath && (_diffRoot != null))
                 {
                     _outputPath = Utility.CombinePath(_diffRoot, s_defaultDiffDirectoryPath);
-                    PathUtility.EnsureDirectoryExists(_outputPath);
+                    Utility.EnsureDirectoryExists(_outputPath);
 
                     Console.WriteLine("Using --output {0}", _outputPath);
                 }
