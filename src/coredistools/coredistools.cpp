@@ -490,6 +490,12 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
                              "                  "};
     OS << (Padding[(InstSize < 7) ? (7 - InstSize) : 0]);
   }
+  else if (TheTargetArch == Target_Thumb) {
+    // Thumb-2 encoding has 32-bit instructions and 16-bit instructions.
+    if (InstSize == 2) {
+      OS << "      ";
+    }
+  }
 
   IP->printInst(&BIter.Inst, OS, "", *STI);
   Print->Dump(OS.str().c_str());
