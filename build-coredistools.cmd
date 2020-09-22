@@ -10,15 +10,19 @@ if /i "%TargetOSArchitecture%" == "windows-arm" (
     set GeneratorPlatform=ARM
     set LLVMDefaultTargetTriple=thumbv7-pc-windows-msvc
     set LLVMHostTriple=arm-pc-windows-msvc
+    set LLVMTargetsToBuild=ARM
 ) else if /i "%TargetOSArchitecture%" == "windows-arm64" (
     set GeneratorPlatform=ARM64
     set LLVMHostTriple=aarch64-pc-windows-msvc
+    set LLVMTargetsToBuild=AArch64
 ) else if /i "%TargetOSArchitecture%" == "windows-x64" (
     set GeneratorPlatform=x64
     set LLVMHostTriple=x86_64-pc-windows-msvc
+    set LLVMTargetsToBuild=AArch64;X86
 ) else if /i "%TargetOSArchitecture%" == "windows-x86" (
     set GeneratorPlatform=Win32
     set LLVMHostTriple=i686-pc-windows-msvc
+    set LLVMTargetsToBuild=ARM;X86
 ) else (
     echo "Unknown target OS and architecture: %TargetOSArchitecture%"
     exit /b 1
@@ -54,7 +58,7 @@ cmake.exe ^
     -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR="%SourcesDirectory%\coredistools" ^
     -DLLVM_HOST_TRIPLE=%LLVMHostTriple% ^
     -DLLVM_TABLEGEN="%LLVMTableGen%" ^
-    -DLLVM_TARGETS_TO_BUILD=AArch64;ARM;X86 ^
+    -DLLVM_TARGETS_TO_BUILD=%LLVMTargetsToBuild% ^
     -DLLVM_TOOL_COREDISTOOLS_BUILD=ON ^
     "%SourcesDirectory%\llvm-project\llvm"
 
