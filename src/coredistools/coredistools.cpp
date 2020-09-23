@@ -30,6 +30,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/DataTypes.h"
+#include <inttypes.h>
 #include <stdarg.h>
 
 #define DllInterfaceExporter
@@ -182,6 +183,8 @@ public:
 protected:
   enum TargetArch TheTargetArch;
   const PrintControl *Print;
+  bool isThumb2MoveImmediateOpcode(unsigned int opcode) const;
+  bool isThumb2MoveTopOpcode(unsigned int opcode) const;
 
 private:
   bool setTarget();
@@ -208,6 +211,11 @@ private:
 
   static const int X86NumPrefixes = 19;
   static const OpcodeMap X86Prefix[X86NumPrefixes];
+
+  // The following constants is a workaround and the opcode numbers
+  // were copied from TableGen-erated lib/Target/ARM/ARMGenInstrInfo.inc
+  static const unsigned int Thumb2MoveImmediateOpcode = 3887; // Corresponds to t2MOVi16
+  static const unsigned int Thumb2MoveTopOpcode = 3885; // Correspond to t2MOVTi16
 };
 
 struct CorAsmDiff : public CorDisasm {
@@ -223,6 +231,8 @@ public:
 private:
   bool fail(const char *Mesg, const BlockIterator &Left,
             const BlockIterator &Right) const;
+
+  bool tryDecodeThumb2MoveImm32(const BlockIterator& Iter, unsigned int& Reg, unsigned int& Imm32) const;
 
   OffsetComparator Comparator;
 };
@@ -281,7 +291,7 @@ bool CorDisasm::setTarget() {
     break;
 
   case Target_Thumb:
-    TheTriple.setArch(Triple::thumb);
+    TheTriple.setArchName("thumbv7");
     break;
   case Target_Arm64:
     TheTriple.setArch(Triple::aarch64);
@@ -463,7 +473,7 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
   string buffer;
   raw_string_ostream OS(buffer);
 
-  OS << format("%8llx: ", BIter.Addr);
+  OS << format("%" PRIxPTR ": ", BIter.Addr);
   dumpBytes(ArrayRef<uint8_t>(BIter.Ptr, InstSize), OS);
 
   if ((TheTargetArch == Target_X86) || (TheTargetArch == Target_X64)) {
@@ -480,6 +490,12 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
                              "                  "};
     OS << (Padding[(InstSize < 7) ? (7 - InstSize) : 0]);
   }
+  else if (TheTargetArch == Target_Thumb) {
+    // Thumb-2 encoding has 32-bit instructions and 16-bit instructions.
+    if (InstSize == 2) {
+      OS << "      ";
+    }
+  }
 
   IP->printInst(&BIter.Inst, OS, "", *STI);
   Print->Dump(OS.str().c_str());
@@ -489,8 +505,8 @@ void CorDisasm::dumpBlock(const BlockInfo &Block) const {
   BlockIterator BIter(Block);
 
   Print->Dump("-----------------------------------------------");
-  Print->Dump("Block:   %s\nSize:    %lu\nAddress: %8llx\nCodePtr: %8llx",
-              BIter.Name, BIter.BlockSize, BIter.Addr, BIter.Ptr);
+  Print->Dump("Block:   %s\nSize:    %" PRIu64 "\nAddress: %" PRIxPTR "\nCodePtr: %" PRIxPTR,
+              BIter.Name, BIter.BlockSize, BIter.Addr, (uintptr_t)BIter.Ptr);
   Print->Dump("-----------------------------------------------");
 
   while (!BIter.isEmpty()) {
@@ -501,6 +517,57 @@ void CorDisasm::dumpBlock(const BlockInfo &Block) const {
     BIter.advance();
   }
   Print->Dump("-----------------------------------------------");
+}
+
+bool CorDisasm::isThumb2MoveImmediateOpcode(unsigned int Opcode) const {
+  return (Opcode == Thumb2MoveImmediateOpcode);
+}
+
+bool CorDisasm::isThumb2MoveTopOpcode(unsigned int Opcode) const {
+  return (Opcode == Thumb2MoveTopOpcode);
+}
+
+bool CorAsmDiff::tryDecodeThumb2MoveImm32(const BlockIterator& Curr, unsigned int& Reg, unsigned int& Imm32) const {
+  assert(Curr.isDecoded());
+
+  if (!isThumb2MoveImmediateOpcode(Curr.Inst.getOpcode())) {
+    return false;
+  }
+
+  BlockIterator Next = Curr;
+
+  Next.advance();
+
+  if (Next.isEmpty()) {
+    return false;
+  }
+
+  decodeInstruction(Next);
+
+  if (!Next.isDecoded()) {
+    return false;
+  }
+
+  if (!isThumb2MoveTopOpcode(Next.Inst.getOpcode())) {
+    return false;
+  }
+
+  const MCInst& MovImm = Curr.Inst;
+  const MCInst& MovTop = Next.Inst;
+
+  if (MovImm.getOperand(0).getReg() != MovTop.getOperand(0).getReg()) {
+    return false;
+  }
+
+  Reg = MovImm.getOperand(0).getReg();
+
+  const unsigned Lo16 = (unsigned int)MovImm.getOperand(1).getImm();
+  const unsigned Hi16 = (unsigned int)MovTop.getOperand(2).getImm();
+
+  // Reconstruct 32-bit value that is loaded using movw/movt instruction pair.
+  Imm32 = Lo16 | (Hi16 << 16);
+
+  return true;
 }
 
 // Compares two code sections for syntactic equality. This is the core of the
@@ -552,6 +619,34 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
 
     if (Left.InstrSize != Right.InstrSize) {
       return fail("Instruction Size Mismatch", Left, Right);
+    }
+
+    if (TheTargetArch == Target_Thumb) {
+      unsigned int RegL = 0;
+      unsigned int RegR = 0;
+
+      unsigned int Imm32L = 0;
+      unsigned int Imm32R = 0;
+
+      // On Thumb2 movw/movt instruction pair can be used to load a 32-bit value to a register.
+      // If this is the case, we should treat such instruction pair as **one** pseudo-instruction and try decoding them together.
+      if (tryDecodeThumb2MoveImm32(Left, RegL, Imm32L) && tryDecodeThumb2MoveImm32(Right, RegR, Imm32R)) {
+        if ((RegL == RegR) && ((Imm32L == Imm32R) || Comparator(UserData, Left.BlockOffset(), Left.InstrSize, Imm32L, Imm32R))) {
+          // When movw/movt instructions pairs load the same or "equivalent" 32-bit values
+          // to the same register advance both iterators to the positions after movt.
+
+          Left.advance();
+          decodeInstruction(Left);
+          Left.advance();
+
+          Right.advance();
+          decodeInstruction(Right);
+          Right.advance();
+
+          continue;
+        }
+        // Otherwise, do nothing and allow the comparison below to fail.
+      }
     }
 
     // First, check to see if these instructions are actually identical.
@@ -613,8 +708,7 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
             continue;
           }
 
-          if (Comparator(UserData, Left.BlockOffset(), Left.InstrSize, ImmL,
-                         ImmR)) {
+          if (Comparator(UserData, Left.BlockOffset(), Left.InstrSize, ImmL, ImmR)) {
             // The client somehow thinks that these offsets are equivalent
             continue;
           }
@@ -637,7 +731,7 @@ bool BlockIterator::isBitwiseEqual(const BlockIterator &BIter) const {
 
 bool CorAsmDiff::fail(const char *Mesg, const BlockIterator &Left,
                       const BlockIterator &Right) const {
-  Print->Log("%s @[%llx : %llx]", Mesg, Left.Addr, Right.Addr);
+  Print->Log("%s @[%" PRIxPTR " : %" PRIxPTR "]", Mesg, Left.Addr, Right.Addr);
   return false;
 }
 

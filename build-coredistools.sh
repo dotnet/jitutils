@@ -9,16 +9,21 @@ CrossRootfsDirectory=$2
 case "$TargetOSArchitecture" in
     linux-arm)
         CrossCompiling=1
-        TargetTriple=arm-linux-gnueabihf
+        LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
+        LLVMHostTriple=arm-linux-gnueabihf
+        LLVMTargetsToBuild=ARM
         ;;
 
     linux-arm64)
         CrossCompiling=1
-        TargetTriple=aarch64-linux-gnu
+        LLVMDefaultTargetTriple=aarch64-linux-gnu
+        LLVMHostTriple=aarch64-linux-gnu
+        LLVMTargetsToBuild=AArch64
         ;;
 
     linux-x64|macos-x64)
         CrossCompiling=0
+        LLVMTargetsToBuild="AArch64;X86"
         ;;
 
     *)
@@ -43,17 +48,18 @@ if [ "$CrossCompiling" -eq 1 ]; then
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=ON \
         -DCMAKE_C_COMPILER=$(which clang) \
-        -DCMAKE_C_FLAGS="-target $TargetTriple --sysroot=$CrossRootfsDirectory" \
+        -DCMAKE_C_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
         -DCMAKE_CXX_COMPILER=$(which clang++) \
-        -DCMAKE_CXX_FLAGS="-target $TargetTriple --sysroot=$CrossRootfsDirectory" \
+        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
-        -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$TargetTriple \
+        -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
+        -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
-        -DLLVM_HOST_TRIPLE=$TargetTriple \
+        -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \
-        -DLLVM_TARGETS_TO_BUILD="AArch64;ARM;X86" \
+        -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
 else
