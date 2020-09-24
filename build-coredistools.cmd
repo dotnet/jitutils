@@ -32,6 +32,13 @@ if not defined LLVMDefaultTargetTriple (
     set LLVMDefaultTargetTriple=%LLVMHostTriple%
 )
 
+where /q cmake.exe
+
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: cmake.exe is not found in the PATH
+    exit /b 1
+)
+
 where /q llvm-tblgen.exe
 
 if %ERRORLEVEL% neq 0 (
