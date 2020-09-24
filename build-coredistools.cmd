@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion EnableExtensions
 
 set RootDirectory=%~dp0
 set SourcesDirectory=%RootDirectory%src
