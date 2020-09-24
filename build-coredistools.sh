@@ -18,7 +18,7 @@ case "$TargetOSArchitecture" in
         LLVMTargetsToBuild=AArch64
         ;;
 
-    linux-x64|macos-x64)
+    linux-x64|osx-x64)
         CrossCompiling=0
         LLVMTargetsToBuild="AArch64;X86"
         ;;
