@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-SourcesDirectory=$RootDirectory/src
-BinariesDirectory=$RootDirectory/obj
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
@@ -36,6 +33,11 @@ if [[ $CrossCompiling -eq 1 && ! -d $CrossRootfsDirectory ]]; then
     exit 1
 fi
 
+RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+SourcesDirectory=$RootDirectory/src
+BinariesDirectory=$RootDirectory/obj
+StagingDirectory=$RootDirectory/artifacts/$TargetOSArchitecture
+
 if [ ! -d $BinariesDirectory ]; then
     mkdir -p $BinariesDirectory
 fi
@@ -52,7 +54,7 @@ if [ "$CrossCompiling" -eq 1 ]; then
         -DCMAKE_CXX_COMPILER=$(which clang++) \
         -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
-        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
@@ -68,7 +70,7 @@ else
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=$(which clang) \
         -DCMAKE_CXX_COMPILER=$(which clang++) \
-        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \

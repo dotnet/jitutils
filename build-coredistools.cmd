@@ -1,9 +1,6 @@
 @echo off
 setlocal EnableDelayedExpansion EnableExtensions
 
-set RootDirectory=%~dp0
-set SourcesDirectory=%RootDirectory%src
-set BinariesDirectory=%RootDirectory%obj
 set TargetOSArchitecture=%1
 
 if /i "%TargetOSArchitecture%" == "windows-arm" (
@@ -32,6 +29,11 @@ if not defined LLVMDefaultTargetTriple (
     set LLVMDefaultTargetTriple=%LLVMHostTriple%
 )
 
+set RootDirectory=%~dp0
+set SourcesDirectory=%RootDirectory%src
+set BinariesDirectory=%RootDirectory%obj\%TargetOSArchitecture%
+set StagingDirectory=%RootDirectory%artifacts\%TargetOSArchitecture%
+
 where /q cmake.exe
 
 if %ERRORLEVEL% neq 0 (
@@ -59,7 +61,7 @@ pushd "%BinariesDirectory%"
 cmake.exe ^
     -G "Visual Studio 16 2019" ^
     -A %GeneratorPlatform% ^
-    -DCMAKE_INSTALL_PREFIX="%RootDirectory%\" ^
+    -DCMAKE_INSTALL_PREFIX="%StagingDirectory%" ^
     -DLLVM_DEFAULT_TARGET_TRIPLE=%LLVMDefaultTargetTriple% ^
     -DLLVM_EXTERNAL_PROJECTS=coredistools ^
     -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR="%SourcesDirectory%\coredistools" ^
