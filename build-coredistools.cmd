@@ -44,7 +44,7 @@ if %ERRORLEVEL% neq 0 (
 where /q llvm-tblgen.exe
 
 if %ERRORLEVEL% neq 0 (
-    echo llvm-tblgen.exe is not found in the PATH
+    echo ERROR: llvm-tblgen.exe is not found in the PATH
     exit /b 1
 )
 
@@ -75,18 +75,24 @@ cmake.exe ^
 
 popd
 
+if %ERRORLEVEL% neq 0 goto :CMakeNonZeroExitStatus
+
 cmake.exe ^
   --build "%BinariesDirectory%" ^
   --target coredistools ^
   --config Release
 
-if %ERRORLEVEL% neq 0 (
-    echo coredistools compilation has failed
-    exit /b 1
-)
+if %ERRORLEVEL% neq 0 goto :CMakeNonZeroExitStatus
 
 cmake.exe ^
     --install "%BinariesDirectory%" ^
     --component coredistools
 
+if %ERRORLEVEL% neq 0 goto :CMakeNonZeroExitStatus
+
 exit /b 0
+
+:CMakeNonZeroExitStatus
+
+echo ERROR: cmake exited with code %ERRORLEVEL%
+exit /b 1

@@ -38,6 +38,13 @@ SourcesDirectory=$RootDirectory/src
 BinariesDirectory=$RootDirectory/obj
 StagingDirectory=$RootDirectory/artifacts/$TargetOSArchitecture
 
+which cmake >/dev/null 2>&1
+
+if [ "$?" -ne 0 ]; then
+    echo "ERROR: cmake is not found in the PATH"
+    exit 1
+fi
+
 if [ ! -d $BinariesDirectory ]; then
     mkdir -p $BinariesDirectory
 fi
@@ -81,15 +88,30 @@ fi
 
 popd
 
+if [ "$?" -ne 0 ]; then
+    CMakeNonZeroExitStatus $?
+fi
+
 cmake \
     --build $BinariesDirectory \
     --target coredistools
 
 if [ "$?" -ne 0 ]; then
-    echo "coredistools compilation has failed"
-    exit 1
+    CMakeNonZeroExitStatus $?
 fi
 
 cmake \
     --install $BinariesDirectory \
     --component coredistools
+
+if [ "$?" -ne 0 ]; then
+    CMakeNonZeroExitStatus $?
+fi
+
+exit 0
+
+function CMakeNonZeroExitStatus
+{
+    echo "ERROR: cmake exited with code $1"
+    exit 1
+}
