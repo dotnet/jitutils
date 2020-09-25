@@ -86,7 +86,7 @@ jobs:
   - script: ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
     displayName: Build coredistools
 
-  - publish: $(Build.SourcesDirectory)/bin/libcoredistools.so
+  - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
@@ -114,7 +114,7 @@ jobs:
   - script: ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
-  - publish: $(Build.SourcesDirectory)/bin/libcoredistools.so
+  - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
@@ -126,7 +126,7 @@ jobs:
     vmImage: macOS-10.14
 
   variables:
-    TargetOSArchitecture: macos-x64
+    TargetOSArchitecture: osx-x64
 
   workspace:
     clean: all
@@ -142,7 +142,7 @@ jobs:
   - script: ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
-  - publish: $(Build.SourcesDirectory)/bin/libcoredistools.dylib
+  - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.dylib
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
@@ -178,13 +178,13 @@ jobs:
   strategy:
     matrix:
       x64:
-        TargetOSArchitecture: windows-x64
+        TargetOSArchitecture: win-x64
       x86:
-        TargetOSArchitecture: windows-x86
+        TargetOSArchitecture: win-x86
       arm:
-        TargetOSArchitecture: windows-arm
+        TargetOSArchitecture: win-arm
       arm64:
-        TargetOSArchitecture: windows-arm64
+        TargetOSArchitecture: win-arm64
 
   workspace:
     clean: all
@@ -202,6 +202,42 @@ jobs:
   - script: build-coredistools.cmd $(TargetOSArchitecture)
     displayName: Build coredistools
 
-  - publish: $(Build.SourcesDirectory)\bin\coredistools.dll
+  - publish: $(Build.SourcesDirectory)\artifacts\$(TargetOSArchitecture)\bin\coredistools.dll
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
+
+- job: build_coredistools_nuget_packages
+  dependsOn:
+  - crossbuild_coredistools_linux
+  - build_coredistools_linux_x64
+  - build_coredistools_macos_x64
+  - build_coredistools_windows
+  displayName: Build coredistools NuGet packages
+
+  pool:
+    vmImage: windows-latest
+
+  workspace:
+    clean: all
+
+  steps:
+  - download: current
+    displayName: Download artifacts
+
+  - script: |
+      call pack-coredistools.cmd portable
+      for %%I in (linux-arm linux-arm64 linux-x64 osx-x64 win-arm win-arm64 win-x64 win-x86) do (
+        call pack-coredistools.cmd %%I "$(Pipeline.Workspace)\coredistools-%%I"
+      )
+    displayName: Pack coredistools into NuGet packages
+
+  - task: CopyFiles@2
+    displayName: Copy NuGet packages to a staging directory
+    inputs:
+      contents: $(Build.SourcesDirectory)\artifacts\pkg\*.nupkg
+      targetFolder: $(Build.StagingDirectory)
+      flattenFolders: true
+
+  - publish: $(Build.StagingDirectory)
+    artifact: coredistools-nuget-packages
+    displayName: Publish coredistools NuGet packages
