@@ -82,7 +82,7 @@ else
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \
-        -DLLVM_TARGETS_TO_BUILD="AArch64;ARM;X86" \
+        -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
 fi
