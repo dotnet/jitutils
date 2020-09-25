@@ -21,7 +21,7 @@ if /i "%TargetOSArchitecture%" == "win-arm" (
     set LLVMHostTriple=i686-pc-windows-msvc
     set LLVMTargetsToBuild=ARM;X86
 ) else (
-    echo "Unknown target OS and architecture: %TargetOSArchitecture%"
+    echo ERROR: Unknown target OS and architecture: %TargetOSArchitecture%
     exit /b 1
 )
 
