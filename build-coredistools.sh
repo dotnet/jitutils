@@ -63,6 +63,7 @@ if [ "$CrossCompiling" -eq 1 ]; then
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
+        -DCMAKE_STRIP=/usr/$LLVMHostTriple/bin/strip \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
@@ -89,29 +90,17 @@ fi
 popd
 
 if [ "$?" -ne 0 ]; then
-    CMakeNonZeroExitStatus $?
+    echo "ERROR: cmake exited with code $1"
+    exit 1
 fi
 
 cmake \
     --build $BinariesDirectory \
-    --target coredistools
+    --target install-coredistools-stripped
 
 if [ "$?" -ne 0 ]; then
-    CMakeNonZeroExitStatus $?
-fi
-
-cmake \
-    --install $BinariesDirectory \
-    --component coredistools
-
-if [ "$?" -ne 0 ]; then
-    CMakeNonZeroExitStatus $?
+    echo "ERROR: cmake exited with code $1"
+    exit 1
 fi
 
 exit 0
-
-function CMakeNonZeroExitStatus
-{
-    echo "ERROR: cmake exited with code $1"
-    exit 1
-}
