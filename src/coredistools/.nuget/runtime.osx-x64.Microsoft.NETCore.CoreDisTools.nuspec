@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <package >
   <metadata>
-    <id>runtime.ubuntu.14.04-x64.Microsoft.NETCore.CoreDisTools</id>
-    <version>1.0.1-prerelease-00002</version>
+    <id>runtime.osx-x64.Microsoft.NETCore.CoreDisTools</id>
+    <version>1.0.1-prerelease-00006</version>
     <title>Microsoft.NETCore Instruction-wise Disassembler</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
     <licenseUrl>http://go.microsoft.com/fwlink/?LinkId=329770</licenseUrl>
-    <projectUrl>https://github.com/dotnet/coreclr</projectUrl>
+    <projectUrl>https://github.com/dotnet/jitutils</projectUrl>
     <iconUrl>http://go.microsoft.com/fwlink/?LinkID=288859</iconUrl>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
     <description>Disassembly Tools for CoreCLR</description>
@@ -15,6 +15,6 @@
     <copyright>Copyright &#169; Microsoft Corporation</copyright>
   </metadata>
   <files>
-    <file src="../libcoredistools.so" target="runtimes/ubuntu.14.04-x64/native/libcoredistools.so" />
+    <file src="$BinariesDirectory$\libcoredistools.dylib" target="runtimes\osx-x64\native\libcoredistools.so" />
   </files>
 </package>

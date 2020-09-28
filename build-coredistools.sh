@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-SourcesDirectory=$RootDirectory/src
-BinariesDirectory=$RootDirectory/obj
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
@@ -21,7 +18,7 @@ case "$TargetOSArchitecture" in
         LLVMTargetsToBuild=AArch64
         ;;
 
-    linux-x64|macos-x64)
+    linux-x64|osx-x64)
         CrossCompiling=0
         LLVMTargetsToBuild="AArch64;X86"
         ;;
@@ -33,6 +30,18 @@ esac
 
 if [[ $CrossCompiling -eq 1 && ! -d $CrossRootfsDirectory ]]; then
     echo "Invalid or unspecified CrossRootfsDirectory: $CrossRootfsDirectory"
+    exit 1
+fi
+
+RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+SourcesDirectory=$RootDirectory/src
+BinariesDirectory=$RootDirectory/obj
+StagingDirectory=$RootDirectory/artifacts/$TargetOSArchitecture
+
+which cmake >/dev/null 2>&1
+
+if [ "$?" -ne 0 ]; then
+    echo "ERROR: cmake is not found in the PATH"
     exit 1
 fi
 
@@ -52,8 +61,9 @@ if [ "$CrossCompiling" -eq 1 ]; then
         -DCMAKE_CXX_COMPILER=$(which clang++) \
         -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
-        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
+        -DCMAKE_STRIP=/usr/$LLVMHostTriple/bin/strip \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
@@ -68,26 +78,29 @@ else
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=$(which clang) \
         -DCMAKE_CXX_COMPILER=$(which clang++) \
-        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \
-        -DLLVM_TARGETS_TO_BUILD="AArch64;ARM;X86" \
+        -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
 fi
 
 popd
 
-cmake \
-    --build $BinariesDirectory \
-    --target coredistools
-
 if [ "$?" -ne 0 ]; then
-    echo "coredistools compilation has failed"
+    echo "ERROR: cmake exited with code $1"
     exit 1
 fi
 
 cmake \
-    --install $BinariesDirectory \
-    --component coredistools
+    --build $BinariesDirectory \
+    --target install-coredistools-stripped
+
+if [ "$?" -ne 0 ]; then
+    echo "ERROR: cmake exited with code $1"
+    exit 1
+fi
+
+exit 0

@@ -1,30 +1,27 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion EnableExtensions
 
-set RootDirectory=%~dp0
-set SourcesDirectory=%RootDirectory%src
-set BinariesDirectory=%RootDirectory%obj
 set TargetOSArchitecture=%1
 
-if /i "%TargetOSArchitecture%" == "windows-arm" (
+if /i "%TargetOSArchitecture%" == "win-arm" (
     set GeneratorPlatform=ARM
     set LLVMDefaultTargetTriple=thumbv7-pc-windows-msvc
     set LLVMHostTriple=arm-pc-windows-msvc
     set LLVMTargetsToBuild=ARM
-) else if /i "%TargetOSArchitecture%" == "windows-arm64" (
+) else if /i "%TargetOSArchitecture%" == "win-arm64" (
     set GeneratorPlatform=ARM64
     set LLVMHostTriple=aarch64-pc-windows-msvc
     set LLVMTargetsToBuild=AArch64
-) else if /i "%TargetOSArchitecture%" == "windows-x64" (
+) else if /i "%TargetOSArchitecture%" == "win-x64" (
     set GeneratorPlatform=x64
     set LLVMHostTriple=x86_64-pc-windows-msvc
     set LLVMTargetsToBuild=AArch64;X86
-) else if /i "%TargetOSArchitecture%" == "windows-x86" (
+) else if /i "%TargetOSArchitecture%" == "win-x86" (
     set GeneratorPlatform=Win32
     set LLVMHostTriple=i686-pc-windows-msvc
     set LLVMTargetsToBuild=ARM;X86
 ) else (
-    echo "Unknown target OS and architecture: %TargetOSArchitecture%"
+    echo ERROR: Unknown target OS and architecture: %TargetOSArchitecture%
     exit /b 1
 )
 
@@ -32,10 +29,22 @@ if not defined LLVMDefaultTargetTriple (
     set LLVMDefaultTargetTriple=%LLVMHostTriple%
 )
 
+set RootDirectory=%~dp0
+set SourcesDirectory=%RootDirectory%src
+set BinariesDirectory=%RootDirectory%obj\%TargetOSArchitecture%
+set StagingDirectory=%RootDirectory%artifacts\%TargetOSArchitecture%
+
+where /q cmake.exe
+
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: cmake.exe is not found in the PATH
+    exit /b 1
+)
+
 where /q llvm-tblgen.exe
 
 if %ERRORLEVEL% neq 0 (
-    echo llvm-tblgen.exe is not found in the PATH
+    echo ERROR: llvm-tblgen.exe is not found in the PATH
     exit /b 1
 )
 
@@ -52,7 +61,7 @@ pushd "%BinariesDirectory%"
 cmake.exe ^
     -G "Visual Studio 16 2019" ^
     -A %GeneratorPlatform% ^
-    -DCMAKE_INSTALL_PREFIX="%RootDirectory%\" ^
+    -DCMAKE_INSTALL_PREFIX="%StagingDirectory%" ^
     -DLLVM_DEFAULT_TARGET_TRIPLE=%LLVMDefaultTargetTriple% ^
     -DLLVM_EXTERNAL_PROJECTS=coredistools ^
     -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR="%SourcesDirectory%\coredistools" ^
@@ -66,18 +75,24 @@ cmake.exe ^
 
 popd
 
+if %ERRORLEVEL% neq 0 goto :CMakeNonZeroExitStatus
+
 cmake.exe ^
   --build "%BinariesDirectory%" ^
   --target coredistools ^
   --config Release
 
-if %ERRORLEVEL% neq 0 (
-    echo coredistools compilation has failed
-    exit /b 1
-)
+if %ERRORLEVEL% neq 0 goto :CMakeNonZeroExitStatus
 
 cmake.exe ^
     --install "%BinariesDirectory%" ^
     --component coredistools
 
+if %ERRORLEVEL% neq 0 goto :CMakeNonZeroExitStatus
+
 exit /b 0
+
+:CMakeNonZeroExitStatus
+
+echo ERROR: cmake exited with code %ERRORLEVEL%
+exit /b 1

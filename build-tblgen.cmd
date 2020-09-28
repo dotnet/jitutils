@@ -1,10 +1,17 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion EnableExtensions
 
 set RootDirectory=%~dp0
 set SourcesDirectory=%RootDirectory%src
 set BinariesDirectory=%RootDirectory%obj
 set StagingDirectory=%RootDirectory%bin
+
+where /q cmake.exe
+
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: cmake.exe is not found in the PATH
+    exit /b 1
+)
 
 if not exist "%BinariesDirectory%" (
     mkdir "%BinariesDirectory%"
