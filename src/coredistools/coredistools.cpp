@@ -354,6 +354,11 @@ bool CorDisasm::init() {
 
   string Mcpu;        // Not specifying any particular CPU type.
   string FeaturesStr; // No additional target specific attributes.
+
+  if (TheTargetArch == Target_Arm64) {
+    Mcpu = "cortex-a76";
+  }
+
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
   if (!STI) {
     Print->Error("error: no subtarget info for target %s\n",
