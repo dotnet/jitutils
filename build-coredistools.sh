@@ -8,19 +8,19 @@ case "$TargetOSArchitecture" in
         CrossCompiling=1
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
-        LLVMTargetsToBuild=ARM
+        LLVMTargetsToBuild="AArch64;ARM"
         ;;
 
     linux-arm64)
         CrossCompiling=1
         LLVMDefaultTargetTriple=aarch64-linux-gnu
         LLVMHostTriple=aarch64-linux-gnu
-        LLVMTargetsToBuild=AArch64
+        LLVMTargetsToBuild="AArch64;ARM"
         ;;
 
     linux-x64|osx-x64)
         CrossCompiling=0
-        LLVMTargetsToBuild="AArch64;X86"
+        LLVMTargetsToBuild="AArch64;ARM;X86"
         ;;
 
     *)
