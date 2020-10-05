@@ -2,24 +2,23 @@
 setlocal EnableDelayedExpansion EnableExtensions
 
 set TargetOSArchitecture=%1
+set LLVMTargetsToBuild=AArch64;ARM;X86
 
 if /i "%TargetOSArchitecture%" == "win-arm" (
     set GeneratorPlatform=ARM
     set LLVMDefaultTargetTriple=thumbv7-pc-windows-msvc
     set LLVMHostTriple=arm-pc-windows-msvc
-    set LLVMTargetsToBuild=ARM
+    set LLVMTargetsToBuild=AArch64;ARM
 ) else if /i "%TargetOSArchitecture%" == "win-arm64" (
     set GeneratorPlatform=ARM64
     set LLVMHostTriple=aarch64-pc-windows-msvc
-    set LLVMTargetsToBuild=AArch64
+    set LLVMTargetsToBuild=AArch64;ARM
 ) else if /i "%TargetOSArchitecture%" == "win-x64" (
     set GeneratorPlatform=x64
     set LLVMHostTriple=x86_64-pc-windows-msvc
-    set LLVMTargetsToBuild=AArch64;X86
 ) else if /i "%TargetOSArchitecture%" == "win-x86" (
     set GeneratorPlatform=Win32
     set LLVMHostTriple=i686-pc-windows-msvc
-    set LLVMTargetsToBuild=ARM;X86
 ) else (
     echo ERROR: Unknown target OS and architecture: %TargetOSArchitecture%
     exit /b 1

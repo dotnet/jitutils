@@ -6,6 +6,10 @@ pr:
     include:
     - eng/*
     - src/coredistools/*
+    - build-coredistools.cmd
+    - build-coredistools.sh
+    - build-tblgen.cmd
+    - pack-coredistools.cmd
 
 trigger:
   branches:
@@ -15,6 +19,10 @@ trigger:
     include:
     - eng/*
     - src/coredistools/*
+    - build-coredistools.cmd
+    - build-coredistools.sh
+    - build-tblgen.cmd
+    - pack-coredistools.cmd
 
 resources:
   containers:
