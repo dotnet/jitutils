@@ -700,9 +700,9 @@ namespace ManagedCodeGen
                     {
                         if (m_config.Verbose)
                         {
-                            Console.WriteLine($"Restoring existing {lib}: {backupLibPath} ==> {backupLibPath}");
+                            Console.WriteLine($"Restoring existing {lib}: {backupLibPath} ==> {existingLibPath}");
                         }
-                        File.Copy(backupLibPath, backupLibPath, true);
+                        File.Copy(backupLibPath, existingLibPath, true);
                     }
                 }
             }
