@@ -612,7 +612,7 @@ namespace ManagedCodeGen
             string m_corerunPath;
             string m_defaultJitName;
             string m_testJitName;
-            string m_testCoreclrName = "coreclr.dll";
+            string m_testCoreclrName;
 
             public PmiDiffTool(Config config) : base(config)
             {
@@ -620,6 +620,7 @@ namespace ManagedCodeGen
                 m_commandName = s_asmToolJit;
                 m_corerunPath = Path.Combine(m_config.CoreRoot, GetCorerunExecutableName(m_config.PlatformMoniker));
                 m_defaultJitName = GetJitLibraryName(m_config.PlatformMoniker);
+                m_testCoreclrName = GetCoreClrLibraryName(m_config.PlatformMoniker);
                 if (m_config.AltJit != null)
                 {
                     m_testJitName = m_config.AltJit;

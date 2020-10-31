@@ -59,6 +59,22 @@ namespace ManagedCodeGen
             }
         }
 
+        private static string GetCoreClrLibraryName(string platformMoniker)
+        {
+            switch (platformMoniker)
+            {
+                case "Windows":
+                    return "coreclr.dll";
+                case "Linux":
+                    return "libcoreclr.so";
+                case "OSX":
+                    return "libcoreclr.dylib";
+                default:
+                    Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
+                    return null;
+            }
+        }
+
         private static string GetCrossgenExecutableName(string platformMoniker)
         {
             switch (platformMoniker)
