@@ -35,7 +35,7 @@ fi
 
 RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 SourcesDirectory=$RootDirectory/src
-BinariesDirectory=$RootDirectory/obj
+BinariesDirectory=$RootDirectory/obj/$TargetOSArchitecture
 StagingDirectory=$RootDirectory/artifacts/$TargetOSArchitecture
 
 which cmake >/dev/null 2>&1
