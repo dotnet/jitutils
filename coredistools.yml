@@ -233,19 +233,15 @@ jobs:
     displayName: Download artifacts
 
   - script: |
-      call pack-coredistools.cmd portable
       for %%I in (linux-arm linux-arm64 linux-x64 osx-x64 win-arm win-arm64 win-x64 win-x86) do (
-        call pack-coredistools.cmd %%I "$(Pipeline.Workspace)\coredistools-%%I"
+        mkdir "$(Build.BinariesDirectory)\%%I"
+        xcopy "$(Pipeline.Workspace)\coredistools-%%I\*" "$(Build.BinariesDirectory)\%%I"
       )
-    displayName: Pack coredistools into NuGet packages
+    displayName: Stage coredistools binaries
 
-  - task: CopyFiles@2
-    displayName: Copy NuGet packages to a staging directory
-    inputs:
-      contents: $(Build.SourcesDirectory)\artifacts\pkg\*.nupkg
-      targetFolder: $(Build.StagingDirectory)
-      flattenFolders: true
+  - script: pack-coredistools.cmd "$(Build.BinariesDirectory)"
+    displayName: Pack coredistools into NuGet package
 
-  - publish: $(Build.StagingDirectory)
+  - publish: $(Build.SourcesDirectory)\artifacts\pkg
     artifact: coredistools-nuget-packages
-    displayName: Publish coredistools NuGet packages
+    displayName: Publish coredistools NuGet package
