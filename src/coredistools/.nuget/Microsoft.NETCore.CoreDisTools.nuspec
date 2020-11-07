@@ -1,20 +1,27 @@
-<?xml version="1.0"?>
-<package >
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
     <id>Microsoft.NETCore.CoreDisTools </id>
     <version>1.0.1-prerelease-00006</version>
     <title>Microsoft.NETCore Instruction-wise Disassembler</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
-    <licenseUrl>http://go.microsoft.com/fwlink/?LinkId=329770</licenseUrl>
+    <license type="file">LICENSE.txt</license>
     <projectUrl>https://github.com/dotnet/jitutils</projectUrl>
-    <iconUrl>http://go.microsoft.com/fwlink/?LinkID=288859</iconUrl>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
-    <description>Disassembly Tools for CoreCLR</description>
+    <description>Disassembly Tools for dotnet/runtime</description>
     <releaseNotes>Initial release</releaseNotes>
     <copyright>Copyright &#169; Microsoft Corporation</copyright>
   </metadata>
   <files>
-    <file src="src\coredistools\.nuget\runtime.json" />
+    <file src="LICENSE.txt" target="" />
+    <file src="$BinariesDirectory$\linux-arm\libcoredistools.so" target="runtimes\linux-arm\native\libcoredistools.so" />
+    <file src="$BinariesDirectory$\linux-arm64\libcoredistools.so" target="runtimes\linux-arm64\native\libcoredistools.so" />
+    <file src="$BinariesDirectory$\linux-x64\libcoredistools.so" target="runtimes\linux-x64\native\libcoredistools.so" />
+    <file src="$BinariesDirectory$\osx-x64\libcoredistools.dylib" target="runtimes\osx-x64\native\libcoredistools.dylib" />
+    <file src="$BinariesDirectory$\win-arm\coredistools.dll" target="runtimes\win-arm\native\coredistools.dll" />
+    <file src="$BinariesDirectory$\win-arm64\coredistools.dll" target="runtimes\win-arm64\native\coredistools.dll" />
+    <file src="$BinariesDirectory$\win-x64\coredistools.dll" target="runtimes\win-x64\native\coredistools.dll" />
+    <file src="$BinariesDirectory$\win-x86\coredistools.dll" target="runtimes\win-x86\native\coredistools.dll" />
   </files>
 </package>
