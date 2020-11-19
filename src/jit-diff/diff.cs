@@ -506,8 +506,8 @@ namespace ManagedCodeGen
             private static List<AssemblyInfo> IdentifyAssemblies(string basePath, string rootPath, Config config, bool recursive, string searchPattern)
             {
                 List<AssemblyInfo> assemblyInfoList = new List<AssemblyInfo>();
-                string fullBasePath = Path.GetFullPath(basePath);
-                string fullRootPath = Path.GetFullPath(rootPath);
+                string fullBasePath = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar);
+                string fullRootPath = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar);
 
                 // Get files that could be assemblies, but discard currently ngen'd assemblies.
                 SearchOption searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
