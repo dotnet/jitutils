@@ -608,7 +608,7 @@ namespace ManagedCodeGen
                             }
                         }
 
-                        if (hasOutput && !File.Exists(dasmPath))
+                        if (hasOutput && File.Exists(logPath) && !File.Exists(dasmPath))
                         {
                             // Looks like the JIT does not support COMPlus_JitStdOutFile so
                             // the assembly output must be in the log file.
