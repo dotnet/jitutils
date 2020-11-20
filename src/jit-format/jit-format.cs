@@ -102,7 +102,7 @@ namespace ManagedCodeGen
                     {
                         if (match.Groups[1].Value.Trim() == "Windows")
                         {
-                            _os = "Windows_NT";
+                            _os = "Windows";
                         }
                         else if (match.Groups[1].Value.Trim() == "Darwin")
                         {
@@ -158,11 +158,6 @@ namespace ManagedCodeGen
                     }
                 }
 
-                if (_os == "Windows")
-                {
-                    _os = "Windows_NT";
-                }
-
                 if (_srcDirectory == null)
                 {
                     if (_verbose)
@@ -212,12 +207,12 @@ namespace ManagedCodeGen
                 }
 
                 // Check that we can find compile_commands.json on windows
-                if (_os == "Windows_NT")
+                if (_os.ToLower() == "windows")
                 {
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
                     if (!_untidy && _compileCommands == null)
                     {
-                        string[] compileCommandsPath = { _rootPath, "..", "..", "artifacts", "nmakeobj", "Windows_NT." + _arch + "." + _build, "compile_commands.json" };
+                        string[] compileCommandsPath = { _rootPath, "..", "..", "artifacts", "nmakeobj", _os + "." + _arch + "." + _build, "compile_commands.json" };
                         _compileCommands = Path.Combine(compileCommandsPath);
                         _rewriteCompileCommands = true;
 
@@ -368,7 +363,7 @@ namespace ManagedCodeGen
                 return default(T);
             }
 
-            public bool IsWindows { get { return (_os == "Windows_NT"); } }
+            public bool IsWindows { get { return (_os.ToLower() == "windows"); } }
             public bool DoVerboseOutput { get { return _verbose; } }
             public bool DoClangTidy { get { return !_untidy; } }
             public bool DoClangFormat { get { return !_noformat; } }
