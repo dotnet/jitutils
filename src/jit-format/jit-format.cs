@@ -59,6 +59,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Linux etc.)");
                     syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
                     syntax.DefineOption("c|coreclr", ref _rootPath, "Full path to base runtime/src/coreclr directory");
+                    syntax.DefineOption("s|source-directory", ref _srcDirectory, "Source directory relative to coreclr root");
                     syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
