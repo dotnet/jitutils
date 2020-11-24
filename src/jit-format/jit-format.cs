@@ -164,7 +164,7 @@ namespace ManagedCodeGen
                     {
                         Console.WriteLine("Formatting jit directory.");
                     }
-                    _srcDirectory = "src/jit";
+                    _srcDirectory = Path.Combine("src", "jit");
                 }
 
                 if (_projects.Count == 0 && _verbose)
