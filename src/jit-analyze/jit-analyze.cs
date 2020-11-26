@@ -1011,6 +1011,11 @@ namespace ManagedCodeGen
                         };
 
                         string[] splitLine = gitMergedOutputRegex.Split(modifiedLine[2]);
+                        if (splitLine.Length != 6)
+                        {
+                            Console.WriteLine($"Couldn't parse output '{line}`.");
+                            continue;
+                        }
 
                         // Split will output:
                         //
