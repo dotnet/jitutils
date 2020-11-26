@@ -972,7 +972,7 @@ namespace ManagedCodeGen
             commandArgs.Add(diffPath);
             commandArgs.Add(basePath);
 
-            ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
+            ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true, basePath);
             Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>();
 
             if (result.ExitCode != 0)
