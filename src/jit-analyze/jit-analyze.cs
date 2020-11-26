@@ -997,7 +997,7 @@ namespace ManagedCodeGen
                     // This should be split into:
                     //
                     // 32\t2\t/coreclr/bin/asm/asm/base/101301.dasm\t/coreclr/bin/asm/asm/diff/101301.dasm
-                    Regex gitMergedOutputRegex = new Regex(@"\{(\w+)\s=>\s(\w+)\}");
+                    Regex gitMergedOutputRegex = new Regex(@"\{((\w+(?:\/|\\)?)+)\s=>\s((\w+(?:\/|\\)?)+)\}");
                     Regex whitespaceRegex = new Regex(@"(\w+)\s+(\w+)\s+(.*)");
                     if (gitMergedOutputRegex.Matches(line).Count > 0)
                     {
@@ -1021,16 +1021,18 @@ namespace ManagedCodeGen
 
                         // Create the base path from the second group
                         // {diff => base}
-                        string manipulatedBasePath = String.Join(splitLine[2], new string[] {
+                        string manipulatedBasePath = String.Join(Path.DirectorySeparatorChar, new string[] {
                             splitLine[0],
-                            splitLine[3]
+                            splitLine[3],
+                            splitLine[5]
                         });
 
                         // Create the diff path from the first 
                         // {diff => base}
-                        string manipulatedDiffPath = String.Join(splitLine[1], new string[] {
+                        string manipulatedDiffPath = String.Join(Path.DirectorySeparatorChar, new string[] {
                             splitLine[0],
-                            splitLine[3]
+                            splitLine[1],
+                            splitLine[5]
                         });
 
                         fields = new string[4] {
@@ -1057,7 +1059,7 @@ namespace ManagedCodeGen
                     string fullBaseFilePath = Path.GetFullPath(fields[2]);
                     if (!File.Exists(fullBaseFilePath))
                     {
-                        Console.WriteLine($"Couldn't parse output '{line}'.");
+                        Console.WriteLine($"Error parsing path '{line}'. `{fullBaseFilePath}` doesn't exist.");
                         continue;
                     }
 
