@@ -12,6 +12,8 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using System.Text;
 using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
@@ -54,6 +56,8 @@ namespace ManagedCodeGen
             private string _note;
             private string _filter;
             private string _metric;
+            private bool _showTextDiff = false;
+            private bool _sequential = true;
 
             public Config(string[] args)
             {
@@ -81,6 +85,10 @@ namespace ManagedCodeGen
                         "Dump analysis data to specified file in tab-separated format.");
                     syntax.DefineOption("filter", ref _filter,
                         "Only consider assembly files whose names match the filter");
+                    syntax.DefineOption("textdiff", ref _showTextDiff,
+                        "Dump files that have textual diffs but no metric diffs.");
+                    syntax.DefineOption("sequential", ref _sequential,
+                        "Diff each file in sequence. By default, it will process in parallel..");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
@@ -127,6 +135,8 @@ namespace ManagedCodeGen
             public string Filter {  get { return _filter; } }
 
             public string Metric {  get { return _metric; } }
+            public bool ShowTextDiff { get { return _showTextDiff;  } }
+            public bool Sequential { get { return _sequential;  } }
         }
 
         public class FileInfo
@@ -492,8 +502,18 @@ namespace ManagedCodeGen
             public IEnumerable<int> diffOffsets;
         }
 
-        public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
+        public static IEnumerable<FileInfo> ExtractFileInfo(string path, Config config)
         {
+            if (config == null)
+            {
+                return null;
+            }
+
+            string filter = config.Filter;
+            string fileExtension = config.FileExtension;
+            bool recursive = config.Recursive;
+            bool sequential = config.Sequential;
+
             // if path is a directory, enumerate files and extract
             // otherwise just extract.
             SearchOption searchOption = (recursive) ?
@@ -504,12 +524,39 @@ namespace ManagedCodeGen
             {
                 string fileNamePattern = filter ?? "*";
                 string searchPattern = fileNamePattern + fileExtension;
-                return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
-                         .Select(p => new FileInfo
-                         {
-                             path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
-                             methodList = ExtractMethodInfo(p)
-                         }).ToList();
+
+                if (sequential)
+                {
+                    return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
+                             .Select(p => new FileInfo
+                             {
+                                 path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
+                                 methodList = ExtractMethodInfo(p)
+                             }).ToList();
+                }
+                else
+                {
+                    var fileOutput = new ConcurrentBag<FileInfo>();
+                    Parallel.ForEach(Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption),
+                        () => new List<FileInfo>(),
+                        (p, loop, details) =>
+                        {
+                            details.Add(new FileInfo
+                            {
+                                path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
+                                methodList = ExtractMethodInfo(p)
+                            });
+                            return details;
+                        },
+                        (finalResult) =>
+                        {
+                            foreach (var result in finalResult)
+                            {
+                                fileOutput.Add(result);
+                            }
+                        });
+                    return fileOutput.ToList();
+                }
             }
             else
             {
@@ -650,7 +697,7 @@ namespace ManagedCodeGen
         //     Top diffs by size across all files
         //     Top diffs by percentage size across all files
         //
-        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
+        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config)
         {
             var totalDeltaMetrics = fileDeltaList.Sum(x => x.deltaMetrics);
             var totalBaseMetrics = fileDeltaList.Sum(x => x.baseMetrics);
@@ -807,18 +854,24 @@ namespace ManagedCodeGen
             Console.WriteLine("\n{0} total methods with {1} differences ({2} improved, {3} regressed), {4} unchanged.",
                 sortedMethodCount, metricName, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
 
-            // Show files with text diffs but no metric diffs.
-            // TODO: resolve diffs to particular methods in the files.
-            var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaMetrics.IsZero()))
-                .OrderByDescending(x => diffCounts[x.basePath]);
-
-            int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
-            if (zeroDiffFilesWithDiffCount > 0)
+            if (config.ShowTextDiff)
             {
-                Console.WriteLine("\n{0} files had text diffs but no metric diffs.", zeroDiffFilesWithDiffCount);
-                foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+                // Show files with text diffs but no metric diffs.
+
+                Dictionary<string, int> diffCounts = DiffInText(config.DiffPath, config.BasePath);
+
+                // TODO: resolve diffs to particular methods in the files.
+                var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaMetrics.IsZero()))
+                    .OrderByDescending(x => diffCounts[x.basePath]);
+
+                int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
+                if (zeroDiffFilesWithDiffCount > 0)
                 {
-                    Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                    Console.WriteLine("\n{0} files had text diffs but no metric diffs.", zeroDiffFilesWithDiffCount);
+                    foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+                    {
+                        Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                    }
                 }
             }
 
@@ -974,12 +1027,11 @@ namespace ManagedCodeGen
             commandArgs.Add(diffPath);
 
             ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
-            Dictionary<string, int> fileToTextDiffCount = null;
+            Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>(); ;
 
             if (result.ExitCode != 0)
             {
                 // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
-                fileToTextDiffCount = new Dictionary<string, int>();
 
                 var rawLines = result.StdOut.Split(new[] { "\0", Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
                 if (rawLines.Length % 3 != 0)
@@ -1047,20 +1099,18 @@ namespace ManagedCodeGen
             // Parse incoming arguments
             Config config = new Config(args);
 
-            Dictionary<string, int> diffCounts = DiffInText(config.DiffPath, config.BasePath);
-
-            // Early out if no textual diffs found.
-            if (diffCounts == null)
-            {
-                Console.WriteLine("No diffs found.");
-                return 0;
-            }
-
+         
             try
             {
+                Stopwatch stopwatch = new Stopwatch();
+
+                stopwatch.Start();
                 // Extract method info from base and diff directory or file.
-                var baseList = ExtractFileInfo(config.BasePath, config.Filter, config.FileExtension, config.Recursive);
-                var diffList = ExtractFileInfo(config.DiffPath, config.Filter, config.FileExtension, config.Recursive);
+                var baseList = ExtractFileInfo(config.BasePath, config);
+                var diffList = ExtractFileInfo(config.DiffPath, config);
+                stopwatch.Stop();
+                Console.WriteLine($"ExtractFileInfo: {stopwatch.Elapsed}.");
+                stopwatch.Restart();
 
                 // Compare the method info for each file and generate a list of
                 // non-zero deltas.  The lists that include files in one but not
@@ -1068,6 +1118,8 @@ namespace ManagedCodeGen
                 // has both sides.
 
                 var compareList = Comparator(baseList, diffList, config);
+                stopwatch.Stop();
+                Console.WriteLine($"Comparator: {stopwatch.Elapsed}.");
 
                 // Generate warning lists if requested.
                 if (config.Warn)
@@ -1086,8 +1138,12 @@ namespace ManagedCodeGen
                     GenerateJson(compareList, config.JsonFileName);
                 }
 
-                return Summarize(compareList, config, diffCounts);
+                stopwatch.Restart();
+                int retCode = Summarize(compareList, config);
+                stopwatch.Stop();
+                Console.WriteLine($"Summarize: {stopwatch.Elapsed}.");
 
+                return retCode;
             }
             catch (System.IO.DirectoryNotFoundException e)
             {
