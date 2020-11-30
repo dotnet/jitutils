@@ -994,8 +994,8 @@ namespace ManagedCodeGen
                     return fileToTextDiffCount;
                 }
 
-                string fullBasePath = Path.GetFullPath(basePath);
-                string fullDiffPath = Path.GetFullPath(diffPath);
+                string fullBasePath = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar);
+                string fullDiffPath = Path.GetFullPath(diffPath).TrimEnd(Path.DirectorySeparatorChar);
 
                 for (int i = 0; i < rawLines.Length; i += 3)
                 {
