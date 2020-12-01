@@ -62,7 +62,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("b|base", ref _basePath, "Base file or directory.");
                     syntax.DefineOption("d|diff", ref _diffPath, "Diff file or directory.");
                     syntax.DefineOption("r|recursive", ref _recursive, "Search directories recursively.");
-                    syntax.DefineOption("ext|fileExtension", ref _fileExtension, "File extension to look for.");
+                    syntax.DefineOption("ext|fileExtension", ref _fileExtension, "File extension to look for. By default, .dasm");
                     syntax.DefineOption("c|count", ref _count,
                         "Count of files and methods (at most) to output in the summary."
                       + " (count) improvements and (count) regressions of each will be included."
@@ -948,16 +948,17 @@ namespace ManagedCodeGen
         // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
         // Use "git diff" to do the analysis for us, then parse that output.
         //
-        // "git diff --no-index --exit-code --numstat" output shows added/deleted lines:
+        // "git diff --diff-filter=M --no-index --exit-code --numstat -z" output shows added/deleted lines:
         //
-        //   <added> <removed> <base-path> => <diff-path>
+        // With -diff-filter=M, "git diff" will only compare modified files i.e. the ones that exists in both base and diff
+        // and ignore files that are present in one but not in other.
+        //
+        // With -z, the output uses field terminators of NULs (\0).
+        //   added\tremoved\t\0base-path-1\0diff-path-1\0added\tremoved\t....
         //
         // For example:
-        // 6       6       "dasmset_8/diff/Vector3Interop_ro/Vector3Interop_ro.dasm" => "dasmset_8/base/Vector3Interop_ro/Vector3Interop_ro.dasm"
+        // 6\t6\t\0d:\root\dasmset_8\base\Vector3Interop_ro.dasm\0d:\root\dasmset_8\diff\Vector3Interop_ro.dasm\0<next diff information>
         //
-        // Note, however, that it can also use a smaller output format, for example:
-        //
-        // 6       6       dasmset_8/{diff => base}/Vector3Interop_ro/Vector3Interop_ro.dasm
         public static Dictionary<string, int> DiffInText(string diffPath, string basePath)
         {
             // run get diff command to see if we have textual diffs.
@@ -965,110 +966,74 @@ namespace ManagedCodeGen
             List<string> commandArgs = new List<string>();
             commandArgs.Add("diff");
             commandArgs.Add("--no-index");
-            // only diff files that are present in both base and diff.
             commandArgs.Add("--diff-filter=M");
             commandArgs.Add("--exit-code");
             commandArgs.Add("--numstat");
-            commandArgs.Add(diffPath);
+            commandArgs.Add("-z");
             commandArgs.Add(basePath);
+            commandArgs.Add(diffPath);
 
             ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
-            Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>();
+            Dictionary<string, int> fileToTextDiffCount = null;
 
             if (result.ExitCode != 0)
             {
                 // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
-                //
-                // diff --numstat output shows added/deleted lines
-                //   added removed base-path => diff-path
-                var rawLines = result.StdOut.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-                string fullDiffPath = Path.GetFullPath(diffPath);
+                fileToTextDiffCount = new Dictionary<string, int>();
 
-                foreach (var line in rawLines)
+                var rawLines = result.StdOut.Split(new[] { "\0", Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+                if (rawLines.Length % 3 != 0)
                 {
-                    string manipulatedLine = line;
-                    string[] fields = null;
+                    Console.WriteLine($"Error parsing output: {result.StdOut}");
+                    return fileToTextDiffCount;
+                }
 
-                    int numFields = 5;
+                string fullBasePath = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar);
+                string fullDiffPath = Path.GetFullPath(diffPath).TrimEnd(Path.DirectorySeparatorChar);
 
-                    // Example output:
-                    // 32\t2\t/coreclr/bin/asm/asm/{diff => base}/101301.dasm
-                    //
-                    // This should be split into:
-                    //
-                    // 32\t2\t/coreclr/bin/asm/asm/base/101301.dasm\t/coreclr/bin/asm/asm/diff/101301.dasm
-                    Regex gitMergedOutputRegex = new Regex(@"\{(\w+)\s=>\s(\w+)\}");
-                    Regex whitespaceRegex = new Regex(@"(\w+)\s+(\w+)\s+(.*)");
-                    if (gitMergedOutputRegex.Matches(line).Count > 0)
+                for (int i = 0; i < rawLines.Length; i += 3)
+                {
+                    string rawStats = rawLines[i];
+                    string rawBasePath = rawLines[i + 1];
+                    string rawDiffPath = rawLines[i + 2];
+
+                    string[] fields = rawStats.Split(new char[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    string parsedFullDiffFilePath = Path.GetFullPath(rawDiffPath);
+                    string parsedFullBaseFilePath = Path.GetFullPath(rawBasePath);
+
+                    string parsedDiffDir = Path.GetDirectoryName(parsedFullDiffFilePath);
+                    string parsedBaseDir = Path.GetDirectoryName(parsedFullBaseFilePath);
+
+
+                    if (!File.Exists(parsedFullBaseFilePath))
                     {
-                        // Do the first split to remove the integers from the file path.
-                        // Then reconstruct both the diff and the base paths.
-                        var groups = whitespaceRegex.Match(line).Groups;
-                        string[] modifiedLine = new string[] {
-                            groups[whitespaceRegex.GroupNameFromNumber(1)].ToString(),
-                            groups[whitespaceRegex.GroupNameFromNumber(2)].ToString(),
-                            groups[whitespaceRegex.GroupNameFromNumber(3)].ToString()
-                        };
-
-                        string[] splitLine = gitMergedOutputRegex.Split(modifiedLine[2]);
-
-                        // Split will output:
-                        //
-                        // 32\t2\t/coreclr/bin/asm/asm/
-                        // {diffFolder}
-                        // {baseFolder}
-                        // 101301.dasm
-
-                        // Create the base path from the second group
-                        // {diff => base}
-                        string manipulatedBasePath = String.Join(splitLine[2], new string[] {
-                            splitLine[0],
-                            splitLine[3]
-                        });
-
-                        // Create the diff path from the first 
-                        // {diff => base}
-                        string manipulatedDiffPath = String.Join(splitLine[1], new string[] {
-                            splitLine[0],
-                            splitLine[3]
-                        });
-
-                        fields = new string[4] {
-                            modifiedLine[0],
-                            modifiedLine[1],
-                            manipulatedBasePath,
-                            manipulatedDiffPath
-                        };
-
-                        numFields = 4;
-                    }
-                    else
-                    {
-                        fields = line.Split(new char[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
-                    }
-
-                    if (fields.Length != numFields)
-                    {
-                        Console.WriteLine($"Couldn't parse output '{line}`.");
+                        Console.WriteLine($"Error parsing path '{rawBasePath}'. `{parsedFullBaseFilePath}` doesn't exist.");
                         continue;
                     }
 
-                    // store diff-relative path
-                    string fullBaseFilePath = Path.GetFullPath(fields[2]);
-                    if (!File.Exists(fullBaseFilePath))
+                    if (parsedBaseDir != fullBasePath)
                     {
-                        Console.WriteLine($"Couldn't parse output '{line}'.");
+                        Console.WriteLine($"Error parsing path '{rawBasePath}'. `{parsedBaseDir}` and `{fullBasePath}` don't match.");
+                    }
+
+                    if (!File.Exists(parsedFullDiffFilePath))
+                    {
+                        Console.WriteLine($"Error parsing path '{rawDiffPath}'. `{parsedFullDiffFilePath}` doesn't exist.");
                         continue;
                     }
 
-                    string baseFilePath = fullBaseFilePath.Substring(fullDiffPath.Length + 1);
+                    if (parsedDiffDir != fullDiffPath)
+                    {
+                        Console.WriteLine($"Error parsing path '{rawDiffPath}'. `{parsedDiffDir}` and `{fullDiffPath}` don't match.");
+                    }
 
                     // Sometimes .dasm is parsed as binary and we don't get numbers, just dashes
                     int addCount = 0;
                     int delCount = 0;
                     Int32.TryParse(fields[0], out addCount);
                     Int32.TryParse(fields[1], out delCount);
-                    fileToTextDiffCount[baseFilePath] = addCount + delCount;
+                    fileToTextDiffCount[parsedFullBaseFilePath] = addCount + delCount;
                 }
 
                 Console.WriteLine($"Found {fileToTextDiffCount.Count()} files with textual diffs.");
