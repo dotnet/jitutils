@@ -57,7 +57,7 @@ namespace ManagedCodeGen
             private string _filter;
             private string _metric;
             private bool _showTextDiff = false;
-            private bool _sequential = true;
+            private bool _sequential = false;
 
             public Config(string[] args)
             {
@@ -527,11 +527,15 @@ namespace ManagedCodeGen
 
                 if (sequential)
                 {
-                    return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
-                             .Select(p => new FileInfo
+                    return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption).AsParallel()
+                             .Select(p =>
                              {
-                                 path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
-                                 methodList = ExtractMethodInfo(p)
+                                 Console.WriteLine($"{Task.CurrentId}. {p}");
+                                 return new FileInfo
+                                 {
+                                     path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
+                                     methodList = ExtractMethodInfo(p)
+                                 };
                              }).ToList();
                 }
                 else
@@ -541,6 +545,7 @@ namespace ManagedCodeGen
                         () => new List<FileInfo>(),
                         (p, loop, details) =>
                         {
+                            Console.WriteLine($"{Task.CurrentId}. {p}");
                             details.Add(new FileInfo
                             {
                                 path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
@@ -1099,7 +1104,6 @@ namespace ManagedCodeGen
             // Parse incoming arguments
             Config config = new Config(args);
 
-         
             try
             {
                 Stopwatch stopwatch = new Stopwatch();
