@@ -12,8 +12,6 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using System.Text;
 using System.Runtime.CompilerServices;
-using System.Collections.Concurrent;
-using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
@@ -57,7 +55,6 @@ namespace ManagedCodeGen
             private string _filter;
             private string _metric;
             private bool _showTextDiff = false;
-            private bool _sequential = false;
 
             public Config(string[] args)
             {
@@ -87,8 +84,6 @@ namespace ManagedCodeGen
                         "Only consider assembly files whose names match the filter");
                     syntax.DefineOption("textdiff", ref _showTextDiff,
                         "Dump files that have textual diffs but no metric diffs.");
-                    syntax.DefineOption("sequential", ref _sequential,
-                        "Diff each file in sequence. By default, it will process in parallel..");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
@@ -136,7 +131,6 @@ namespace ManagedCodeGen
 
             public string Metric {  get { return _metric; } }
             public bool ShowTextDiff { get { return _showTextDiff;  } }
-            public bool Sequential { get { return _sequential;  } }
         }
 
         public class FileInfo
@@ -502,18 +496,8 @@ namespace ManagedCodeGen
             public IEnumerable<int> diffOffsets;
         }
 
-        public static IEnumerable<FileInfo> ExtractFileInfo(string path, Config config)
+        public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
         {
-            if (config == null)
-            {
-                return null;
-            }
-
-            string filter = config.Filter;
-            string fileExtension = config.FileExtension;
-            bool recursive = config.Recursive;
-            bool sequential = config.Sequential;
-
             // if path is a directory, enumerate files and extract
             // otherwise just extract.
             SearchOption searchOption = (recursive) ?
@@ -524,44 +508,12 @@ namespace ManagedCodeGen
             {
                 string fileNamePattern = filter ?? "*";
                 string searchPattern = fileNamePattern + fileExtension;
-
-                if (sequential)
-                {
-                    return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption).AsParallel()
-                             .Select(p =>
-                             {
-                                 Console.WriteLine($"{Task.CurrentId}. {p}");
-                                 return new FileInfo
-                                 {
-                                     path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
-                                     methodList = ExtractMethodInfo(p)
-                                 };
-                             }).ToList();
-                }
-                else
-                {
-                    var fileOutput = new ConcurrentBag<FileInfo>();
-                    Parallel.ForEach(Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption),
-                        () => new List<FileInfo>(),
-                        (p, loop, details) =>
-                        {
-                            Console.WriteLine($"{Task.CurrentId}. {p}");
-                            details.Add(new FileInfo
-                            {
-                                path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
-                                methodList = ExtractMethodInfo(p)
-                            });
-                            return details;
-                        },
-                        (finalResult) =>
-                        {
-                            foreach (var result in finalResult)
-                            {
-                                fileOutput.Add(result);
-                            }
-                        });
-                    return fileOutput.ToList();
-                }
+                return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
+                         .AsParallel().Select(p => new FileInfo
+                         {
+                             path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
+                             methodList = ExtractMethodInfo(p)
+                         }).ToList();
             }
             else
             {
@@ -1106,15 +1058,9 @@ namespace ManagedCodeGen
 
             try
             {
-                Stopwatch stopwatch = new Stopwatch();
-
-                stopwatch.Start();
                 // Extract method info from base and diff directory or file.
-                var baseList = ExtractFileInfo(config.BasePath, config);
-                var diffList = ExtractFileInfo(config.DiffPath, config);
-                stopwatch.Stop();
-                Console.WriteLine($"ExtractFileInfo: {stopwatch.Elapsed}.");
-                stopwatch.Restart();
+                var baseList = ExtractFileInfo(config.BasePath, config.Filter, config.FileExtension, config.Recursive);
+                var diffList = ExtractFileInfo(config.DiffPath, config.Filter, config.FileExtension, config.Recursive);
 
                 // Compare the method info for each file and generate a list of
                 // non-zero deltas.  The lists that include files in one but not
@@ -1122,8 +1068,6 @@ namespace ManagedCodeGen
                 // has both sides.
 
                 var compareList = Comparator(baseList, diffList, config);
-                stopwatch.Stop();
-                Console.WriteLine($"Comparator: {stopwatch.Elapsed}.");
 
                 // Generate warning lists if requested.
                 if (config.Warn)
@@ -1142,12 +1086,7 @@ namespace ManagedCodeGen
                     GenerateJson(compareList, config.JsonFileName);
                 }
 
-                stopwatch.Restart();
-                int retCode = Summarize(compareList, config);
-                stopwatch.Stop();
-                Console.WriteLine($"Summarize: {stopwatch.Elapsed}.");
-
-                return retCode;
+                return Summarize(compareList, config);
             }
             catch (System.IO.DirectoryNotFoundException e)
             {
