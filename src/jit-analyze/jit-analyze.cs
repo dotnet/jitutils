@@ -950,7 +950,7 @@ namespace ManagedCodeGen
         //
         // "git diff --diff-filter=M --no-index --exit-code --numstat -z" output shows added/deleted lines:
         //
-        // With -diff-filter=M, "git diff" will only compare files modified files i.e. the ones that exists in both base and diff
+        // With -diff-filter=M, "git diff" will only compare modified files i.e. the ones that exists in both base and diff
         // and ignore files that are present in one but not in other.
         //
         // With -z, the output uses field terminators of NULs (\0).
@@ -973,13 +973,7 @@ namespace ManagedCodeGen
             commandArgs.Add(basePath);
             commandArgs.Add(diffPath);
 
-            Console.WriteLine($"git {string.Join(" ", commandArgs)}");
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
             ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
-            stopwatch.Stop();
-            Console.WriteLine($"Took {stopwatch.Elapsed} to complete.");
-            Console.WriteLine();
             Dictionary<string, int> fileToTextDiffCount = null;
 
             if (result.ExitCode != 0)
