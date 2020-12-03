@@ -54,7 +54,7 @@ namespace ManagedCodeGen
             private string _note;
             private string _filter;
             private string _metric;
-            private bool _showTextDiff = false;
+            private bool _skipTextDiff = false;
 
             public Config(string[] args)
             {
@@ -82,7 +82,7 @@ namespace ManagedCodeGen
                         "Dump analysis data to specified file in tab-separated format.");
                     syntax.DefineOption("filter", ref _filter,
                         "Only consider assembly files whose names match the filter");
-                    syntax.DefineOption("textdiff", ref _showTextDiff,
+                    syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
                         "Dump files that have textual diffs but no metric diffs.");
                 });
 
@@ -130,7 +130,7 @@ namespace ManagedCodeGen
             public string Filter {  get { return _filter; } }
 
             public string Metric {  get { return _metric; } }
-            public bool ShowTextDiff { get { return _showTextDiff;  } }
+            public bool SkipTextDiff { get { return _skipTextDiff;  } }
         }
 
         public class FileInfo
@@ -811,7 +811,7 @@ namespace ManagedCodeGen
             Console.WriteLine("\n{0} total methods with {1} differences ({2} improved, {3} regressed), {4} unchanged.",
                 sortedMethodCount, metricName, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
 
-            if (config.ShowTextDiff)
+            if (!config.SkipTextDiff)
             {
                 // Show files with text diffs but no metric diffs.
 
