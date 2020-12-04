@@ -83,7 +83,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("filter", ref _filter,
                         "Only consider assembly files whose names match the filter");
                     syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
-                        "Dump files that have textual diffs but no metric diffs.");
+                        "Skip analysis that checks for files that have textual diffs but no metric diffs.");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
