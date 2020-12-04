@@ -49,7 +49,7 @@ A common task for developers is to format their changes before submitting a GitH
 A developer can run the tool using the tests/scripts/format.py script in the coreclr repo:
 
 ```
-python tests\scripts\format.py --coreclr C:\gh\coreclr --arch x64 --os Windows_NT
+python src\tests\Common\scripts\format.py --coreclr C:\gh\coreclr --arch x64 --os windows
 ```
 
 This will run all build flavors and all projects for the user. This should be done on both
@@ -79,13 +79,13 @@ jit-format -a x64 -b Debug -o Windows -c C:\gh\coreclr -v lower.cpp codegenxarch
 Formatting jit directory.
 Formatting dll project.
 Building compile_commands.json.
-Using compile_commands.json found at C:\gh\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json
+Using compile_commands.json found at C:\gh\coreclr\bin\obj\windows.x64.Checked\compile_commands.json
 Running clang-tidy.
 Running:
-        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\codegenxarch.cpp
+        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\windows.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\codegenxarch.cpp
 
 Running:
-        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\lower.cpp
+        clang-tidy   -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\windows.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\lower.cpp
 
 Running: clang-format   C:\gh\coreclr\src\jit\codegenxarch.cpp
 Running: clang-format   C:\gh\coreclr\src\jit\lower.cpp
@@ -103,13 +103,13 @@ jit-format -a x64 -b Debug -o Windows -c C:\gh\coreclr -v --fix lower.cpp codege
 Formatting jit directory.
 Formatting dll project.
 Building compile_commands.json.
-Using compile_commands.json found at C:\gh\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json
+Using compile_commands.json found at C:\gh\coreclr\bin\obj\windows.x64.Checked\compile_commands.json
 Running clang-tidy.
 Running:
-        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\codegenxarch.cpp
+        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\windows.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\codegenxarch.cpp
 
 Running:
-        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\Windows_NT.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\lower.cpp
+        clang-tidy -fix  -checks=-*,readability-braces*,modernize-use-nullptr -header-filter=.* -p C:\gh\coreclr\bin\obj\windows.x64.Checked\compile_commands.json C:\gh\coreclr\src\jit\lower.cpp
 
 Running: clang-format -i  C:\gh\coreclr\src\jit\codegenxarch.cpp
 Running: clang-format -i  C:\gh\coreclr\src\jit\lower.cpp

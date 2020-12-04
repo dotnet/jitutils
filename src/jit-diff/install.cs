@@ -27,7 +27,7 @@ namespace ManagedCodeGen
                 return -1;
             }
 
-            if ((config.PlatformMoniker == null) || (GetBuildOS(config.PlatformMoniker) == null))
+            if ((config.PlatformMoniker == null) || (GetOSArtifactDirComponent(config.PlatformMoniker) == null))
             {
                 return -1;
             }
@@ -143,7 +143,7 @@ namespace ManagedCodeGen
                 return 1;
             }
 
-            string buildOS = GetBuildOS(config.PlatformMoniker).ToUpper();
+            string buildOS = GetOSArtifactDirComponent(config.PlatformMoniker).ToUpper();
             foreach (var dir in Directory.EnumerateDirectories(platformPath))
             {
                 if (Path.GetFileName(dir).ToUpper().Contains(buildOS))
