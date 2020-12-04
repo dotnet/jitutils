@@ -54,6 +54,7 @@ namespace ManagedCodeGen
             private string _note;
             private string _filter;
             private string _metric;
+            private bool _skipTextDiff = false;
 
             public Config(string[] args)
             {
@@ -81,6 +82,8 @@ namespace ManagedCodeGen
                         "Dump analysis data to specified file in tab-separated format.");
                     syntax.DefineOption("filter", ref _filter,
                         "Only consider assembly files whose names match the filter");
+                    syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
+                        "Skip analysis that checks for files that have textual diffs but no metric diffs.");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
@@ -127,6 +130,7 @@ namespace ManagedCodeGen
             public string Filter {  get { return _filter; } }
 
             public string Metric {  get { return _metric; } }
+            public bool SkipTextDiff { get { return _skipTextDiff;  } }
         }
 
         public class FileInfo
@@ -505,7 +509,7 @@ namespace ManagedCodeGen
                 string fileNamePattern = filter ?? "*";
                 string searchPattern = fileNamePattern + fileExtension;
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
-                         .Select(p => new FileInfo
+                         .AsParallel().Select(p => new FileInfo
                          {
                              path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
                              methodList = ExtractMethodInfo(p)
@@ -650,7 +654,7 @@ namespace ManagedCodeGen
         //     Top diffs by size across all files
         //     Top diffs by percentage size across all files
         //
-        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config, Dictionary<string, int> diffCounts)
+        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config)
         {
             var totalDeltaMetrics = fileDeltaList.Sum(x => x.deltaMetrics);
             var totalBaseMetrics = fileDeltaList.Sum(x => x.baseMetrics);
@@ -807,18 +811,24 @@ namespace ManagedCodeGen
             Console.WriteLine("\n{0} total methods with {1} differences ({2} improved, {3} regressed), {4} unchanged.",
                 sortedMethodCount, metricName, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
 
-            // Show files with text diffs but no metric diffs.
-            // TODO: resolve diffs to particular methods in the files.
-            var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaMetrics.IsZero()))
-                .OrderByDescending(x => diffCounts[x.basePath]);
-
-            int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
-            if (zeroDiffFilesWithDiffCount > 0)
+            if (!config.SkipTextDiff)
             {
-                Console.WriteLine("\n{0} files had text diffs but no metric diffs.", zeroDiffFilesWithDiffCount);
-                foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+                // Show files with text diffs but no metric diffs.
+
+                Dictionary<string, int> diffCounts = DiffInText(config.DiffPath, config.BasePath);
+
+                // TODO: resolve diffs to particular methods in the files.
+                var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaMetrics.IsZero()))
+                    .OrderByDescending(x => diffCounts[x.basePath]);
+
+                int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
+                if (zeroDiffFilesWithDiffCount > 0)
                 {
-                    Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                    Console.WriteLine("\n{0} files had text diffs but no metric diffs.", zeroDiffFilesWithDiffCount);
+                    foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
+                    {
+                        Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                    }
                 }
             }
 
@@ -974,12 +984,11 @@ namespace ManagedCodeGen
             commandArgs.Add(diffPath);
 
             ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
-            Dictionary<string, int> fileToTextDiffCount = null;
+            Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>(); ;
 
             if (result.ExitCode != 0)
             {
                 // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
-                fileToTextDiffCount = new Dictionary<string, int>();
 
                 var rawLines = result.StdOut.Split(new[] { "\0", Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
                 if (rawLines.Length % 3 != 0)
@@ -1047,15 +1056,6 @@ namespace ManagedCodeGen
             // Parse incoming arguments
             Config config = new Config(args);
 
-            Dictionary<string, int> diffCounts = DiffInText(config.DiffPath, config.BasePath);
-
-            // Early out if no textual diffs found.
-            if (diffCounts == null)
-            {
-                Console.WriteLine("No diffs found.");
-                return 0;
-            }
-
             try
             {
                 // Extract method info from base and diff directory or file.
@@ -1086,8 +1086,7 @@ namespace ManagedCodeGen
                     GenerateJson(compareList, config.JsonFileName);
                 }
 
-                return Summarize(compareList, config, diffCounts);
-
+                return Summarize(compareList, config);
             }
             catch (System.IO.DirectoryNotFoundException e)
             {
