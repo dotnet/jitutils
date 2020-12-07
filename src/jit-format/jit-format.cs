@@ -572,7 +572,7 @@ namespace ManagedCodeGen
                             // of the precompiled header file. It's not needed for clang-tidy and currently the precompiled
                             // header won't be found at the specified location: we run the build that generates compile_commands.json
                             // in ConfigureOnly mode so the precompiled headers are not generated.
-                            else if (option.Contains("src/jit") && !option.StartsWith("/Fp"))
+                            else if (option.Contains("jit") && !option.StartsWith("/Fp"))
                             {
                                 compileCommand = compileCommand + " " + option;
                             }
@@ -627,7 +627,7 @@ namespace ManagedCodeGen
 
             if (filename.EndsWith(".cpp"))
             {
-                List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=src/jit/.*", "-p=" + compileCommands, filename };
+                List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=jit/.*", "-p=" + compileCommands, filename };
 
                 if (verbose)
                 {
