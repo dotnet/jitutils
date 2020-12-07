@@ -408,7 +408,7 @@ namespace ManagedCodeGen
             if (config.Filenames.Count() == 0)
             {
                 // add all files to a list of files
-                foreach (string filename in Directory.GetFiles(Path.Combine(config.CoreCLRRoot, "src", config.SourceDirectory)))
+                foreach (string filename in Directory.GetFiles(Path.Combine(config.CoreCLRRoot, config.SourceDirectory)))
                 {
                     // if it's not a directory, add it to our list
                     if (!Directory.Exists(filename) && (filename.EndsWith(".cpp") || filename.EndsWith(".h") || filename.EndsWith(".hpp")))
@@ -424,7 +424,7 @@ namespace ManagedCodeGen
                     string prefix = "";
                     if (!filename.Contains(config.CoreCLRRoot))
                     {
-                        prefix = Path.Combine(config.CoreCLRRoot, "src", config.SourceDirectory);
+                        prefix = Path.Combine(config.CoreCLRRoot, config.SourceDirectory);
                     }
 
                     if (File.Exists(Path.Combine(prefix, filename)))
