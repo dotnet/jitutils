@@ -239,8 +239,8 @@ namespace ManagedCodeGen
         public class ExtraAllocBytesMetric : Metric
         {
             public override string Name => "ExtraAllocBytes";
-            public override string DisplayName => "(Code Size - Allocation Size) bytes";
-            public override string Unit => "ratio";
+            public override string DisplayName => "Extra Allocation Size";
+            public override string Unit => "byte";
             public override bool LowerIsBetter => true;
             public override Metric Clone() => new ExtraAllocBytesMetric();
             public override string ValueString => $"{Value}";
