@@ -71,7 +71,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
-                    syntax.DefineOption("m|metric", ref _metric, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount, AllocSize, DebugClauseCount, DebugVarCount");
+                    syntax.DefineOption("m|metric", ref _metric, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount, AllocSize, ExtraAllocBytes, DebugClauseCount, DebugVarCount");
                     syntax.DefineOption("note", ref _note,
                         "Descriptive note to add to summary output");
                     syntax.DefineOption("noreconcile", ref _noreconcile,
@@ -236,6 +236,15 @@ namespace ManagedCodeGen
             public override string ValueString => $"{Value}";
         }
 
+        public class ExtraAllocBytesMetric : Metric
+        {
+            public override string Name => "ExtraAllocBytes";
+            public override string DisplayName => "(Code Size - Allocation Size) bytes";
+            public override string Unit => "ratio";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new ExtraAllocBytesMetric();
+            public override string ValueString => $"{Value}";
+        }
         public class DebugClauseMetric : Metric
         {
             public override string Name => "DebugClauseCount";
@@ -263,7 +272,7 @@ namespace ManagedCodeGen
 
             static MetricCollection()
             {
-                s_metrics = new Metric[] { new CodeSizeMetric(), new PrologSizeMetric(), new PerfScoreMetric(), new InstrCountMetric(), new AllocSizeMetric(), new DebugClauseMetric(), new DebugVarMetric() };
+                s_metrics = new Metric[] { new CodeSizeMetric(), new PrologSizeMetric(), new PerfScoreMetric(), new InstrCountMetric(), new AllocSizeMetric(), new ExtraAllocBytesMetric(), new DebugClauseMetric(), new DebugVarMetric() };
                 s_metricNameToIndex = new Dictionary<string, int>(s_metrics.Length);
 
                 for (int i = 0; i < s_metrics.Length; i++)
@@ -604,11 +613,16 @@ namespace ManagedCodeGen
                                                     .Select(z => z.functionOffset).ToList()
                                  };
 
-                                 mi.Metrics.Add("CodeSize", x.Sum(z => z.totalBytes));
+                                 int totalCodeSize = x.Sum(z => z.totalBytes);
+                                 int totalAllocSize = x.Sum(z => z.allocSize);
+                                 Debug.Assert(totalCodeSize <= totalAllocSize);
+
+                                 mi.Metrics.Add("CodeSize", totalCodeSize);
                                  mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
                                  mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
                                  mi.Metrics.Add("InstrCount", x.Sum(z => z.instrCount));
-                                 mi.Metrics.Add("AllocSize", x.Sum(z => z.allocSize));
+                                 mi.Metrics.Add("AllocSize", totalAllocSize);
+                                 mi.Metrics.Add("ExtraAllocBytes", totalAllocSize - totalCodeSize);
                                  mi.Metrics.Add("DebugClauseCount", x.Sum(z => z.debugClauseCount));
                                  mi.Metrics.Add("DebugVarCount", x.Sum(z => z.debugVarCount));
 
