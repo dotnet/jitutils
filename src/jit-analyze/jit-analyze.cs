@@ -38,6 +38,18 @@ namespace ManagedCodeGen
 
     public class jitanalyze
     {
+
+        private const string DETAILS_MARKER = "SUMMARY_MARKER";
+        private static string METRIC_SEP = new string('-', 80);
+        private const string DETAILS_TEXT =
+@"```
+<details>
+
+<summary>Detail diffs</summary>
+
+```
+";
+
         public class Config
         {
             private ArgumentSyntax _syntaxResult;
@@ -50,10 +62,11 @@ namespace ManagedCodeGen
             private int _count = 20;
             private string _json;
             private string _tsv;
+            private string _md;
             private bool _noreconcile = false;
             private string _note;
             private string _filter;
-            private string _metric;
+            private List<string> _metrics;
             private bool _skipTextDiff = false;
 
             public Config(string[] args)
@@ -71,7 +84,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
-                    syntax.DefineOption("m|metric", ref _metric, "Metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount, AllocSize, ExtraAllocBytes, DebugClauseCount, DebugVarCount");
+                    syntax.DefineOption("m|metrics", ref _metrics, (value) => value.Split(",").ToList(), "Comma-separated metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount, AllocSize, ExtraAllocBytes, DebugClauseCount, DebugVarCount");
                     syntax.DefineOption("note", ref _note,
                         "Descriptive note to add to summary output");
                     syntax.DefineOption("noreconcile", ref _noreconcile,
@@ -80,6 +93,8 @@ namespace ManagedCodeGen
                         "Dump analysis data to specified file in JSON format.");
                     syntax.DefineOption("tsv", ref _tsv,
                         "Dump analysis data to specified file in tab-separated format.");
+                    syntax.DefineOption("md", ref _md,
+                        "Dump analysis data to specified file in markdown format.");
                     syntax.DefineOption("filter", ref _filter,
                         "Only consider assembly files whose names match the filter");
                     syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
@@ -102,14 +117,17 @@ namespace ManagedCodeGen
                     _syntaxResult.ReportError("Diff path (--diff) is required.");
                 }
 
-                if (_metric == null)
+                if (_metrics == null)
                 {
-                    _metric = "CodeSize";
+                    _metrics = new List<string> { "CodeSize" };
                 }
 
-                if (!MetricCollection.ValidateMetric(_metric))
+                foreach (string metricName in _metrics)
                 {
-                    _syntaxResult.ReportError($"Unknown metric '{_metric}'. Available metrics: {MetricCollection.ListMetrics()}");
+                    if (!MetricCollection.ValidateMetric(metricName))
+                    {
+                        _syntaxResult.ReportError($"Unknown metric '{metricName}'. Available metrics: {MetricCollection.ListMetrics()}");
+                    }
                 }
             }
 
@@ -122,14 +140,16 @@ namespace ManagedCodeGen
             public int Count { get { return _count; } }
             public string TSVFileName { get { return _tsv; } }
             public string JsonFileName { get { return _json; } }
+            public string MarkdownFileName { get { return _md;  } }
             public bool DoGenerateJson { get { return _json != null; } }
             public bool DoGenerateTSV { get { return _tsv != null; } }
+            public bool DoGenerateMarkdown { get { return _md != null; } }
             public bool Reconcile { get { return !_noreconcile; } }
             public string Note { get { return _note; } }
 
             public string Filter {  get { return _filter; } }
 
-            public string Metric {  get { return _metric; } }
+            public List<string> Metrics {  get { return _metrics; } }
             public bool SkipTextDiff { get { return _skipTextDiff;  } }
         }
 
@@ -638,7 +658,7 @@ namespace ManagedCodeGen
         //
         // Todo: handle metrics where "higher is better"
         public static IEnumerable<FileDelta> Comparator(IEnumerable<FileInfo> baseInfo,
-            IEnumerable<FileInfo> diffInfo, Config config)
+            IEnumerable<FileInfo> diffInfo, Config config, string metricName)
         {
             MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
             return baseInfo.Join(diffInfo, b => b.path, d => d.path, (b, d) =>
@@ -652,7 +672,7 @@ namespace ManagedCodeGen
                             baseOffsets = x.functionOffsets,
                             diffOffsets = y.functionOffsets
                         })
-                        .OrderByDescending(r => r.deltaMetrics.GetMetric(config.Metric).Value);
+                        .OrderByDescending(r => r.deltaMetrics.GetMetric(metricName).Value);
 
                 FileDelta f = new FileDelta
                 {
@@ -664,7 +684,7 @@ namespace ManagedCodeGen
                     methodsInBoth = jointList.Count(),
                     methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer),
                     methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer),
-                    methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(config.Metric).Value != 0)
+                    methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(metricName).Value != 0)
                 };
 
                 if (config.Reconcile)
@@ -683,45 +703,49 @@ namespace ManagedCodeGen
         //     Top diffs by size across all files
         //     Top diffs by percentage size across all files
         //
-        public static int Summarize(IEnumerable<FileDelta> fileDeltaList, Config config)
+        public static (int, string) Summarize(IEnumerable<FileDelta> fileDeltaList, Config config, string metricName)
         {
+            StringBuilder summaryContents = new StringBuilder();
+
             var totalDeltaMetrics = fileDeltaList.Sum(x => x.deltaMetrics);
             var totalBaseMetrics = fileDeltaList.Sum(x => x.baseMetrics);
             var totalDiffMetrics = fileDeltaList.Sum(x => x.diffMetrics);
 
             if (config.Note != null)
             {
-                Console.WriteLine($"\n{config.Note}");
+                summaryContents.AppendLine($"\n{config.Note}");
             }
 
-            Metric totalBaseMetric = totalBaseMetrics.GetMetric(config.Metric);
-            Metric totalDiffMetric = totalDiffMetrics.GetMetric(config.Metric);
-            Metric totalDeltaMetric = totalDeltaMetrics.GetMetric(config.Metric);
-            string unitName = totalBaseMetrics.GetMetric(config.Metric).Unit;
-            string metricName = totalBaseMetrics.GetMetric(config.Metric).DisplayName;
+            Metric totalBaseMetric = totalBaseMetrics.GetMetric(metricName);
+            Metric totalDiffMetric = totalDiffMetrics.GetMetric(metricName);
+            Metric totalDeltaMetric = totalDeltaMetrics.GetMetric(metricName);
+            string unitName = totalBaseMetrics.GetMetric(metricName).Unit;
+            string metricDisplayName = totalBaseMetrics.GetMetric(metricName).DisplayName;
 
-            Console.Write($"\nSummary of {metricName} diffs:");
+            summaryContents.Append($"\nSummary of {metricDisplayName} diffs:");
             if (config.Filter != null)
             {
-                Console.Write($" (using filter '{config.Filter}')");
+                summaryContents.Append($" (using filter '{config.Filter}')");
             }
-            Console.WriteLine("\n({0} is better)\n", totalBaseMetric.LowerIsBetter ? "Lower" : "Higher");
+            summaryContents.AppendLine(string.Format("\n({0} is better)\n", totalBaseMetric.LowerIsBetter ? "Lower" : "Higher"));
 
             if (totalBaseMetric.Value != 0)
             {
-                Console.WriteLine("Total {0}s of base: {1}", unitName, totalBaseMetric.Value);
-                Console.WriteLine("Total {0}s of diff: {1}", unitName, totalDiffMetric.Value);
-                Console.WriteLine("Total {0}s of delta: {1} ({2:P} of base)", unitName, totalDeltaMetric.ValueString, totalDeltaMetric.Value / totalBaseMetric.Value);
+                summaryContents.AppendLine(string.Format("Total {0}s of base: {1}", unitName, totalBaseMetric.Value));
+                summaryContents.AppendLine(string.Format("Total {0}s of diff: {1}", unitName, totalDiffMetric.Value));
+                summaryContents.AppendLine(string.Format("Total {0}s of delta: {1} ({2:P} of base)", unitName, totalDeltaMetric.ValueString, totalDeltaMetric.Value / totalBaseMetric.Value));
             }
             else 
             {
-                Console.WriteLine("Warning: the base metric is 0, the diff metric is {0}, have you used a release version?", totalDiffMetrics.GetMetric(config.Metric).ValueString);
+                summaryContents.AppendLine(string.Format("Warning: the base metric is 0, the diff metric is {0}, have you used a release version?", totalDiffMetrics.GetMetric(metricName).ValueString));
             }
 
             if (totalDeltaMetric.Value != 0)
             {
-                Console.WriteLine("    diff is {0}", totalDeltaMetric.LowerIsBetter == (totalDeltaMetric.Value < 0) ? "an improvement." : "a regression.");
+                summaryContents.AppendLine(string.Format("    diff is {0}", totalDeltaMetric.LowerIsBetter == (totalDeltaMetric.Value < 0) ? "an improvement." : "a regression."));
             }
+
+            summaryContents.AppendLine(DETAILS_MARKER);
 
             if (config.Reconcile)
             {
@@ -734,24 +758,24 @@ namespace ManagedCodeGen
                 {
                     var reconciledBaseMetrics = fileDeltaList.Sum(x => x.reconciledBaseMetrics);
                     var reconciledDiffMetrics = fileDeltaList.Sum(x => x.reconciledDiffMetrics);
-                    Metric reconciledBaseMetric = reconciledBaseMetrics.GetMetric(config.Metric);
-                    Metric reconciledDiffMetric = reconciledDiffMetrics.GetMetric(config.Metric);
+                    Metric reconciledBaseMetric = reconciledBaseMetrics.GetMetric(metricName);
+                    Metric reconciledDiffMetric = reconciledDiffMetrics.GetMetric(metricName);
 
-                    Console.WriteLine("\nTotal {0} diff includes {1} {0}s from reconciling methods", unitName,
-                        reconciledDiffMetric.Value - reconciledBaseMetric.Value);
-                    Console.WriteLine("\tBase had {0,4} unique methods, {1,8} unique {2}s", uniqueToBase, reconciledBaseMetric.ValueString, unitName);
-                    Console.WriteLine("\tDiff had {0,4} unique methods, {1,8} unique {2}s", uniqueToDiff, reconciledDiffMetric.ValueString, unitName);
+                    summaryContents.AppendLine(string.Format("\nTotal {0} diff includes {1} {0}s from reconciling methods", unitName,
+                        reconciledDiffMetric.Value - reconciledBaseMetric.Value));
+                    summaryContents.AppendLine(string.Format("\tBase had {0,4} unique methods, {1,8} unique {2}s", uniqueToBase, reconciledBaseMetric.ValueString, unitName));
+                    summaryContents.AppendLine(string.Format("\tDiff had {0,4} unique methods, {1,8} unique {2}s", uniqueToDiff, reconciledDiffMetric.ValueString, unitName));
                 }
             }
 
             // Todo: handle higher is better metrics
             int requestedCount = config.Count;
             var sortedFileImprovements = fileDeltaList
-                                            .Where(x => x.deltaMetrics.GetMetric(config.Metric).Value < 0)
-                                            .OrderBy(d => d.deltaMetrics.GetMetric(config.Metric).Value).ToList();
+                                            .Where(x => x.deltaMetrics.GetMetric(metricName).Value < 0)
+                                            .OrderBy(d => d.deltaMetrics.GetMetric(metricName).Value).ToList();
             var sortedFileRegressions = fileDeltaList
-                                            .Where(x => x.deltaMetrics.GetMetric(config.Metric).Value > 0)
-                                            .OrderByDescending(d => d.deltaMetrics.GetMetric(config.Metric).Value).ToList();
+                                            .Where(x => x.deltaMetrics.GetMetric(metricName).Value > 0)
+                                            .OrderByDescending(d => d.deltaMetrics.GetMetric(metricName).Value).ToList();
             int fileImprovementCount = sortedFileImprovements.Count();
             int fileRegressionCount = sortedFileRegressions.Count();
             int sortedFileCount = fileImprovementCount + fileRegressionCount;
@@ -761,12 +785,12 @@ namespace ManagedCodeGen
             {
                 if (metricCount > 0)
                 {
-                    Console.WriteLine($"\n{headerText} ({unitName}s):");
+                    summaryContents.AppendLine($"\n{headerText} ({unitName}s):");
                     foreach (var fileDelta in list.Take(Math.Min(metricCount, requestedCount)))
                     {
-                        Console.WriteLine("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
-                            fileDelta.deltaMetrics.GetMetric(config.Metric).ValueString, 
-                            fileDelta.deltaMetrics.GetMetric(config.Metric).Value / fileDelta.baseMetrics.GetMetric(config.Metric).Value);
+                        summaryContents.AppendLine(string.Format("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
+                            fileDelta.deltaMetrics.GetMetric(metricName).ValueString,
+                            fileDelta.deltaMetrics.GetMetric(metricName).Value / fileDelta.baseMetrics.GetMetric(metricName).Value));
                     }
                 }
             }
@@ -774,17 +798,16 @@ namespace ManagedCodeGen
             DisplayFileMetric("Top file regressions", fileRegressionCount, sortedFileRegressions);
             DisplayFileMetric("Top file improvements", fileImprovementCount, sortedFileImprovements);
 
-            Console.WriteLine("\n{0} total files with {1} differences ({2} improved, {3} regressed), {4} unchanged.",
-                sortedFileCount, metricName, fileImprovementCount, fileRegressionCount, unchangedFileCount);
+            summaryContents.AppendLine($"\n{sortedFileCount} total files with {metricDisplayName} differences ({fileImprovementCount} improved, {fileRegressionCount} regressed), {unchangedFileCount} unchanged.");
 
             var methodDeltaList = fileDeltaList
                                         .SelectMany(fd => fd.methodDeltaList, (fd, md) => new
                                         {
                                             path = fd.basePath,
                                             name = md.name,
-                                            deltaMetric = md.deltaMetrics.GetMetric(config.Metric),
-                                            baseMetric = md.baseMetrics.GetMetric(config.Metric),
-                                            diffMetric = md.diffMetrics.GetMetric(config.Metric),
+                                            deltaMetric = md.deltaMetrics.GetMetric(metricName),
+                                            baseMetric = md.baseMetrics.GetMetric(metricName),
+                                            diffMetric = md.diffMetrics.GetMetric(metricName),
                                             baseCount = md.baseOffsets == null ? 0 : md.baseOffsets.Count(),
                                             diffCount = md.diffOffsets == null ? 0 : md.diffOffsets.Count()
                                         }).ToList();
@@ -810,24 +833,24 @@ namespace ManagedCodeGen
             {
                 if (methodCount > 0)
                 {
-                    Console.WriteLine($"\n{headerText} ({subtext}s):");
+                    summaryContents.AppendLine($"\n{headerText} ({subtext}s):");
                     foreach (var method in list.GetRange(0, Math.Min(methodCount, requestedCount)))
                     {
-                        Console.Write("    {2,8} ({3,6:P} of base) : {0} - {1}", method.path, method.name, method.deltaMetric.ValueString,
-                            method.deltaMetric.Value / method.baseMetric.Value);
+                        summaryContents.Append(string.Format("    {2,8} ({3,6:P} of base) : {0} - {1}", method.path, method.name, method.deltaMetric.ValueString,
+                            method.deltaMetric.Value / method.baseMetric.Value));
 
                         if (method.baseCount == method.diffCount)
                         {
                             if (method.baseCount > 1)
                             {
-                                Console.Write(" ({0} methods)", method.baseCount);
+                                summaryContents.Append($" ({method.baseCount} methods)");
                             }
                         }
                         else
                         {
-                            Console.Write(" ({0} base, {1} diff methods)", method.baseCount, method.diffCount);
+                            summaryContents.Append($" ({method.baseCount} base, {method.diffCount} diff methods)");
                         }
-                        Console.WriteLine();
+                        summaryContents.AppendLine();
                     }
                 }
             }
@@ -837,8 +860,7 @@ namespace ManagedCodeGen
             DisplayMethodMetric("Top method regressions", "percentage", methodRegressionCount, sortedMethodRegressionsByPercentage);
             DisplayMethodMetric("Top method improvements", "percentage", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
-            Console.WriteLine("\n{0} total methods with {1} differences ({2} improved, {3} regressed), {4} unchanged.",
-                sortedMethodCount, metricName, methodImprovementCount, methodRegressionCount, unchangedMethodCount);
+            summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed), {unchangedMethodCount} unchanged.");
 
             if (!config.SkipTextDiff)
             {
@@ -853,15 +875,15 @@ namespace ManagedCodeGen
                 int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
                 if (zeroDiffFilesWithDiffCount > 0)
                 {
-                    Console.WriteLine("\n{0} files had text diffs but no metric diffs.", zeroDiffFilesWithDiffCount);
+                    summaryContents.AppendLine($"\n{zeroDiffFilesWithDiffCount} files had text diffs but no metric diffs.");
                     foreach (var zerofile in zeroDiffFilesWithDiffs.Take(config.Count))
                     {
-                        Console.WriteLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                        summaryContents.AppendLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
                     }
                 }
             }
 
-            return Math.Abs(totalDeltaMetric.Value) == 0 ? 0 : -1;
+            return (Math.Abs(totalDeltaMetric.Value) == 0 ? 0 : -1, summaryContents.ToString());
         }
 
         public static void WarnFiles(IEnumerable<FileInfo> diffList, IEnumerable<FileInfo> baseList)
@@ -925,63 +947,70 @@ namespace ManagedCodeGen
             }
         }
 
-        public static void GenerateJson(IEnumerable<FileDelta> compareList, string path)
+        public static StringBuilder GenerateMarkdown(string summarizedReport)
         {
-            using (var outputStream = System.IO.File.Create(path))
-            {
-                using (var outputStreamWriter = new StreamWriter(outputStream))
-                {
-                    // Serialize file delta to output file.
-                    outputStreamWriter.Write(JsonConvert.SerializeObject(compareList.Where(file => !file.deltaMetrics.IsZero()), Formatting.Indented));
-                }
-            }
+            StringBuilder markdownBuilder = new StringBuilder();
+
+            markdownBuilder.AppendLine("```");
+            markdownBuilder.AppendLine(summarizedReport.Replace(DETAILS_MARKER, DETAILS_TEXT));
+            markdownBuilder.AppendLine("```");
+            markdownBuilder.AppendLine("");
+            markdownBuilder.AppendLine("</details>");
+
+            return markdownBuilder;
         }
 
-        public static void GenerateTSV(IEnumerable<FileDelta> compareList, string path)
+        public static StringBuilder GenerateJson(IEnumerable<FileDelta> compareList)
         {
-            using (var outputStream = System.IO.File.Create(path))
+            StringBuilder fileContents = new StringBuilder();
+
+            fileContents.AppendLine(JsonConvert.SerializeObject(compareList.Where(file => !file.deltaMetrics.IsZero()), Formatting.Indented));
+
+            return fileContents;
+        }
+
+        public static StringBuilder GenerateTSV(IEnumerable<FileDelta> compareList)
+        {
+            StringBuilder fileContents = new StringBuilder();
+
+            fileContents.Append($"File\tMethod");
+            foreach (Metric metric in MetricCollection.AllMetrics)
             {
-                using (var outputStreamWriter = new StreamWriter(outputStream))
+                fileContents.Append($"\tBase {metric.Name}\tDiff {metric.Name}\tDelta {metric.Name}\tPercentage {metric.Name}");
+            }
+            fileContents.AppendLine();
+
+            foreach (var file in compareList)
+            {
+                foreach (var method in file.methodDeltaList)
                 {
-                    outputStreamWriter.Write($"File\tMethod");
+                    // Method names often contain commas, so use tabs as field separators
+                    fileContents.Append($"{file.basePath}\t{method.name}\t");
+
                     foreach (Metric metric in MetricCollection.AllMetrics)
                     {
-                        outputStreamWriter.Write($"\tBase {metric.Name}\tDiff {metric.Name}\tDelta {metric.Name}\tPercentage {metric.Name}");
-                    }
-                    outputStreamWriter.WriteLine();
+                        // Metric Base Value
+                        fileContents.Append($"{method.baseMetrics.GetMetric(metric.Name).Value}\t");
 
-                    foreach (var file in compareList)
-                    {
-                        foreach (var method in file.methodDeltaList)
+                        // Metric Diff Value
+                        fileContents.Append($"{method.diffMetrics.GetMetric(metric.Name).Value}\t");
+
+                        // Metric Delta Value
+                        fileContents.Append($"{method.deltaMetrics.GetMetric(metric.Name).Value}\t");
+
+                        // Metric Delta Percentage of Base
+                        double deltaPercentage = 0.0;
+                        if (method.baseMetrics.GetMetric(metric.Name).Value != 0)
                         {
-                            // Method names often contain commas, so use tabs as field separators
-                            outputStreamWriter.Write($"{file.basePath}\t{method.name}\t");
-
-                            foreach (Metric metric in MetricCollection.AllMetrics)
-                            {
-                                // Metric Base Value
-                                outputStreamWriter.Write($"{method.baseMetrics.GetMetric(metric.Name).Value}\t");
-
-                                // Metric Diff Value
-                                outputStreamWriter.Write($"{method.diffMetrics.GetMetric(metric.Name).Value}\t");
-
-                                // Metric Delta Value
-                                outputStreamWriter.Write($"{method.deltaMetrics.GetMetric(metric.Name).Value}\t");
-
-                                // Metric Delta Percentage of Base
-                                double deltaPercentage = 0.0;
-                                if (method.baseMetrics.GetMetric(metric.Name).Value != 0)
-                                {
-                                    deltaPercentage = method.deltaMetrics.GetMetric(metric.Name).Value / method.baseMetrics.GetMetric(metric.Name).Value;
-                                }
-                                outputStreamWriter.Write($"{deltaPercentage}\t");
-                            }
-
-                            outputStreamWriter.WriteLine();
+                            deltaPercentage = method.deltaMetrics.GetMetric(metric.Name).Value / method.baseMetrics.GetMetric(metric.Name).Value;
                         }
+                        fileContents.Append($"{deltaPercentage}\t");
                     }
+
+                    fileContents.AppendLine();
                 }
             }
+            return fileContents;
         }
 
         // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
@@ -1084,7 +1113,7 @@ namespace ManagedCodeGen
         {
             // Parse incoming arguments
             Config config = new Config(args);
-
+            int retCode = 0;
             try
             {
                 // Extract method info from base and diff directory or file.
@@ -1096,7 +1125,40 @@ namespace ManagedCodeGen
                 // the other are used as the comparator function only compares where it 
                 // has both sides.
 
-                var compareList = Comparator(baseList, diffList, config);
+                IEnumerable<FileDelta> compareList = null;
+                StringBuilder tsvContents = new StringBuilder();
+                StringBuilder jsonContents = new StringBuilder();
+                StringBuilder markdownContents = new StringBuilder();
+
+                foreach (var metricName in config.Metrics)
+                {
+                    compareList = Comparator(baseList, diffList, config, metricName);
+
+                    if (config.DoGenerateTSV)
+                    {
+                        tsvContents.Append(GenerateTSV(compareList));
+                    }
+
+                    if (config.DoGenerateJson)
+                    {
+                        jsonContents.Append(GenerateJson(compareList));
+                    }
+
+                    var summarizedReport = Summarize(compareList, config, metricName);
+
+                    if (config.DoGenerateMarkdown)
+                    {
+                        markdownContents.Append(GenerateMarkdown(summarizedReport.Item2));
+                        markdownContents.AppendLine();
+                        markdownContents.AppendLine(METRIC_SEP);
+                        markdownContents.AppendLine();
+                    }
+
+                    retCode += summarizedReport.Item1;
+                    Console.WriteLine(summarizedReport.Item2.Replace(DETAILS_MARKER, string.Empty));
+                    Console.WriteLine(METRIC_SEP);
+                }
+
 
                 // Generate warning lists if requested.
                 if (config.Warn)
@@ -1105,17 +1167,22 @@ namespace ManagedCodeGen
                     WarnMethods(compareList);
                 }
 
-                if (config.DoGenerateTSV)
+                if (tsvContents.Length > 0)
                 {
-                    GenerateTSV(compareList, config.TSVFileName);
+                    File.WriteAllText(config.TSVFileName, tsvContents.ToString());
                 }
 
-                if (config.DoGenerateJson)
+                if (jsonContents.Length > 0)
                 {
-                    GenerateJson(compareList, config.JsonFileName);
+                    File.WriteAllText(config.JsonFileName, jsonContents.ToString());
                 }
 
-                return Summarize(compareList, config);
+                if (markdownContents.Length > 0)
+                {
+                    File.WriteAllText(config.MarkdownFileName, markdownContents.ToString());
+                }
+
+                return retCode;
             }
             catch (System.IO.DirectoryNotFoundException e)
             {
