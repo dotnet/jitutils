@@ -89,12 +89,12 @@ namespace ManagedCodeGen
             }
         }
 
-        private static string GetBuildOS(string platformMoniker)
+        private static string GetOSArtifactDirComponent(string platformMoniker)
         {
             switch (platformMoniker)
             {
                 case "Windows":
-                    return "Windows_NT";
+                    return "windows";
                 case "Linux":
                     return "Linux";
                 case "OSX":
@@ -103,6 +103,11 @@ namespace ManagedCodeGen
                     Console.Error.WriteLine("No platform mapping! (Platform moniker = {0})", platformMoniker);
                     return null;
             }
+        }
+
+        private static string GetConfigurationArtifactDir(string platformMoniker, string arch, string buildType)
+        {
+            return GetOSArtifactDirComponent(platformMoniker) + "." + arch + "." + buildType;
         }
 
         public class Config
@@ -407,9 +412,9 @@ namespace ManagedCodeGen
                     // --crossgen and --core_root need to be from the same build.
                     //
                     // E.g.:
-                    //    test_root: c:\gh\runtime\artifacts\tests\coreclr\Windows_NT.x64.Release
-                    //    Core_Root: c:\gh\runtime\artifacts\tests\coreclr\Windows_NT.x64.Release\Tests\Core_Root
-                    //    base/diff: c:\gh\runtime\artifacts\bin\coreclr\Windows_NT.x64.Checked
+                    //    test_root: c:\gh\runtime\artifacts\tests\coreclr\windows.x64.Release
+                    //    Core_Root: c:\gh\runtime\artifacts\tests\coreclr\windows.x64.Release\Tests\Core_Root
+                    //    base/diff: c:\gh\runtime\artifacts\bin\coreclr\windows.x64.Checked
 
                     List<string> archList;
                     List<string> buildList;
@@ -455,7 +460,7 @@ namespace ManagedCodeGen
 
                         foreach (var build in buildList)
                         {
-                            var buildDirName = GetBuildOS(PlatformMoniker) + "." + arch + "." + build;
+                            var buildDirName = GetConfigurationArtifactDir(PlatformMoniker, arch, build);
                             string tryBasePath = null, tryDiffPath = null;
 
                             if (needBasePath && (_baseRoot != null))
@@ -513,7 +518,7 @@ namespace ManagedCodeGen
 
                         foreach (var build in buildList)
                         {
-                            var buildDirName = GetBuildOS(PlatformMoniker) + "." + arch + "." + build;
+                            var buildDirName = GetConfigurationArtifactDir(PlatformMoniker, arch, build);
                             string tryPlatformPath = null, tryCrossgen = null, tryTestPath = null;
 
                             if (needCoreRoot && (_diffRoot != null))
@@ -759,11 +764,11 @@ namespace ManagedCodeGen
                     string[] diffExampleText = {
                     @"Examples:",
                     @"",
-                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\runtime\artifacts\tests\coreclr\Windows_NT.x64.Release\Tests\Core_Root --base c:\runtime_base\artifacts\bin\coreclr\Windows_NT.x64.Checked --diff c:\runtime\artifacts\bin\coreclr\Windows_NT.x86.Checked",
+                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\runtime\artifacts\tests\coreclr\windows.x64.Release\Tests\Core_Root --base c:\runtime_base\artifacts\bin\coreclr\windows.x64.Checked --diff c:\runtime\artifacts\bin\coreclr\windows.x86.Checked",
                     @"      Generate diffs of prejitted code for System.Private.CoreLib.dll by specifying baseline and",
                     @"      diff compiler directories explicitly.",
                     @"",
-                    @"  jit-diff diff --output c:\diffs --base c:\runtime_base\artifacts\bin\coreclr\Windows_NT.x64.Checked --diff",
+                    @"  jit-diff diff --output c:\diffs --base c:\runtime_base\artifacts\bin\coreclr\windows.x64.Checked --diff",
                     @"      If run within the c:\runtime git clone of dotnet/runtime, does the same",
                     @"      as the prevous example, using defaults.",
                     @"",
