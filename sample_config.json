@@ -1,12 +1,12 @@
 {
     "asmdiff" : {
         "default": {
-            "base": "e:\\gh\\coreclr2\\bin\\Product\\Windows_NT.x86.checked",
-            "diff": "c:\\gh\\coreclr\\bin\\Product\\Windows_NT.x86.checked",
+            "base": "e:\\gh\\coreclr2\\bin\\Product\\Windows.x86.checked",
+            "diff": "c:\\gh\\coreclr\\bin\\Product\\Windows.x86.checked",
             "frameworks": "true",
             "output": "c:\\diffs",
-            "core_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.checked\\Tests\\Core_Root",
-            "test_root": "c:\\gh\\coreclr\\bin\\tests\\Windows_NT.x86.Release"
+            "core_root": "c:\\gh\\coreclr\\bin\\tests\\Windows.x86.checked\\Tests\\Core_Root",
+            "test_root": "c:\\gh\\coreclr\\bin\\tests\\Windows.x86.Release"
         },
         "tools": [
             {
@@ -31,7 +31,7 @@
         "default": {
             "arch": "x64",
             "build": "Checked",
-            "os": "Windows_NT",
+            "os": "Windows",
             "coreclr": "C:\\gh\\coreclr",
             "verbose": "true",
             "fix": "true",

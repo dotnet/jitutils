@@ -199,12 +199,12 @@ The "jit-diff diff" command has this help message:
     
     Examples:
     
-      jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.Release\Tests\Core_Root --base c:\coreclr_base\bin\Product
-    \Windows_NT.x64.Checked --diff c:\coreclr\bin\Product\Windows_NT.x86.Checked
+      jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows.x64.Release\Tests\Core_Root --base c:\coreclr_base\bin\Product
+    \Windows.x64.Checked --diff c:\coreclr\bin\Product\Windows.x86.Checked
           Generate diffs of System.Private.CoreLib.dll by specifying baseline and
           diff compiler directories explicitly.
     
-      jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows_NT.x64.Checked --diff
+      jit-diff diff --output c:\diffs --base c:\coreclr_base\bin\Product\Windows.x64.Checked --diff
           If run within the c:\coreclr git clone of dotnet/coreclr, does the same
           as the prevous example, using defaults.
     
@@ -267,7 +267,7 @@ The tool needs to know:
 These can all be specified explicitly. For example:
 
 ```
-    c:\coreclr> jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows_NT.x64.release\Tests\Core_Root --base e:\coreclr2\bin\Product\Windows_NT.x64.checked --diff c:\coreclr\bin\Product\Windows_NT.x64.checked --crossgen c:\coreclr\bin\Product\Windows_NT.x64.release
+    c:\coreclr> jit-diff diff --output c:\diffs --corelib --core_root c:\coreclr\bin\tests\Windows.x64.release\Tests\Core_Root --base e:\coreclr2\bin\Product\Windows.x64.checked --diff c:\coreclr\bin\Product\Windows.x64.checked --crossgen c:\coreclr\bin\Product\Windows.x64.release
 ```
 
 Explanation:

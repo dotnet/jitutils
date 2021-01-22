@@ -52,7 +52,7 @@ Sample config.json:
     "default": {
       "arch": "x64",
       "build": "Checked",
-      "os": "Windows_NT",
+      "os": "Windows",
       "coreclr": "C:\\michelm\\coreclr",
       "verbose": "true",
       "fix": "true"
