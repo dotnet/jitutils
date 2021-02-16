@@ -1050,7 +1050,7 @@ class Worker
         }
 
         // Types we will use for instantiation attempts.
-        Type[] typesToTry = new Type[] { typeof(object), typeof(byte), typeof(short), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
+        Type[] typesToTry = new Type[] { typeof(object), typeof(byte), typeof(short), typeof(int), typeof(double), typeof(Vector<float>), typeof(long), typeof(int?) };
 
         // To keep things sane, we won't try and instantiate too many copies
         int instantiationLimit = genericArguments.Length * typesToTry.Length;
@@ -1142,7 +1142,7 @@ class Worker
         }
 
         // Types we will use for instantiation attempts.
-        Type[] typesToTry = new Type[] { typeof(object), typeof(byte), typeof(short), typeof(int), typeof(double), typeof(Vector<float>), typeof(long) };
+        Type[] typesToTry = new Type[] { typeof(object), typeof(byte), typeof(short), typeof(int), typeof(double), typeof(Vector<float>), typeof(long), typeof(int?) };
 
         // To keep things sane, we won't try and instantiate too many copies
         int instantiationLimit = genericArguments.Length * typesToTry.Length;
