@@ -352,7 +352,7 @@ namespace ManagedCodeGen
                     analysisArgs.Add("--count");
                     analysisArgs.Add(config.Count.ToString());
                     analysisArgs.Add("--recursive");
-                    analysisArgs.Add("--metric");
+                    analysisArgs.Add("--metrics");
                     analysisArgs.Add(config.Metric);
                     analysisArgs.Add("--note");
 
