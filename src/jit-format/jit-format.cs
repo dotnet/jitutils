@@ -85,7 +85,26 @@ namespace ManagedCodeGen
                     Console.WriteLine("Running: {0} {1}", "dotnet", String.Join(" ", commandArgs));
                 }
 
-                ProcessResult result = Utility.ExecuteProcess("dotnet", commandArgs, true);
+                // Running "dotnet" (the executable, not the .cmd/.sh wrapper script) when the current
+                // directory is within a runtime repo clone does not give us the information we want:
+                // it is missing the "OS Platform" and "RID" lines. So, pick some other directory that
+                // is expected to not be in a repo clone, and run the "dotnet" command from that directory.
+                string commandWorkingDirectory = "";
+                OperatingSystem os = Environment.OSVersion;
+                PlatformID pid = os.Platform;
+                switch (pid)
+                {
+                    case PlatformID.Win32NT:
+                        commandWorkingDirectory = Environment.SystemDirectory;
+                        break;
+                    case PlatformID.Unix:
+                        commandWorkingDirectory = "/"; // Use the root directory
+                        break;
+                    default:
+                        break;
+                }
+
+                ProcessResult result = Utility.ExecuteProcess("dotnet", commandArgs, true, commandWorkingDirectory);
 
                 if (result.ExitCode != 0)
                 {
@@ -224,7 +243,7 @@ namespace ManagedCodeGen
                                 Console.WriteLine("Neither compile_commands.json exists, nor is there a build log. Running CMake to generate compile_commands.json.");
                             }
 
-                            string[] commandArgs = { _arch, _build, "usenmakemakefiles" };
+                            string[] commandArgs = { _arch, _build, "-configureonly", "-ninja" };
                             string buildPath = Path.Combine(_rootPath, "build-runtime.cmd");
 
                             if (_verbose)
