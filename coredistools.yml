@@ -1,7 +1,7 @@
 pr:
   branches:
     include:
-    - master
+    - main
   paths:
     include:
     - eng/*
@@ -14,7 +14,7 @@ pr:
 trigger:
   branches:
     include:
-    - master
+    - main
   paths:
     include:
     - eng/*
