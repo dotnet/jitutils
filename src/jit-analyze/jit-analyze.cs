@@ -1055,9 +1055,6 @@ namespace ManagedCodeGen
                     return fileToTextDiffCount;
                 }
 
-                string fullBasePath = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar);
-                string fullDiffPath = Path.GetFullPath(diffPath).TrimEnd(Path.DirectorySeparatorChar);
-
                 for (int i = 0; i < rawLines.Length; i += 3)
                 {
                     string rawStats = rawLines[i];
@@ -1069,30 +1066,17 @@ namespace ManagedCodeGen
                     string parsedFullDiffFilePath = Path.GetFullPath(rawDiffPath);
                     string parsedFullBaseFilePath = Path.GetFullPath(rawBasePath);
 
-                    string parsedDiffDir = Path.GetDirectoryName(parsedFullDiffFilePath);
-                    string parsedBaseDir = Path.GetDirectoryName(parsedFullBaseFilePath);
-
-
                     if (!File.Exists(parsedFullBaseFilePath))
                     {
                         Console.WriteLine($"Error parsing path '{rawBasePath}'. `{parsedFullBaseFilePath}` doesn't exist.");
                         continue;
                     }
 
-                    if (parsedBaseDir != fullBasePath)
-                    {
-                        Console.WriteLine($"Error parsing path '{rawBasePath}'. `{parsedBaseDir}` and `{fullBasePath}` don't match.");
-                    }
 
                     if (!File.Exists(parsedFullDiffFilePath))
                     {
                         Console.WriteLine($"Error parsing path '{rawDiffPath}'. `{parsedFullDiffFilePath}` doesn't exist.");
                         continue;
-                    }
-
-                    if (parsedDiffDir != fullDiffPath)
-                    {
-                        Console.WriteLine($"Error parsing path '{rawDiffPath}'. `{parsedDiffDir}` and `{fullDiffPath}` don't match.");
                     }
 
                     // Sometimes .dasm is parsed as binary and we don't get numbers, just dashes
