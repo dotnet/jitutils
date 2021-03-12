@@ -1,12 +1,9 @@
 <Project>
-
-  <PropertyGroup Condition="!$(NETCoreSdkVersion.StartsWith('5'))">
-    <_UseNetCoreApp3>true</_UseNetCoreApp3>
-  </PropertyGroup>
-
   <PropertyGroup>
-    <TargetFramework Condition="$(_UseNetCoreApp3) == true">netcoreapp3.1</TargetFramework>
-    <TargetFramework Condition="$(_UseNetCoreApp3) != true">net5.0</TargetFramework>   
+    <!-- Target the oldest possible LTS framework version. This will allow   -->
+    <!-- using multiple versions of the runtime with the same managed        -->
+    <!-- executable.                                                         -->
+    <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
 </Project>
