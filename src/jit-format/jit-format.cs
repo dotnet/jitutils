@@ -231,6 +231,7 @@ namespace ManagedCodeGen
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
                     if (!_untidy && _compileCommands == null)
                     {
+                        // Check both the nmakeobj and obj paths for back-compat with the old Ninja/NMake output dir.
                         string[] nmakeObjCompileCommandsPathSegments = { _rootPath, "..", "..", "artifacts", "nmakeobj", _os + "." + _arch + "." + _build, "compile_commands.json" };
                         string[] compileCommandsPathSegments = { _rootPath, "..", "..", "artifacts", "obj", "coreclr", _os + "." + _arch + "." + _build, "compile_commands.json" };
                         string nmakeObjCompileCommands = Path.Combine(nmakeObjCompileCommandsPathSegments);
