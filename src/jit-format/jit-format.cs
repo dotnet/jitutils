@@ -231,11 +231,22 @@ namespace ManagedCodeGen
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
                     if (!_untidy && _compileCommands == null)
                     {
-                        string[] compileCommandsPath = { _rootPath, "..", "..", "artifacts", "nmakeobj", _os + "." + _arch + "." + _build, "compile_commands.json" };
-                        _compileCommands = Path.Combine(compileCommandsPath);
+                        // Check both the nmakeobj and obj paths for back-compat with the old Ninja/NMake output dir.
+                        string[] nmakeObjCompileCommandsPathSegments = { _rootPath, "..", "..", "artifacts", "nmakeobj", _os + "." + _arch + "." + _build, "compile_commands.json" };
+                        string[] compileCommandsPathSegments = { _rootPath, "..", "..", "artifacts", "obj", "coreclr", _os + "." + _arch + "." + _build, "compile_commands.json" };
+                        string nmakeObjCompileCommands = Path.Combine(nmakeObjCompileCommandsPathSegments);
+                        string compileCommandsPath = Path.Combine(compileCommandsPathSegments);
                         _rewriteCompileCommands = true;
 
-                        if (!File.Exists(_compileCommands))
+                        if (File.Exists(compileCommandsPath))
+                        {
+                            _compileCommands = compileCommandsPath;
+                        }
+                        else if (File.Exists(nmakeObjCompileCommands))
+                        {
+                            _compileCommands = nmakeObjCompileCommands;
+                        }
+                        else
                         {
                             // We haven't done a build, so we need to do one.
                             if (_verbose)
@@ -256,6 +267,20 @@ namespace ManagedCodeGen
                             if (result.ExitCode != 0)
                             {
                                 Console.WriteLine("There was an error running CMake to generate compile_commands.json. Please do a full build to generate a build log.");
+                                Environment.Exit(-1);
+                            }
+
+                            if (File.Exists(compileCommandsPath))
+                            {
+                                _compileCommands = compileCommandsPath;
+                            }
+                            else if (File.Exists(nmakeObjCompileCommands))
+                            {
+                                _compileCommands = nmakeObjCompileCommands;
+                            }
+                            else
+                            {
+                                Console.WriteLine("CMake ran successfully, but no compile_commmands.json was generated.");
                                 Environment.Exit(-1);
                             }
                         }
