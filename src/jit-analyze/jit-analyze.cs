@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using System.Text;
 using System.Runtime.CompilerServices;
+using System.Globalization;
 
 namespace ManagedCodeGen
 {
@@ -602,19 +603,19 @@ namespace ManagedCodeGen
                                      name = nameMatch.Groups[1].Value,
                                      // Use matched data or default to 0
                                      totalBytes = codeAndPrologSizeMatch.Success ?
-                                        Int32.Parse(codeAndPrologSizeMatch.Groups[1].Value) : 0,
+                                        int.Parse(codeAndPrologSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
                                      prologBytes = codeAndPrologSizeMatch.Success ?
-                                        Int32.Parse(codeAndPrologSizeMatch.Groups[2].Value) : 0,
+                                        int.Parse(codeAndPrologSizeMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
                                      perfScore = perfScoreMatch.Success ?
-                                        Double.Parse(perfScoreMatch.Groups[2].Value) : 0,
+                                        double.Parse(perfScoreMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
                                      instrCount = instrCountMatch.Success ?
-                                        Int32.Parse(instrCountMatch.Groups[1].Value) : 0,
+                                        int.Parse(instrCountMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
                                      allocSize = allocSizeMatch.Success ?
-                                        Int32.Parse(allocSizeMatch.Groups[1].Value) : 0,
+                                        int.Parse(allocSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
                                      debugClauseCount = debugInfoMatch.Success ?
-                                        Int32.Parse(debugInfoMatch.Groups[1].Value) : 0,
+                                        int.Parse(debugInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
                                      debugVarCount = debugInfoMatch.Success ?
-                                        Int32.Parse(debugInfoMatch.Groups[2].Value) : 0,
+                                        int.Parse(debugInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
                                      // Use function index only from non-data lines (the name line)
                                      functionOffset = codeAndPrologSizeMatch.Success ?
                                         0 : x.index
