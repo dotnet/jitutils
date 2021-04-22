@@ -769,8 +769,13 @@ namespace ManagedCodeGen
                 }
             }
 
-            // Todo: handle higher is better metrics
             int requestedCount = config.Count;
+            if (requestedCount == 0)
+            {
+                return (Math.Abs(totalDeltaMetric.Value) == 0 ? 0 : -1, summaryContents.ToString());
+            }
+
+            // Todo: handle higher is better metrics
             var sortedFileImprovements = fileDeltaList
                                             .Where(x => x.deltaMetrics.GetMetric(metricName).Value < 0)
                                             .OrderBy(d => d.deltaMetrics.GetMetric(metricName).Value).ToList();
