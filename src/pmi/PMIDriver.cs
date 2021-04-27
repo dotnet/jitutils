@@ -194,6 +194,11 @@ namespace PMIDriver
 
                 Console.WriteLine($"DRIVEALL: Invoking {driverName} {newCommandLine}");
 
+                foreach (var pair in pi.environment)
+                {
+                    Console.WriteLine($"    {pair.Key}={pair.Value}");
+                }
+
                 p.Start();
                 p.BeginErrorReadLine();
                 szOutput = p.StandardOutput.ReadToEnd();
