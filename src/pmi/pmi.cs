@@ -431,9 +431,10 @@ abstract class PrepareBase : CounterBase
 
     public abstract void AttemptMethod(Type type, MethodBase method);
 
-    protected TimeSpan PrepareMethod(Type type, MethodBase method)
+    protected bool TryPrepareMethod(Type type, MethodBase method, out TimeSpan elapsedFunc)
     {
-        TimeSpan elapsedFunc = TimeSpan.MinValue;
+        bool success = false;
+        elapsedFunc = TimeSpan.MinValue;
 
         try
         {
@@ -441,6 +442,7 @@ abstract class PrepareBase : CounterBase
             GC.WaitForPendingFinalizers();
             System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(method.MethodHandle);
             elapsedFunc = DateTime.Now - startFunc;
+            success = true;
         }
         catch (System.EntryPointNotFoundException)
         {
@@ -512,7 +514,7 @@ abstract class PrepareBase : CounterBase
             Console.WriteLine(e);
         }
 
-        return elapsedFunc;
+        return success;
     }
 
     protected string GetGenericArgumentsString(MethodBase method)
@@ -603,11 +605,11 @@ class PrepareAll : PrepareBase
                     Console.WriteLine($"PREPALL type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
                 }
 
-                TimeSpan elapsedFunc = PrepareMethod(type, method);
+                var succeeded = TryPrepareMethod(type, method, out TimeSpan elapsedFunc);
 
-                if (_verbose)
+                if (_verbose || !succeeded)
                 {
-                    Console.Write($"Completed method {type.FullName}::{method.Name}{genericArgString}");
+                    Console.Write($"{(succeeded ? "Completed" : "Failed")} type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
                     if (elapsedFunc != TimeSpan.MinValue)
                     {
                         Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
@@ -671,8 +673,10 @@ class PrepareOne : PrepareBase
             {
                 string genericArgString = GetGenericArgumentsString(method);
                 Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
-                TimeSpan elapsedFunc = PrepareMethod(type, method);
-                Console.Write($"Completed method {type.FullName}::{method.Name}{genericArgString}");
+
+                var succeeded = TryPrepareMethod(type, method, out TimeSpan elapsedFunc);
+                Console.Write($"{(succeeded ? "Completed" : "Failed")} type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
+
                 if (elapsedFunc != TimeSpan.MinValue)
                 {
                     Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
