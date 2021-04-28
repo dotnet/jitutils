@@ -16,7 +16,7 @@ where /q git.exe
 if %errorlevel% NEQ 0 echo Can't find git.exe! Please add to PATH&set __ExitCode=1&goto :script_exit
 
 set __root=%~dp0
-setlocal
+setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
 REM Are we already in the dotnet/jitutils repo? Or do we need to clone it? We look for build.cmd
 REM in the current directory (which is the directory this script was invoked from).
@@ -145,14 +145,38 @@ echo Tools can be found at http://llvm.org/releases/download.html#3.8.0
 :: Download clang-format and clang-tidy
 echo Downloading formatting tools
 
-call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" -OutFile bin\clang-format.exe
-if errorlevel 1 echo ERROR: failed to download clang-format.&set __ExitCode=1&goto :eof
+call :download_url clang-format "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" bin\clang-format.exe
+if %__ExitCode% NEQ 0 goto :eof
 
-call powershell Invoke-WebRequest -Uri "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" -OutFile bin\clang-tidy.exe
-if errorlevel 1 echo ERROR: failed to download clang-tidy.&set __ExitCode=1&goto :eof
+call :download_url clang-tidy "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" bin\clang-tidy.exe
+if %__ExitCode% NEQ 0 goto :eof
 
 :build_done
 goto :eof
+
+REM ===================================================================
+REM Download helper, with retry on failure. Args:
+REM %1 - friendly name of download
+REM %2 - URL to download
+REM %3 - target of download
+REM
+REM We'd like to use Invoke-WebRequest `-MaximumRetryCount 8 -RetryIntervalSec 15`, but those aren't
+REM available on all versions of PowerShell.
+:download_url
+set _friendly_name=%1
+set _url=%2
+set _target_file=%3
+set _retry_count=1
+:start_download
+echo call powershell Invoke-WebRequest -Uri %_url% -OutFile %_target_file%
+call powershell Invoke-WebRequest -Uri %_url% -OutFile %_target_file%
+if %errorlevel% EQU 0 goto :eof
+echo ERROR: attempt #%_retry_count% failed to download %_friendly_name%.
+if %_retry_count% GEQ 4 echo ERROR: giving up attempting to download %_friendly_name%.&set __ExitCode=1&goto :eof
+echo Waiting 15 seconds to retry...
+powershell -command "Start-Sleep -Seconds 15"
+set /A _retry_count=_retry_count + 1
+goto start_download
 
 REM ===================================================================
 :script_exit
