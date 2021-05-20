@@ -436,82 +436,100 @@ abstract class PrepareBase : CounterBase
         bool success = false;
         elapsedFunc = TimeSpan.MinValue;
 
-        try
+        string methodToDisasm = Environment.GetEnvironmentVariable("COMPlus_JitDisasm");
+
+        bool useEnv = methodToDisasm != null;
+        ReadOnlySpan<char> methodName = null;
+
+        if (useEnv)
         {
-            DateTime startFunc = DateTime.Now;
-            GC.WaitForPendingFinalizers();
-            System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(method.MethodHandle);
-            elapsedFunc = DateTime.Now - startFunc;
-            success = true;
+            int methodNameStart = methodToDisasm.IndexOf(':') + 1;
+            ReadOnlySpan<char> splitStr = methodToDisasm.AsSpan(methodNameStart);
+
+            int endofMethodNameStart = splitStr.IndexOf('(');
+
+            methodName = splitStr.Slice(0, endofMethodNameStart);
         }
-        catch (System.EntryPointNotFoundException)
+
+        if (!useEnv || (methodName.CompareTo(method.Name.AsSpan(), StringComparison.OrdinalIgnoreCase) == 0 && methodToDisasm.IndexOf(method.DeclaringType.Name) != -1))
         {
-            Console.WriteLine();
-            Console.WriteLine($"EntryPointNotFoundException {type.FullName}::{method.Name}");
-        }
-        catch (System.BadImageFormatException)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"BadImageFormatException {type.FullName}::{method.Name}");
-        }
-        catch (System.MissingMethodException)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"MissingMethodException {type.FullName}::{method.Name}");
-        }
-        catch (System.ArgumentException e)
-        {
-            Console.WriteLine();
-            string msg = e.Message.Split(new char[] { '\r', '\n' })[0];
-            Console.WriteLine($"ArgumentException {type.FullName}::{method.Name} {msg}");
-        }
-        catch (System.IO.FileNotFoundException eFileNotFound)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"FileNotFoundException {type.FullName}::{method.Name}" +
-                $" - {eFileNotFound.FileName} ({eFileNotFound.Message})");
-        }
-        catch (System.DllNotFoundException eDllNotFound)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"DllNotFoundException {type.FullName}::{method.Name} ({eDllNotFound.Message})");
-        }
-        catch (System.TypeInitializationException eTypeInitialization)
-        {
-            Console.WriteLine();
-            Console.WriteLine("TypeInitializationException {type.FullName}::{method.Name}" +
-                $"{eTypeInitialization.TypeName} ({eTypeInitialization.Message})");
-        }
-        catch (System.Runtime.InteropServices.MarshalDirectiveException)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"MarshalDirectiveException {type.FullName}::{method.Name}");
-        }
-        catch (System.TypeLoadException)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"TypeLoadException {type.FullName}::{method.Name}");
-        }
-        catch (System.OverflowException)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"OverflowException {type.FullName}::{method.Name}");
-        }
-        catch (System.InvalidProgramException)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"InvalidProgramException {type.FullName}::{method.Name}");
-        }
-        catch (System.InvalidOperationException)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"InvalidOperationException {type.FullName}::{method.Name}");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine();
-            Console.WriteLine($"Unknown exception {type.FullName}::{method.Name}");
-            Console.WriteLine(e);
+            try
+            {
+                DateTime startFunc = DateTime.Now;
+                GC.WaitForPendingFinalizers();
+                System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(method.MethodHandle);
+                elapsedFunc = DateTime.Now - startFunc;
+                success = true;
+            }
+            catch (System.EntryPointNotFoundException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"EntryPointNotFoundException {type.FullName}::{method.Name}");
+            }
+            catch (System.BadImageFormatException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"BadImageFormatException {type.FullName}::{method.Name}");
+            }
+            catch (System.MissingMethodException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"MissingMethodException {type.FullName}::{method.Name}");
+            }
+            catch (System.ArgumentException e)
+            {
+                Console.WriteLine();
+                string msg = e.Message.Split(new char[] { '\r', '\n' })[0];
+                Console.WriteLine($"ArgumentException {type.FullName}::{method.Name} {msg}");
+            }
+            catch (System.IO.FileNotFoundException eFileNotFound)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"FileNotFoundException {type.FullName}::{method.Name}" +
+                    $" - {eFileNotFound.FileName} ({eFileNotFound.Message})");
+            }
+            catch (System.DllNotFoundException eDllNotFound)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"DllNotFoundException {type.FullName}::{method.Name} ({eDllNotFound.Message})");
+            }
+            catch (System.TypeInitializationException eTypeInitialization)
+            {
+                Console.WriteLine();
+                Console.WriteLine("TypeInitializationException {type.FullName}::{method.Name}" +
+                    $"{eTypeInitialization.TypeName} ({eTypeInitialization.Message})");
+            }
+            catch (System.Runtime.InteropServices.MarshalDirectiveException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"MarshalDirectiveException {type.FullName}::{method.Name}");
+            }
+            catch (System.TypeLoadException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"TypeLoadException {type.FullName}::{method.Name}");
+            }
+            catch (System.OverflowException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"OverflowException {type.FullName}::{method.Name}");
+            }
+            catch (System.InvalidProgramException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"InvalidProgramException {type.FullName}::{method.Name}");
+            }
+            catch (System.InvalidOperationException)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"InvalidOperationException {type.FullName}::{method.Name}");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"Unknown exception {type.FullName}::{method.Name}");
+                Console.WriteLine(e);
+            }
         }
 
         return success;
@@ -997,10 +1015,17 @@ class Worker
             }
         }
 
+        string methodToDisasm = Environment.GetEnvironmentVariable("COMPlus_JitDisasm");
+
         if (keepGoing)
         {
             foreach (MethodBase methodBase in methods)
             {
+                if (methodToDisasm != null && methodToDisasm.IndexOf(methodBase.DeclaringType.Name) == -1)
+                {
+                    continue;
+                }
+                
                 if (methodBase == cctor)
                 {
                     continue;
