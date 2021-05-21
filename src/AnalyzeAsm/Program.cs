@@ -114,7 +114,7 @@ namespace AnalyzeAsm
             }
             result.AppendLine($"Processed {totalMethods} methods. Found {foundMethods} methods containing {totalTestGroups} groups.");
 
-            WriteResults(@"E:\perfinvestigation\52297\binaries\dasm\dasmset_1\jb.txt", result.ToString());
+            WriteResults(@"E:\perfinvestigation\52297\binaries\dasm\dasmset_1\je_jne_lea.txt", result.ToString());
             
 
             watch.Stop();
@@ -1939,17 +1939,17 @@ namespace AnalyzeAsm
              */
             var testRegex = new Regex(@"test     (\w+), (\w+)");
 
-            //var aluRegex = new Regex(@"(add|and|dec|inc|lsl|neg|or|sal|sar|shl|shr|sbb|sub|xor)      (\w+),?");
-            //List<string> ops = new List<string>()
-            //{
-            //    " je ", " jne ", " jz ", "jnz "
-            //};
-
-            var aluRegex = new Regex(@"(add|btr|btc|bts|imul|mul|rol|ror|sal|sar|shl|shr|sbb|sub|xor)      (\w+),?");
+            var aluRegex = new Regex(@"(add|and|dec|inc|lsl|lea|neg|or|sal|sar|shl|shr|sbb|sub|xor)      (\w+),?");
             List<string> ops = new List<string>()
             {
-                " jb ", " jnb ", " jae ", "jnae "
+                " je ", " jne ", " jz ", "jnz "
             };
+
+            //var aluRegex = new Regex(@"(add|btr|btc|bts|imul|mul|rol|ror|sal|sar|shl|shr|sbb|sub|xor)      (\w+),?");
+            //List<string> ops = new List<string>()
+            //{
+            //    " jb ", " jnb ", " jae ", "jnae "
+            //};
 
             bool foundRedundantTest = false;
             string header = "";
