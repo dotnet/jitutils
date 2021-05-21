@@ -1925,7 +1925,8 @@ namespace AnalyzeAsm
         }
 
         /// <summary>
-        /// Summarizes "ldr wzr
+        /// Find redundant test instructions that can be deleted because the previous instruction already
+        /// wrote to EFLAGS and the next instruction can read that flag.
         /// </summary>
         static StringBuilder FindRedundantTest(string inputFile, ref int totalMethods, ref int foundMethods, ref int totalTestGroups)
         {
