@@ -97,13 +97,25 @@ namespace AnalyzeAsm
             //RedundantMovs2($@"{workingFolder}\redundant-mov-2.asm");
             //RedundantMovs3($@"{workingFolder}\redundant-mov-3.asm");
             //PrintAssembly(armFile, "System.Linq.Expressions.Interpreter.ActionCallInstruction:Run(System.Linq.Expressions.Interpreter.InterpretedFrame):int:this");
-            PrintAssembly();
+            //PrintAssembly();
             // No index
             //var dasmFiles = Directory.GetFiles(armFolderForJit, "*.dasm", SearchOption.TopDirectoryOnly);
             //foreach (var dasmFile in dasmFiles)
             //{
             //    PrintAssembly(dasmFile, "System.Linq.Expressions.Interpreter.ActionCallInstruction:Run(System.Linq.Expressions.Interpreter.InterpretedFrame):int:this");
             //}
+            var dasmFiles = Directory.GetFiles(@"E:\perfinvestigation\52297\binaries\dasm\dasmset_1\base", "*.dasm", SearchOption.TopDirectoryOnly);
+            StringBuilder result = new StringBuilder();
+            int totalMethods = 0, totalTestGroups = 0, foundMethods = 0;
+            foreach (var dasmFile in dasmFiles)
+            {
+                Console.WriteLine($"Processing {dasmFile}");
+                result.Append(FindRedundantTest(dasmFile, ref totalMethods, ref foundMethods, ref totalTestGroups));
+            }
+            result.AppendLine($"Processed {totalMethods} methods. Found {foundMethods} methods containing {totalTestGroups} groups.");
+
+            WriteResults(@"E:\perfinvestigation\52297\binaries\dasm\dasmset_1\jb.txt", result.ToString());
+            
 
             watch.Stop();
             Console.WriteLine($"Hello World! took {watch.Elapsed.TotalSeconds} secs.");
@@ -1912,6 +1924,124 @@ namespace AnalyzeAsm
             WriteResults(outputFile, resultBuilder.ToString());
         }
 
+        /// <summary>
+        /// Summarizes "ldr wzr
+        /// </summary>
+        static StringBuilder FindRedundantTest(string inputFile, ref int totalMethods, ref int foundMethods, ref int totalTestGroups)
+        {
+
+            /* JE/JNE checks for ZF
+             * Below instructions modify ZF
+             * add, and, dec, inc, lsl, neg, or, sal, sar, shl, shr, sbb, sub, xor
+             * 
+             * 
+             */
+            var testRegex = new Regex(@"test     (\w+), (\w+)");
+
+            //var aluRegex = new Regex(@"(add|and|dec|inc|lsl|neg|or|sal|sar|shl|shr|sbb|sub|xor)      (\w+),?");
+            //List<string> ops = new List<string>()
+            //{
+            //    " je ", " jne ", " jz ", "jnz "
+            //};
+
+            var aluRegex = new Regex(@"(add|btr|btc|bts|imul|mul|rol|ror|sal|sar|shl|shr|sbb|sub|xor)      (\w+),?");
+            List<string> ops = new List<string>()
+            {
+                " jb ", " jnb ", " jae ", "jnae "
+            };
+
+            bool foundRedundantTest = false;
+            string header = "";
+
+            string aluLine = "";
+            string testLine = "";
+
+            int localLineNum = 0;
+            StringBuilder resultBuilder = new StringBuilder();
+
+            int methodsInFile = 0;
+            int foundInFile = 0;
+            int totalGroupInFile = 0;
+
+            using (FileStream fs = File.Open(inputFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string line;
+                int lineNum = 1;
+                StringBuilder strBuilder = new StringBuilder();
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (line.StartsWith("; Assembly listing for method"))
+                    {
+                        if (foundRedundantTest)
+                        {
+                            foundMethods++;
+                            foundInFile++;
+                            //header = $"[{headerLine,-10}][{movGroup,2} groups]  {header}";
+                            resultBuilder.AppendLine("####################################################################################");
+                            resultBuilder.AppendLine(header);
+                            resultBuilder.AppendLine(strBuilder.ToString());
+                        }
+
+                        strBuilder.Clear();
+                        foundRedundantTest = false;
+
+                        //header = line.Replace("; Assembly listing for method ", "");
+                        header = line;
+                        localLineNum = 1;
+                        totalMethods++;
+                        methodsInFile++;
+                    }
+                    if (ops.Any(op => line.Contains(op)))
+                    {
+                        var testMatch = testRegex.Match(testLine);
+                        if (testMatch.Success)
+                        {
+                            string currentDstReg = testMatch.Groups[1].Value;
+                            string currentSrcReg = testMatch.Groups[2].Value;
+
+                            // Make sure current source and dst are same.
+                            if (currentSrcReg == currentDstReg)
+                            {
+                                // there was a previous alu instruction that has given register as dst
+                                var aluMatch = aluRegex.Match(aluLine);
+                                if (aluMatch.Success)
+                                {
+                                    string dstReg = aluMatch.Groups[2].Value;
+                                    if (dstReg == currentSrcReg)
+                                    {
+                                        strBuilder.AppendLine($"[{localLineNum - 2:0000}]{aluLine}");
+                                        strBuilder.AppendLine($"[{localLineNum - 1:0000}]{testLine}");
+                                        strBuilder.AppendLine($"[{localLineNum:0000}]{line}");
+                                        strBuilder.AppendLine("...................................................");
+                                        totalTestGroups++;
+                                        totalGroupInFile++;
+                                        foundRedundantTest = true;
+                                    }
+                                }
+
+                            }
+
+                        }
+                    }
+                    aluLine = testLine;
+                    testLine = line;
+
+                    lineNum++;
+                    localLineNum++;
+                }
+            }
+
+            if (totalGroupInFile > 0)
+            {
+                resultBuilder.AppendLine($"Processed {methodsInFile} methods in '{Path.GetFileName(inputFile)}'. Found {foundInFile} methods containing {totalGroupInFile} groups.");
+            }
+
+            //WriteResults(outputFile, resultBuilder.ToString());
+            return resultBuilder;
+        }
+
         private static void WriteResults(string fileName, string contents)
         {
             // So we don't accidently write to input files
@@ -1919,6 +2049,7 @@ namespace AnalyzeAsm
             {
                 throw new Exception("Can't write to input files.");
             }
+
             File.WriteAllText(fileName, contents);
         }
     }
