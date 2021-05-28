@@ -175,19 +175,47 @@ namespace PMIDriver
                     p.StartInfo.EnvironmentVariables[pair.Key] = pair.Value;
                 }
 
+                Process thisProcess = Process.GetCurrentProcess();
+                string driverName = thisProcess.MainModule.FileName;
+
                 // Fetch our command line. Split off the arguments.
 #if NETCOREAPP
                 // For .Net Core the PMI assembly is an argument to dotnet.
-                string newCommandLine = Environment.CommandLine.Replace("DRIVEALL", "PREPALL");
+                string newCommandLine = Environment.CommandLine.Replace("DRIVEALL", "PREPALL", StringComparison.OrdinalIgnoreCase);
+
+                // If PMI is invoked as one of:
+                // 1. dotnet.exe pmi.dll DriveAll ...
+                //    (this is how the wrapper script `pmi.bat` invokes it)
+                // 2. corerun.exe pmi.dll DriveAll ...
+                // Then `driverName` will be either `dotnet.exe` or `corerun.exe` and the first argument in `newCommandLine` will be
+                // `pmi.dll`.
+                // 
+                // However, if PMI is invoked as:
+                // 3. pmi.exe DriveAll ...
+                // Then `driverName` will be `pmi.exe`, but the first argument of `newCommandLine` will still contain pmi.dll! We need
+                // to remove this pmi.dll from the command line we will spawn, as `pmi.exe` won't know what to do with it. (We could
+                // alternatively let the PMI arg parser skip an initial "pmi.dll" argument.)
+
+                if (driverName.EndsWith("pmi.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Simple parsing: assume no spaces in pmi.dll pathname.
+                    int firstSpace = newCommandLine.IndexOf(' ');
+                    if (firstSpace > 0)
+                    {
+                        string firstArg = newCommandLine.Substring(0, firstSpace);
+                        if (firstArg.EndsWith("pmi.dll", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Ok, we found the case. Remove the `pmi.dll` argument.
+                            newCommandLine = newCommandLine.Substring(firstSpace + 1);
+                        }
+                    }
+                }
 #else
                 // For .Net Framework the OS knows how to bootstrap .Net when
                 // passed the PMI assembly as an executable.
                 string newCommandLine = "PREPALL \"" + pi.assemblyName + "\"";
 #endif
                 newCommandLine += " " + pi.methodToPrep;
-
-                Process thisProcess = Process.GetCurrentProcess();
-                string driverName = thisProcess.MainModule.FileName;
 
                 p.StartInfo.FileName = driverName;
                 p.StartInfo.Arguments = newCommandLine;

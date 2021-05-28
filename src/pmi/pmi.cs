@@ -559,7 +559,7 @@ class PrepareAll : PrepareBase
         base.StartAssembly(assembly, assemblyPath);
         if (_verbose)
         {
-            Console.WriteLine($"Prepall for {assemblyName}");
+            Console.WriteLine($"PrepAll for {assemblyName}");
         }
         string assemblyPathAsFile = Util.MapPathToFileName(assemblyPath);
         pmiFullLogFileName = $"{assemblyPathAsFile}.pmi";
@@ -652,7 +652,10 @@ class PrepareOne : PrepareBase
     public override void StartAssembly(Assembly assembly, string assemblyPath)
     {
         base.StartAssembly(assembly, assemblyPath);
-        Console.WriteLine($"Prepone for {assemblyName} method {firstMethod} ");
+        if (_verbose)
+        {
+            Console.WriteLine($"PrepOne for {assemblyName} method {firstMethod} ");
+        }
     }
 
     public override void AttemptMethod(Type type, MethodBase method)
@@ -663,27 +666,40 @@ class PrepareOne : PrepareBase
 
             if (method.IsAbstract)
             {
-                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (abstract)");
+                if (_verbose)
+                {
+                    Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (abstract)");
+                }
             }
             else if (method.ContainsGenericParameters)
             {
-                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (generic parameters)");
+                if (_verbose)
+                {
+                    Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name} - skipping (generic parameters)");
+                }
             }
             else
             {
                 string genericArgString = GetGenericArgumentsString(method);
-                Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
+
+                if (_verbose)
+                {
+                    Console.WriteLine($"PREPONE type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
+                }
 
                 var succeeded = TryPrepareMethod(type, method, out TimeSpan elapsedFunc);
-                Console.Write($"{(succeeded ? "Completed" : "Failed")} type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
 
-                if (elapsedFunc != TimeSpan.MinValue)
+                if (_verbose || !succeeded)
                 {
-                    Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
-                }
-                else
-                {
-                    Console.WriteLine();
+                    Console.Write($"{(succeeded ? "Completed" : "Failed")} type# {typeCount} method# {methodCount} {type.FullName}::{method.Name}{genericArgString}");
+                    if (elapsedFunc != TimeSpan.MinValue)
+                    {
+                        Console.WriteLine($", elapsed ms: {elapsedFunc.TotalMilliseconds:F2}");
+                    }
+                    else
+                    {
+                        Console.WriteLine();
+                    }
                 }
             }
         }
@@ -741,7 +757,7 @@ class Worker
         Assembly result = null;
 
         // The core library needs special handling as it often is in fragile ngen format
-        if (assemblyPath.EndsWith("System.Private.CoreLib.dll") || assemblyPath.EndsWith("mscorlib.dll"))
+        if (assemblyPath.EndsWith("System.Private.CoreLib.dll", StringComparison.OrdinalIgnoreCase) || assemblyPath.EndsWith("mscorlib.dll", StringComparison.OrdinalIgnoreCase))
         {
             result = typeof(object).Assembly;
         }
@@ -1327,8 +1343,8 @@ class PrepareMethodinator
             + "  " + exeName + " Count PATH_TO_ASSEMBLY\n"
             + "      Count the number of types and methods in an assembly.\n"
             + "\n"
-            + "  " + exeName + " PrepOne PATH_TO_ASSEMBLY INDEX_OF_TARGET_METHOD\n"
-            + "      JIT a single method, specified by a method number.\n"
+            + "  " + exeName + " PrepOne PATH_TO_ASSEMBLY [INDEX_OF_TARGET_METHOD]\n"
+            + "      JIT a single method, specified by a method number (default: method zero).\n"
             + "\n"
             + "  " + exeName + " PrepAll PATH_TO_ASSEMBLY [INDEX_OF_FIRST_METHOD_TO_PROCESS]\n"
             + "      JIT all the methods in an assembly. If INDEX_OF_FIRST_METHOD_TO_PROCESS is specified, it is the first\n"
@@ -1340,15 +1356,16 @@ class PrepareMethodinator
             + "\n"
             + "Optional suffixes on the command will change behavior:\n"
             + "   -CCtors will jit and run cctors before jitting other methods\n"
-            + "   -Quiet will suppress in-progress messages for type and method exploration\n"
+            + "   -Quiet will suppress progress messages for type and method exploration\n"
             + "   -Time will always show elapsed times, even in -Quiet mode\n"
+            + "   -Tailcalls will log JIT tailcall decisions\n"
+            + "   -Inlines will log JIT inlining decisions\n"
             + "\n"
-            + "    for example: " + exeName + " PrepAll-Quiet-Time PATH_TO_ASSEMBLY\n"
+            + "   For example: " + exeName + " PrepAll-Quiet-Time PATH_TO_ASSEMBLY\n"
             + "\n"
             + "Environment variable PMIPATH is a semicolon-separated list of paths used to find dependent assemblies.\n"
-            + "Environment variable PMIENV is a semicolon-separated list of name=value pairs used to set the environment"
-            + "    when running pmi in a subprocess. This only affects DRIVEALL mode.\n"
-            + "   "
+            + "Environment variable PMIENV is a semicolon-separated list of name=value pairs used to set the environment\n"
+            + "   when running pmi in a subprocess. This only affects DRIVEALL mode.\n"
 #if NETCOREAPP
             + "\n"
             + "PATH_TO_ASSEMBLY can optionally be a directory; if so the tool will process all .exe and .dll files\n"
@@ -1393,7 +1410,7 @@ class PrepareMethodinator
 
         int dashIndex = command.IndexOf('-');
         string rootCommand = dashIndex < 0 ? command : command.Substring(0, dashIndex);
-        bool verbose = !(command.IndexOf("QUIET") > 0);
+        bool verbose = !(command.IndexOf("-QUIET") > 0);
         switch (rootCommand)
         {
             case "DRIVEALL":
@@ -1434,6 +1451,7 @@ class PrepareMethodinator
                     return PMIDriver.PMIDriver.Drive(assemblyName, verbose, environment);
                 }
 
+                // Handle COUNT command here.
                 v = new Counter();
                 break;
 
@@ -1461,10 +1479,9 @@ class PrepareMethodinator
                     }
                 }
 
-                bool all = command.IndexOf("ALL") > 0;
-                bool time = verbose || command.IndexOf("TIME") > 0;
+                bool time = verbose || command.IndexOf("-TIME") > 0;
 
-                if (all)
+                if (rootCommand == "PREPALL")
                 {
                     v = new PrepareAll(methodToPrep, verbose, time);
                 }
@@ -1479,9 +1496,9 @@ class PrepareMethodinator
                 return Usage();
         }
 
-        bool runCctors = command.IndexOf("CCTORS") > 0;
-        bool logTailCallDecisions = command.IndexOf("TAILCALLS") > 0;
-        bool logInliningDecisions = command.IndexOf("INLINES") > 0;
+        bool runCctors = command.IndexOf("-CCTORS") > 0;
+        bool logTailCallDecisions = command.IndexOf("-TAILCALLS") > 0;
+        bool logInliningDecisions = command.IndexOf("-INLINES") > 0;
 
         if (logTailCallDecisions)
         {
