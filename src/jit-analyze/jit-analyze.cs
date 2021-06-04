@@ -158,6 +158,10 @@ namespace ManagedCodeGen
         {
             public string path;
             public IEnumerable<MethodInfo> methodList;
+            public override string ToString()
+            {
+                return path;
+            }
         }
 
         // Custom comparer for the FileInfo class
@@ -204,6 +208,11 @@ namespace ManagedCodeGen
             public void SetValueFrom(Metric m)
             {
                 Value = m.Value;
+            }
+
+            public override string ToString()
+            {
+                return Name;
             }
         }
 
@@ -541,6 +550,11 @@ namespace ManagedCodeGen
             }
             public IEnumerable<int> baseOffsets;
             public IEnumerable<int> diffOffsets;
+
+            public override string ToString()
+            {
+                return name;
+            }
         }
 
         public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
