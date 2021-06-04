@@ -523,13 +523,20 @@ namespace ManagedCodeGen
             public string name;
             public MetricCollection baseMetrics;
             public MetricCollection diffMetrics;
+            private MetricCollection _deltaMetrics;
             public MetricCollection deltaMetrics
             {
                 get
                 {
-                    MetricCollection result = new MetricCollection(diffMetrics);
-                    result.Sub(baseMetrics);
-                    return result;
+                    if (_deltaMetrics == null)
+                    {
+                        _deltaMetrics = new MetricCollection(diffMetrics);
+                        _deltaMetrics.Sub(baseMetrics);
+                    }
+
+                    return _deltaMetrics;
+                }
+            }
                 }
             }
             public IEnumerable<int> baseOffsets;
