@@ -158,6 +158,10 @@ namespace ManagedCodeGen
         {
             public string path;
             public IEnumerable<MethodInfo> methodList;
+            public override string ToString()
+            {
+                return path;
+            }
         }
 
         // Custom comparer for the FileInfo class
@@ -201,9 +205,19 @@ namespace ManagedCodeGen
                 Value -= m.Value;
             }
 
+            public void Rel(Metric m)
+            {
+                Value = (Value - m.Value) / m.Value;
+            }
+
             public void SetValueFrom(Metric m)
             {
                 Value = m.Value;
+            }
+
+            public override string ToString()
+            {
+                return Name;
             }
         }
 
@@ -395,6 +409,14 @@ namespace ManagedCodeGen
                 }
             }
 
+            public void Rel(MetricCollection other)
+            {
+                for (int i = 0; i < metrics.Length; i++)
+                {
+                    metrics[i].Rel(other.metrics[i]);
+                }
+            }
+
             public void SetValueFrom(MetricCollection other)
             {
                 for (int i = 0; i < metrics.Length; i++)
@@ -463,6 +485,7 @@ namespace ManagedCodeGen
             public MetricCollection baseMetrics;
             public MetricCollection diffMetrics;
             public MetricCollection deltaMetrics;
+            public MetricCollection relDeltaMetrics;
             public MetricCollection reconciledBaseMetrics;
             public MetricCollection reconciledDiffMetrics;
 
@@ -523,17 +546,43 @@ namespace ManagedCodeGen
             public string name;
             public MetricCollection baseMetrics;
             public MetricCollection diffMetrics;
+            private MetricCollection _deltaMetrics;
             public MetricCollection deltaMetrics
             {
                 get
                 {
-                    MetricCollection result = new MetricCollection(diffMetrics);
-                    result.Sub(baseMetrics);
-                    return result;
+                    if (_deltaMetrics == null)
+                    {
+                        _deltaMetrics = new MetricCollection(diffMetrics);
+                        _deltaMetrics.Sub(baseMetrics);
+                    }
+
+                    return _deltaMetrics;
                 }
             }
+
+            public MetricCollection _relDeltaMetrics;
+            public MetricCollection relDeltaMetrics
+            {
+                get
+                {
+                    if (_relDeltaMetrics == null)
+                    {
+                        _relDeltaMetrics = new MetricCollection(diffMetrics);
+                        _relDeltaMetrics.Rel(baseMetrics);
+                    }
+
+                    return _relDeltaMetrics;
+                }
+            }
+
             public IEnumerable<int> baseOffsets;
             public IEnumerable<int> diffOffsets;
+
+            public override string ToString()
+            {
+                return name;
+            }
         }
 
         public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
@@ -682,6 +731,7 @@ namespace ManagedCodeGen
                     baseMetrics = jointList.Sum(x => x.baseMetrics),
                     diffMetrics = jointList.Sum(x => x.diffMetrics),
                     deltaMetrics = jointList.Sum(x => x.deltaMetrics),
+                    relDeltaMetrics = jointList.Sum(x => x.relDeltaMetrics),
                     methodsInBoth = jointList.Count(),
                     methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer),
                     methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer),
@@ -708,6 +758,7 @@ namespace ManagedCodeGen
         {
             StringBuilder summaryContents = new StringBuilder();
 
+            var totalRelDeltaMetrics = fileDeltaList.Sum(x => x.relDeltaMetrics);
             var totalDeltaMetrics = fileDeltaList.Sum(x => x.deltaMetrics);
             var totalBaseMetrics = fileDeltaList.Sum(x => x.baseMetrics);
             var totalDiffMetrics = fileDeltaList.Sum(x => x.diffMetrics);
@@ -720,6 +771,7 @@ namespace ManagedCodeGen
             Metric totalBaseMetric = totalBaseMetrics.GetMetric(metricName);
             Metric totalDiffMetric = totalDiffMetrics.GetMetric(metricName);
             Metric totalDeltaMetric = totalDeltaMetrics.GetMetric(metricName);
+            Metric totalRelDeltaMetric = totalRelDeltaMetrics.GetMetric(metricName);
             string unitName = totalBaseMetrics.GetMetric(metricName).Unit;
             string metricDisplayName = totalBaseMetrics.GetMetric(metricName).DisplayName;
 
@@ -735,6 +787,10 @@ namespace ManagedCodeGen
                 summaryContents.AppendLine(string.Format("Total {0}s of base: {1}", unitName, totalBaseMetric.Value));
                 summaryContents.AppendLine(string.Format("Total {0}s of diff: {1}", unitName, totalDiffMetric.Value));
                 summaryContents.AppendLine(string.Format("Total {0}s of delta: {1} ({2:P} of base)", unitName, totalDeltaMetric.ValueString, totalDeltaMetric.Value / totalBaseMetric.Value));
+                if (totalRelDeltaMetric.Value != 0)
+                {
+                    summaryContents.AppendLine(string.Format("Total relative delta: {0:0.00}", totalRelDeltaMetric.Value));
+                }
             }
             else 
             {
@@ -744,6 +800,10 @@ namespace ManagedCodeGen
             if (totalDeltaMetric.Value != 0)
             {
                 summaryContents.AppendLine(string.Format("    diff is {0}", totalDeltaMetric.LowerIsBetter == (totalDeltaMetric.Value < 0) ? "an improvement." : "a regression."));
+            }
+            if (totalRelDeltaMetric.Value != 0)
+            {
+                summaryContents.AppendLine(string.Format("    relative diff is {0}", totalRelDeltaMetric.LowerIsBetter == (totalRelDeltaMetric.Value < 0) ? "an improvement." : "a regression."));
             }
 
             summaryContents.AppendLine(DETAILS_MARKER);
@@ -779,9 +839,11 @@ namespace ManagedCodeGen
             var sortedFileImprovements = fileDeltaList
                                             .Where(x => x.deltaMetrics.GetMetric(metricName).Value < 0)
                                             .OrderBy(d => d.deltaMetrics.GetMetric(metricName).Value).ToList();
+
             var sortedFileRegressions = fileDeltaList
                                             .Where(x => x.deltaMetrics.GetMetric(metricName).Value > 0)
                                             .OrderByDescending(d => d.deltaMetrics.GetMetric(metricName).Value).ToList();
+
             int fileImprovementCount = sortedFileImprovements.Count();
             int fileRegressionCount = sortedFileRegressions.Count();
             int sortedFileCount = fileImprovementCount + fileRegressionCount;

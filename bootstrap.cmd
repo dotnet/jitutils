@@ -40,7 +40,7 @@ set /P gitroot=<%__tempfile%
 del %__tempfile%
 set gitroot=%gitroot:/=\%
 if not %gitroot:~-1%==\ set gitroot=%gitroot%\
-if not %__root%==%gitroot% (
+if /I not %__root%==%gitroot% (
     echo It doesn't looks like bootstrap.cmd is at the root of the repo.
     echo Cloning jitutils repo.
     popd
