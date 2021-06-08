@@ -328,7 +328,7 @@ namespace ManagedCodeGen
             public override string DisplayName => "Resolution Count";
             public override string Unit => "Count";
             public override bool LowerIsBetter => true;
-            public override Metric Clone() => new SpillCountMetric();
+            public override Metric Clone() => new ResolutionCountMetric();
             public override string ValueString => $"{Value}";
         }
 
@@ -338,7 +338,7 @@ namespace ManagedCodeGen
             public override string DisplayName => "Resolution Weighted";
             public override string Unit => "Count";
             public override bool LowerIsBetter => true;
-            public override Metric Clone() => new SpillWeightMetric();
+            public override Metric Clone() => new ResolutionWeightMetric();
             public override string ValueString => $"{Value}";
         }
 
