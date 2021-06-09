@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using System.Text;
 using System.Runtime.CompilerServices;
 using System.Globalization;
+using System.Reflection;
 
 namespace ManagedCodeGen
 {
@@ -85,7 +86,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("w|warn", ref _warn,
                         "Generate warning output for files/methods that only "
                       + "exists in one dataset or the other (only in base or only in diff).");
-                    syntax.DefineOption("m|metrics", ref _metrics, (value) => value.Split(",").ToList(), "Comma-separated metric to use for diff computations. Available metrics: CodeSize(default), PerfScore, PrologSize, InstrCount, AllocSize, ExtraAllocBytes, DebugClauseCount, DebugVarCount");
+                    syntax.DefineOption("m|metrics", ref _metrics, (value) => value.Split(",").ToList(), $"Comma-separated metric to use for diff computations. Available metrics: {MetricCollection.ListMetrics()}.");
                     syntax.DefineOption("note", ref _note,
                         "Descriptive note to add to summary output");
                     syntax.DefineOption("noreconcile", ref _noreconcile,
@@ -300,6 +301,47 @@ namespace ManagedCodeGen
             public override string ValueString => $"{Value}";
         }
 
+        /* LSRA specific */
+        public class SpillCountMetric : Metric
+        {
+            public override string Name => "SpillCount";
+            public override string DisplayName => "Spill Count";
+            public override string Unit => "Count";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new SpillCountMetric();
+            public override string ValueString => $"{Value}";
+        }
+
+        public class SpillWeightMetric : Metric
+        {
+            public override string Name => "SpillWeight";
+            public override string DisplayName => "Spill Weighted";
+            public override string Unit => "Count";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new SpillWeightMetric();
+            public override string ValueString => $"{Value}";
+        }
+
+        public class ResolutionCountMetric : Metric
+        {
+            public override string Name => "ResolutionCount";
+            public override string DisplayName => "Resolution Count";
+            public override string Unit => "Count";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new ResolutionCountMetric();
+            public override string ValueString => $"{Value}";
+        }
+
+        public class ResolutionWeightMetric : Metric
+        {
+            public override string Name => "ResolutionWeight";
+            public override string DisplayName => "Resolution Weighted";
+            public override string Unit => "Count";
+            public override bool LowerIsBetter => true;
+            public override Metric Clone() => new ResolutionWeightMetric();
+            public override string ValueString => $"{Value}";
+        }
+
         public class MetricCollection
         {
             private static Dictionary<string, int> s_metricNameToIndex;
@@ -307,7 +349,12 @@ namespace ManagedCodeGen
 
             static MetricCollection()
             {
-                s_metrics = new Metric[] { new CodeSizeMetric(), new PrologSizeMetric(), new PerfScoreMetric(), new InstrCountMetric(), new AllocSizeMetric(), new ExtraAllocBytesMetric(), new DebugClauseMetric(), new DebugVarMetric() };
+                var derivedType = typeof(Metric);
+                var currentAssembly = Assembly.GetAssembly(derivedType);
+                s_metrics = currentAssembly.GetTypes()
+                    .Where(t => t != derivedType && derivedType.IsAssignableFrom(t))
+                    .Select(t => currentAssembly.CreateInstance(t.FullName)).Cast<Metric>().ToArray();
+
                 s_metricNameToIndex = new Dictionary<string, int>(s_metrics.Length);
 
                 for (int i = 0; i < s_metrics.Length; i++)
@@ -632,6 +679,8 @@ namespace ManagedCodeGen
             Regex instrCountPattern = new Regex(@"instruction count ([0-9]{1,})");
             Regex allocSizePattern = new Regex(@"allocated bytes for code ([0-9]{1,})");
             Regex debugInfoPattern = new Regex(@"Variable debug info: ([0-9]{1,}) live range\(s\), ([0-9]{1,}) var\(s\)");
+            Regex spillInfoPattern = new Regex(@"SpillCount (\d+) SpillCountWt (\d+\.\d+)");
+            Regex resolutionInfoPattern = new Regex(@"ResolutionMovs (\d+) ResolutionMovsWt (\d+\.\d+)");
 
             var result =
              File.ReadLines(filePath)
@@ -647,6 +696,8 @@ namespace ManagedCodeGen
                                  var instrCountMatch = instrCountPattern.Match(x.line);
                                  var allocSizeMatch = allocSizePattern.Match(x.line);
                                  var debugInfoMatch = debugInfoPattern.Match(x.line);
+                                 var spillInfoMatch = spillInfoPattern.Match(x.line);
+                                 var resolutionInfoMatch = resolutionInfoPattern.Match(x.line);
                                  return new
                                  {
                                      name = nameMatch.Groups[1].Value,
@@ -665,6 +716,14 @@ namespace ManagedCodeGen
                                         int.Parse(debugInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
                                      debugVarCount = debugInfoMatch.Success ?
                                         int.Parse(debugInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
+                                     spillCount = spillInfoMatch.Success ?
+                                        int.Parse(spillInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
+                                     spillWeight = spillInfoMatch.Success ?
+                                        double.Parse(spillInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
+                                     resolutionCount = resolutionInfoMatch.Success ?
+                                        int.Parse(resolutionInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
+                                     resolutionWeight = resolutionInfoMatch.Success ?
+                                        double.Parse(resolutionInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
                                      // Use function index only from non-data lines (the name line)
                                      functionOffset = codeAndPrologSizeMatch.Success ?
                                         0 : x.index
@@ -695,7 +754,10 @@ namespace ManagedCodeGen
                                  mi.Metrics.Add("ExtraAllocBytes", totalAllocSize - totalCodeSize);
                                  mi.Metrics.Add("DebugClauseCount", x.Sum(z => z.debugClauseCount));
                                  mi.Metrics.Add("DebugVarCount", x.Sum(z => z.debugVarCount));
-
+                                 mi.Metrics.Add("SpillCount", x.Sum(z => z.spillCount));
+                                 mi.Metrics.Add("SpillWeight", x.Sum(z => z.spillWeight));
+                                 mi.Metrics.Add("ResolutionCount", x.Sum(z => z.resolutionCount));
+                                 mi.Metrics.Add("ResolutionWeight", x.Sum(z => z.resolutionWeight));
                                  return mi;
                              }).ToList();
 
