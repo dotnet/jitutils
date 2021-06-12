@@ -440,18 +440,70 @@ abstract class PrepareBase : CounterBase
 
         bool useEnv = methodToDisasm != null;
         ReadOnlySpan<char> methodName = null;
+        ReadOnlySpan<char> className = null;
+
+        bool namesMatch = false;
 
         if (useEnv)
         {
-            int methodNameStart = methodToDisasm.IndexOf(':') + 1;
+            bool hasClassName = methodToDisasm.IndexOf(':') != -1;
+            bool containsArgs = methodToDisasm.IndexOf('(') != -1;
+            bool endsWithWildcard = methodToDisasm.IndexOf('*') != -1;
+
+            // COMPlus_JitDisasm=* passed, this is the same as not having
+            // the environment set.
+            if (endsWithWildcard && methodToDisasm.Length == 1)
+            {
+                useEnv = false;
+            }
+
+            int methodNameStart = 0;
             ReadOnlySpan<char> splitStr = methodToDisasm.AsSpan(methodNameStart);
 
-            int endofMethodNameStart = splitStr.IndexOf('(');
+            if (hasClassName)
+            {
+                methodNameStart = methodToDisasm.IndexOf(':') + 1;
+                className = splitStr.Slice(0, methodNameStart - 1);
+            }
 
-            methodName = splitStr.Slice(0, endofMethodNameStart);
+            int methodNameEnd = splitStr.Length - methodNameStart;
+            if (containsArgs)
+            {
+                methodNameEnd = splitStr.IndexOf('(') - methodNameStart;
+            }
+
+            if (endsWithWildcard)
+            {
+                --methodNameEnd;
+            }
+
+            methodName = splitStr.Slice(methodNameStart, methodNameEnd);
+
+            bool classNamesMatch = className.CompareTo(method.DeclaringType.Name.AsSpan(), StringComparison.OrdinalIgnoreCase) == 0;
+
+            if (!endsWithWildcard)
+            {
+                namesMatch = methodName.CompareTo(method.Name.AsSpan(), StringComparison.OrdinalIgnoreCase) == 0;
+            }
+            else
+            {
+                ReadOnlySpan<char> compareName = method.Name.AsSpan();
+
+                bool same = true;
+                for (int index = 0; index < methodName.Length; ++index)
+                {
+                    if (methodName[index] != compareName[index])
+                    {
+                        same = false;
+                        break;
+                    }
+                }
+
+                namesMatch = same;
+            }
         }
 
-        if (!useEnv || (methodName.CompareTo(method.Name.AsSpan(), StringComparison.OrdinalIgnoreCase) == 0 && methodToDisasm.IndexOf(method.DeclaringType.Name) != -1))
+        if (!useEnv || namesMatch)
         {
             try
             {
