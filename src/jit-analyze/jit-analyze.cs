@@ -943,10 +943,14 @@ namespace ManagedCodeGen
                                         }).ToList();
             var sortedMethodImprovements = methodDeltaList
                                             .Where(x => x.deltaMetric.Value< 0)
-                                            .OrderBy(d => d.deltaMetric.Value).ToList();
+                                            .OrderBy(d => d.deltaMetric.Value)
+                                            .ThenBy(d => d.name)
+                                            .ToList();
             var sortedMethodRegressions = methodDeltaList
                                             .Where(x => x.deltaMetric.Value > 0)
-                                            .OrderByDescending(d => d.deltaMetric.Value).ToList();
+                                            .OrderByDescending(d => d.deltaMetric.Value)
+                                            .ThenBy(d => d.name)
+                                            .ToList();
             int methodImprovementCount = sortedMethodImprovements.Count();
             int methodRegressionCount = sortedMethodRegressions.Count();
             int sortedMethodCount = methodImprovementCount + methodRegressionCount;
@@ -954,10 +958,14 @@ namespace ManagedCodeGen
 
             var sortedMethodImprovementsByPercentage = methodDeltaList
                                             .Where(x => x.deltaMetric.Value < 0)
-                                            .OrderBy(d => d.deltaMetric.Value / d.baseMetric.Value).ToList();
+                                            .OrderBy(d => d.deltaMetric.Value / d.baseMetric.Value)
+                                            .ThenBy(d => d.name)
+                                            .ToList();
             var sortedMethodRegressionsByPercentage = methodDeltaList
                                             .Where(x => x.deltaMetric.Value > 0)
-                                            .OrderByDescending(d => d.deltaMetric.Value / d.baseMetric.Value).ToList();
+                                            .OrderByDescending(d => d.deltaMetric.Value / d.baseMetric.Value)
+                                            .ThenBy(d => d.name)
+                                            .ToList();
 
             void DisplayMethodMetric(string headerText, string subtext, int methodCount, dynamic list)
             {
