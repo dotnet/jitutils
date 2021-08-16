@@ -710,6 +710,7 @@ namespace ManagedCodeGen
 
             override protected ProcessResult ExecuteProcess(List<string> commandArgs, bool capture)
             {
+                commandArgs.Add("--parallelism 1");
                 foreach (var envVar in _environmentVariables)
                 {
                     commandArgs.Add("--codegenopt");
