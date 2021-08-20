@@ -42,9 +42,17 @@ function get_host_os {
     esac
 }
 
+_machineHasCurl=
+
 function validate_url {
-    if wget -S --spider $1  2>&1 | grep -e "HTTP/1.1 200 OK";
-    then
+    if (( _machineHasCurl == 1 )); then
+        status="$(curl -sLIo /dev/null "$1" -w '%{http_code}\n')"
+    else
+        response=($(wget -S --spider "$1" 2>&1 | grep "HTTP/"))
+        status="${response[1]}"
+    fi
+
+    if (( status >= 200 || status < 400 )); then
         return 0;
     else
         return 1;
@@ -53,13 +61,12 @@ function validate_url {
 
 function download_tools {
 
-    # Do we have wget?
+    # Do we have wget or curl?
 
-    if ! hash wget 2>/dev/null; then
-        echo "Error: wget not found; not downloading clang-format and clang-tidy."
-        if [ "$__HostOS" == "OSX" ]; then
-            echo "On OSX, install wget using Homebrew (https://brew.sh/) using 'brew install wget'."
-        fi
+    if command -v curl 2>/dev/null; then
+        _machineHasCurl=1
+    elif ! command -v wget 2>/dev/null; then
+        echo "Error: curl or wget not found; not downloading clang-format and clang-tidy."
         return 1
     fi
 
@@ -72,24 +79,32 @@ function download_tools {
 
     clangFormatUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-format
 
-    if validate_url ${clangFormatUrl} > /dev/null; then
+    if validate_url "$clangFormatUrl" > /dev/null; then
         echo "Downloading clang-format to bin directory"
         # download appropriate version of clang-format
-        wget --progress=dot:giga ${clangFormatUrl} -O bin/clang-format
+        if (( _machineHasCurl == 1 )); then
+            curl --progress-bar --fail "$clangFormatUrl" -o bin/clang-format
+        else
+            wget --progress=dot:giga "$clangFormatUrl" -O bin/clang-format
+        fi
         chmod 751 bin/clang-format
     else
-        echo "clang-format not found here: ${clangFormatUrl}"
+        echo "clang-format not found here: $clangFormatUrl"
     fi
 
     clangTidyUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-tidy
 
-    if validate_url ${clangTidyUrl} > /dev/null; then
+    if validate_url "$clangTidyUrl" > /dev/null; then
         echo "Downloading clang-tidy to bin directory"
         # download appropriate version of clang-tidy
-        wget --progress=dot:giga ${clangTidyUrl} -O bin/clang-tidy
+        if (( _machineHasCurl == 1 )); then
+            curl --progress-bar --fail "$clangTidyUrl" -o bin/clang-tidy
+        else
+            wget --progress=dot:giga "$clangTidyUrl" -O bin/clang-tidy
+        fi
         chmod 751 bin/clang-tidy
     else
-        echo "clang-tidy not found here: ${clangTidyUrl}"
+        echo "clang-tidy not found here: $clangTidyUrl"
     fi
 
     if [ ! -f bin/clang-format -o ! -f bin/clang-tidy ]; then
