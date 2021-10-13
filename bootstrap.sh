@@ -83,9 +83,9 @@ function download_tools {
         echo "Downloading clang-format to bin directory"
         # download appropriate version of clang-format
         if (( _machineHasCurl == 1 )); then
-            curl --progress-bar --fail "$clangFormatUrl" -o bin/clang-format
+            curl --retry 4 --progress-bar --fail "$clangFormatUrl" -o bin/clang-format
         else
-            wget --progress=dot:giga "$clangFormatUrl" -O bin/clang-format
+            wget --tries 4 --progress=dot:giga "$clangFormatUrl" -O bin/clang-format
         fi
         chmod 751 bin/clang-format
     else
@@ -98,9 +98,9 @@ function download_tools {
         echo "Downloading clang-tidy to bin directory"
         # download appropriate version of clang-tidy
         if (( _machineHasCurl == 1 )); then
-            curl --progress-bar --fail "$clangTidyUrl" -o bin/clang-tidy
+            curl --retry 4 --progress-bar --fail "$clangTidyUrl" -o bin/clang-tidy
         else
-            wget --progress=dot:giga "$clangTidyUrl" -O bin/clang-tidy
+            wget --tries 4 --progress=dot:giga "$clangTidyUrl" -O bin/clang-tidy
         fi
         chmod 751 bin/clang-tidy
     else

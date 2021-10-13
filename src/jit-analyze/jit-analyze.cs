@@ -70,9 +70,19 @@ namespace ManagedCodeGen
             private string _filter;
             private List<string> _metrics;
             private bool _skipTextDiff = false;
+            private double? _overrideTotalBaseMetric;
+            private double? _overrideTotalDiffMetric;
 
             public Config(string[] args)
             {
+                static double? ParseDouble(string val)
+                {
+                    if (double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out double dblVal))
+                        return dblVal;
+
+                    return null;
+                }
+
                 _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
                 {
                     syntax.DefineOption("b|base", ref _basePath, "Base file or directory.");
@@ -101,13 +111,17 @@ namespace ManagedCodeGen
                         "Only consider assembly files whose names match the filter");
                     syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
                         "Skip analysis that checks for files that have textual diffs but no metric diffs.");
+                    syntax.DefineOption("override-total-base-metric", ref _overrideTotalBaseMetric, ParseDouble,
+                        "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known.");
+                    syntax.DefineOption("override-total-diff-metric", ref _overrideTotalDiffMetric, ParseDouble,
+                        "Override the total diff metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known.");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
-                validate();
+                Validate();
             }
 
-            private void validate()
+            private void Validate()
             {
                 if (_basePath == null)
                 {
@@ -131,6 +145,11 @@ namespace ManagedCodeGen
                         _syntaxResult.ReportError($"Unknown metric '{metricName}'. Available metrics: {MetricCollection.ListMetrics()}");
                     }
                 }
+
+                if (OverrideTotalBaseMetric.HasValue != OverrideTotalDiffMetric.HasValue)
+                {
+                    _syntaxResult.ReportError("override-total-base-metric and override-total-diff-metric must either both be specified or both not be specified");
+                }
             }
 
             public string BasePath { get { return _basePath; } }
@@ -148,6 +167,8 @@ namespace ManagedCodeGen
             public bool DoGenerateMarkdown { get { return _md != null; } }
             public bool Reconcile { get { return !_noreconcile; } }
             public string Note { get { return _note; } }
+            public double? OverrideTotalBaseMetric => _overrideTotalBaseMetric;
+            public double? OverrideTotalDiffMetric => _overrideTotalDiffMetric;
 
             public string Filter {  get { return _filter; } }
 
@@ -844,14 +865,22 @@ namespace ManagedCodeGen
             }
             summaryContents.AppendLine(string.Format("\n({0} is better)\n", totalBaseMetric.LowerIsBetter ? "Lower" : "Higher"));
 
-            if (totalBaseMetric.Value != 0)
+            if (config.OverrideTotalBaseMetric.HasValue)
             {
-                summaryContents.AppendLine(string.Format("Total {0}s of base: {1}", unitName, totalBaseMetric.Value));
-                summaryContents.AppendLine(string.Format("Total {0}s of diff: {1}", unitName, totalDiffMetric.Value));
-                summaryContents.AppendLine(string.Format("Total {0}s of delta: {1} ({2:P} of base)", unitName, totalDeltaMetric.ValueString, totalDeltaMetric.Value / totalBaseMetric.Value));
+                Debug.Assert(config.OverrideTotalDiffMetric.HasValue);
+                summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of base: {1} (overridden on cmd)", unitName, config.OverrideTotalBaseMetric.Value));
+                summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of diff: {1} (overridden on cmd)", unitName, config.OverrideTotalDiffMetric.Value));
+                double delta = config.OverrideTotalDiffMetric.Value - config.OverrideTotalBaseMetric.Value;
+                summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of delta: {1} ({2:P} of base)", unitName, delta, delta / config.OverrideTotalBaseMetric.Value));
+            }
+            else if (totalBaseMetric.Value != 0)
+            {
+                summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of base: {1}", unitName, totalBaseMetric.Value));
+                summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of diff: {1}", unitName, totalDiffMetric.Value));
+                summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of delta: {1} ({2:P} of base)", unitName, totalDeltaMetric.ValueString, totalDeltaMetric.Value / totalBaseMetric.Value));
                 if (totalRelDeltaMetric.Value != 0)
                 {
-                    summaryContents.AppendLine(string.Format("Total relative delta: {0:0.00}", totalRelDeltaMetric.Value));
+                    summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total relative delta: {0:0.00}", totalRelDeltaMetric.Value));
                 }
             }
             else 

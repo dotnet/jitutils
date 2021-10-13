@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 ## Build and optionally publish sub projects
 ##
 ## This script will by default build release versions of the tools.
