@@ -77,6 +77,16 @@ function download_tools {
     info=$(dotnet --info |grep RID:)
     info=${info##*RID:* }
 
+    # override common RIDs with compatible version so we don't need to upload binaries for each RID
+    case $info in
+        osx.*-x64)
+        info=osx.10.15-x64
+        ;;
+        ubuntu.*-x64)
+        info=ubuntu.18.04-x64
+        ;;
+    esac
+
     clangFormatUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-format
 
     if validate_url "$clangFormatUrl" > /dev/null; then
