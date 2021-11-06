@@ -57,9 +57,6 @@ for %%p in (%projects%) do (
     if %publish%==true (
         dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
         if errorlevel 1 echo ERROR: dotnet publish failed for .\src\%%p.&set __ExitCode=1
-
-        copy .\wrapper.bat %appInstallDir%\%%p.bat
-        if not exist %appInstallDir%\%%p.bat echo ERROR: Failed to copy wrapper script to %appInstallDir%\%%p.bat&set __ExitCode=1
     ) else (
         dotnet build -c %buildType% .\src\%%p
         if errorlevel 1 echo ERROR: dotnet build failed for .\src\%%p.&set __ExitCode=1

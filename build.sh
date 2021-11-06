@@ -67,12 +67,6 @@ do
             echo "${__ErrMsgPrefix}dotnet publish of ./src/${proj} failed."
             final_exit_code=1
         fi
-
-        cp ./wrapper.sh $appInstallDir/$proj
-        if [ ! -f $appInstallDir/$proj ]; then
-            echo "Failed to copy wrapper script to $appInstallDir/$proj"
-            final_exit_code=1
-        fi
     else
         dotnet build -c $buildType ./src/$proj
         exit_code=$?

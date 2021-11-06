@@ -185,7 +185,6 @@ namespace PMIDriver
 
                 // If PMI is invoked as one of:
                 // 1. dotnet.exe pmi.dll DriveAll ...
-                //    (this is how the wrapper script `pmi.bat` invokes it)
                 // 2. corerun.exe pmi.dll DriveAll ...
                 // Then `driverName` will be either `dotnet.exe` or `corerun.exe` and the first argument in `newCommandLine` will be
                 // `pmi.dll`.
