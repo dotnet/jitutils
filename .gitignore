@@ -4,7 +4,6 @@
 # ignore default binary/obj locations
 **/bin
 **/obj
-/fx
 .vscode
 
 # project system lock files

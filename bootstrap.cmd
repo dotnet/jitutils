@@ -110,9 +110,9 @@ if not exist .\build.cmd echo Can't find build.cmd.&set __ExitCode=1&goto :eof
 dotnet restore
 if errorlevel 1 echo ERROR: dotnet restore failed.&set __ExitCode=1&goto :eof
 
-:: Build and publish all the utilties and frameworks
+:: Build and publish all the utilities
 
-call .\build.cmd -p -f
+call .\build.cmd -p
 if errorlevel 1 echo ERROR: build failed.&set __ExitCode=1&goto :eof
 
 :: Check to see if clang-format and clang-tidy are available. Since we're going

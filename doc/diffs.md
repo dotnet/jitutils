@@ -58,7 +58,6 @@ build.sh [-b <BUILD TYPE>] [-f] [-h] [-p] [-t <TARGET>]
 
     -b <BUILD TYPE> : Build type, can be Debug or Release.
     -h              : Show this message.
-    -f              : Install default framework directory in <script_root>/fx.
     -p              : Publish utilities.
 ```
 
@@ -547,14 +546,3 @@ Sample help command line:
     <assembly>...              The list of assemblies or directories to
                                scan for assemblies.
 ```
-
-## packages
-
-This is a skeleton project that exists to pull down a predictable set of framework 
-assemblies and publish them in the root in the subdirectory './fx'.
-When this package is installed 
-via the `build.{cmd|sh}` script this set can be used on any supported platform for 
-diffing.  Note: The mscorlib.dll is removed, as this assembly should be updated from 
-the selected base runtime that is under test, for consistency. To add particular packages 
-to the set you diff, add their dependencies to the project.json in this project and 
-they will be pulled in and published in the standalone directory './fx'.
