@@ -190,9 +190,9 @@ if [ $exit_code != 0 ]; then
     exit $exit_code
 fi
 
-# Build and publish all the utilties and frameworks
+# Build and publish all the utilities
 
-./build.sh -p -f
+./build.sh -p
 exit_code=$?
 if [ $exit_code != 0 ]; then
     echo "${__ErrMsgPrefix}Build failed."

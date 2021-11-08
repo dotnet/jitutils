@@ -5,9 +5,6 @@
 ## This script will by default build release versions of the tools.
 ## If publish (-p) is requested it will create standalone versions of the
 ## tools in <script_root>/bin.
-## 
-## If frameworks (-f) are requested the script will create a scratch empty 'app'
-## publish that contains the default frameworks.
 
 function usage
 {
@@ -16,7 +13,6 @@ function usage
     echo ""
     echo "    -b <BUILD TYPE> : Build type, can be Debug or Release."
     echo "    -h              : Show this message."
-    echo "    -f              : Install default framework directory in <script_root>/fx."
     echo "    -p              : Publish utilities."
     echo ""
 }
@@ -33,9 +29,8 @@ cd $workingDir
 platform="`dotnet --info | awk '/RID/ {print $2}'`"
 # default install in 'bin' dir at script location
 appInstallDir="$scriptDir/bin"
-fxInstallDir="$scriptDir/fx"
 
-# process for '-h', '-p', 'f', '-b <arg>'
+# process for '-h', '-p', '-b <arg>'
 while getopts "hpfb:" opt; do
     case "$opt" in
     h)
@@ -47,9 +42,6 @@ while getopts "hpfb:" opt; do
         ;;
     p)  
         publish=true
-        ;;
-    f)  
-        fx=true
         ;;
     esac
 done
@@ -67,12 +59,6 @@ do
             echo "${__ErrMsgPrefix}dotnet publish of ./src/${proj} failed."
             final_exit_code=1
         fi
-
-        cp ./wrapper.sh $appInstallDir/$proj
-        if [ ! -f $appInstallDir/$proj ]; then
-            echo "Failed to copy wrapper script to $appInstallDir/$proj"
-            final_exit_code=1
-        fi
     else
         dotnet build -c $buildType ./src/$proj
         exit_code=$?
@@ -82,29 +68,5 @@ do
         fi
     fi
 done
-
-# set up fx if requested.
-
-if [ "$fx" == true ]; then
-    # Need to explicitly restore 'packages' project for host runtime in order
-    # for subsequent publish to be able to accept --runtime parameter to publish
-    # it as standalone.
-    dotnet restore --runtime $platform ./src/packages
-    exit_code=$?
-    if [ $exit_code != 0 ]; then
-        echo "${__ErrMsgPrefix}dotnet restore of ./src/packages failed."
-        final_exit_code=1
-    fi
-
-    dotnet publish -c $buildType -o $fxInstallDir --runtime $platform ./src/packages
-    exit_code=$?
-    if [ $exit_code != 0 ]; then
-        echo "${__ErrMsgPrefix}dotnet publish of ./src/packages failed."
-        final_exit_code=1
-    fi
-
-    # remove package version of mscorlib* - refer to core root version for diff testing.
-    rm -f $fxInstallDir/mscorlib*
-fi
 
 exit $final_exit_code

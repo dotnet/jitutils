@@ -64,7 +64,7 @@ Sample config.json:
       "diff": "/Users/russellhadley/Work/dotnet/coreclr/bin/Product/OSX.x64.Checked",
       "frameworks": "true",
       "output": "/Users/russellhadley/Work/dotnet/output",
-      "core_root": "/Users/russellhadley/Work/dotnet/jitutils/fx"
+      "core_root": "/Users/russellhadley/Work/dotnet/runtime/artifacts/tests/coreclr/OSX.x64.Checked/Tests/Core_Root"
     },
     "tools": [
       {
@@ -101,7 +101,7 @@ Defaults:
 	base: checked_osx-1526
 	diff: /Users/russellhadley/Work/dotnet/coreclr/bin/Product/OSX.x64.Checked
 	output: /Users/russellhadley/Work/dotnet/output
-	core_root: /Users/russellhadley/Work/dotnet/jitutils/fx
+    core_root: /Users/russellhadley/Work/dotnet/runtime/artifacts/tests/coreclr/OSX.x64.Checked/Tests/Core_Root
 	frameworks: true
 
 Installed tools:
