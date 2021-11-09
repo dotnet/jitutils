@@ -226,7 +226,22 @@ namespace ManagedCodeGen
             }
 
             // Finally, start the process.
-            process.Start();
+            try
+            {
+                process.Start();
+            }
+            catch (System.Exception e)
+            {
+                // Maybe the program we're spawning wasn't found (ERROR_FILE_NOT_FOUND == 2).
+                Console.Error.WriteLine($"Error: failed to start '{name} {startInfo.Arguments}': {e.Message}");
+
+                return new ProcessResult()
+                {
+                    ExitCode = -1,
+                    StdOut = string.Empty,
+                    StdErr = string.Empty
+                };
+            }
 
             if (capture)
             {
