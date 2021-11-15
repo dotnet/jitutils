@@ -6,6 +6,7 @@ CrossRootfsDirectory=$2
 case "$TargetOSArchitecture" in
     linux-arm)
         CrossCompiling=1
+        BuildUsesCrossRootfs=1
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
         LLVMTargetsToBuild="AArch64;ARM"
@@ -13,6 +14,7 @@ case "$TargetOSArchitecture" in
 
     linux-arm64)
         CrossCompiling=1
+        BuildUsesCrossRootfs=1
         LLVMDefaultTargetTriple=aarch64-linux-gnu
         LLVMHostTriple=aarch64-linux-gnu
         LLVMTargetsToBuild="AArch64;ARM"
@@ -20,6 +22,15 @@ case "$TargetOSArchitecture" in
 
     linux-x64|osx-x64)
         CrossCompiling=0
+        BuildUsesCrossRootfs=0
+        LLVMTargetsToBuild="AArch64;ARM;X86"
+        ;;
+
+    osx-arm64)
+        CrossCompiling=1
+        BuildUsesCrossRootfs=0
+        LLVMDefaultTargetTriple=aarch64-apple-darwin
+        LLVMHostTriple=aarch64-apple-darwin
         LLVMTargetsToBuild="AArch64;ARM;X86"
         ;;
 
@@ -28,7 +39,7 @@ case "$TargetOSArchitecture" in
         exit 1
 esac
 
-if [[ $CrossCompiling -eq 1 && ! -d $CrossRootfsDirectory ]]; then
+if [[ $BuildUsesCrossRootfs -eq 1 && ! -d $CrossRootfsDirectory ]]; then
     echo "Invalid or unspecified CrossRootfsDirectory: $CrossRootfsDirectory"
     exit 1
 fi
