@@ -27,9 +27,9 @@ trigger:
 resources:
   containers:
   - container: ubuntu-16.04-arm
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-20200413125008-09ec757
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-20210719121212-8a8d3be
   - container: ubuntu-16.04-arm64
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-arm64-20200413125008-cfdd435
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-arm64-20210719121212-8a8d3be
 
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
@@ -103,7 +103,7 @@ jobs:
   displayName: Build coredistools Linux x64
 
   pool:
-    vmImage: ubuntu-16.04
+    vmImage: ubuntu-18.04
 
   variables:
     TargetOSArchitecture: linux-x64
