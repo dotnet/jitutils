@@ -70,6 +70,7 @@ namespace ManagedCodeGen
             private string _filter;
             private List<string> _metrics;
             private bool _skipTextDiff = false;
+            private bool _retainOnlyTopFiles = false;
             private double? _overrideTotalBaseMetric;
             private double? _overrideTotalDiffMetric;
 
@@ -111,6 +112,8 @@ namespace ManagedCodeGen
                         "Only consider assembly files whose names match the filter");
                     syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
                         "Skip analysis that checks for files that have textual diffs but no metric diffs.");
+                    syntax.DefineOption("retainOnlyTopFiles ", ref _retainOnlyTopFiles,
+                        "Retain only the top 'count' improvements/regressions .dasm files. Delete other files. Useful in CI scenario to reduce the upload size.");
                     syntax.DefineOption("override-total-base-metric", ref _overrideTotalBaseMetric, ParseDouble,
                         "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known.");
                     syntax.DefineOption("override-total-diff-metric", ref _overrideTotalDiffMetric, ParseDouble,
@@ -174,6 +177,7 @@ namespace ManagedCodeGen
 
             public List<string> Metrics {  get { return _metrics; } }
             public bool SkipTextDiff { get { return _skipTextDiff;  } }
+            public bool RetainOnlyTopFiles { get { return _retainOnlyTopFiles; } }
         }
 
         public class FileInfo
@@ -563,6 +567,7 @@ namespace ManagedCodeGen
             public IEnumerable<MethodInfo> methodsOnlyInBase;
             public IEnumerable<MethodInfo> methodsOnlyInDiff;
             public IEnumerable<MethodDelta> methodDeltaList;
+            public bool RetainFile = false;
 
             // Adjust lists to include empty methods in diff|base for methods that appear only in base|diff.
             // Also adjust delta to take these methods into account.
@@ -950,6 +955,8 @@ namespace ManagedCodeGen
                         summaryContents.AppendLine(string.Format("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
                             fileDelta.deltaMetrics.GetMetric(metricName).ValueString,
                             fileDelta.deltaMetrics.GetMetric(metricName).Value / fileDelta.baseMetrics.GetMetric(metricName).Value));
+
+                        fileDelta.RetainFile = config.RetainOnlyTopFiles;
                     }
                 }
             }
@@ -1047,6 +1054,35 @@ namespace ManagedCodeGen
                     {
                         summaryContents.AppendLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
                     }
+                }
+            }
+
+            if (config.RetainOnlyTopFiles)
+            {
+                if ((fileDeltaList.Count() > 0))
+                {
+                    void DeleteFile(string path)
+                    {
+                        try
+                        {
+                            File.Delete(path);
+                        }
+                        catch (Exception) { }
+                    }
+
+                    int filesDeleted = 0;
+                    foreach (var fileToDelete in fileDeltaList)
+                    {
+                        if (!fileToDelete.RetainFile)
+                        {
+                            DeleteFile(Path.Combine(config.BasePath, fileToDelete.basePath));
+                            DeleteFile(Path.Combine(config.DiffPath, fileToDelete.diffPath));
+                            filesDeleted += 2;
+                        }
+                    }
+
+                    Console.WriteLine($"Deleted {filesDeleted} .dasm files.");
+
                 }
             }
 
