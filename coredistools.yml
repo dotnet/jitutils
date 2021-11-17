@@ -9,6 +9,7 @@ pr:
     - build-coredistools.cmd
     - build-coredistools.sh
     - build-tblgen.cmd
+    - coredistools.yml
     - pack-coredistools.cmd
 
 trigger:
@@ -22,6 +23,7 @@ trigger:
     - build-coredistools.cmd
     - build-coredistools.sh
     - build-tblgen.cmd
+    - coredistools.yml
     - pack-coredistools.cmd
 
 resources:
