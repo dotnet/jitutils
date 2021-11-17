@@ -70,7 +70,7 @@ namespace ManagedCodeGen
             private string _filter;
             private List<string> _metrics;
             private bool _skipTextDiff = false;
-            private bool _retainBigDiffFilesOnly = false;
+            private bool _retainOnlyTopFiles = false;
             private double? _overrideTotalBaseMetric;
             private double? _overrideTotalDiffMetric;
 
@@ -112,7 +112,7 @@ namespace ManagedCodeGen
                         "Only consider assembly files whose names match the filter");
                     syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
                         "Skip analysis that checks for files that have textual diffs but no metric diffs.");
-                    syntax.DefineOption("e|retainBigDiffFilesOnly", ref _retainBigDiffFilesOnly,
+                    syntax.DefineOption("retainOnlyTopFiles ", ref _retainOnlyTopFiles,
                         "Retain only the .dasm files that has top 'count' improvements/regressions. Delete other files. Useful in CI scenario to reduce the upload size.");
                     syntax.DefineOption("override-total-base-metric", ref _overrideTotalBaseMetric, ParseDouble,
                         "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known.");
@@ -177,7 +177,7 @@ namespace ManagedCodeGen
 
             public List<string> Metrics {  get { return _metrics; } }
             public bool SkipTextDiff { get { return _skipTextDiff;  } }
-            public bool RetainBigDiffFilesOnly { get { return _retainBigDiffFilesOnly; } }
+            public bool RetainOnlyTopFiles { get { return _retainOnlyTopFiles; } }
         }
 
         public class FileInfo
@@ -567,6 +567,7 @@ namespace ManagedCodeGen
             public IEnumerable<MethodInfo> methodsOnlyInBase;
             public IEnumerable<MethodInfo> methodsOnlyInDiff;
             public IEnumerable<MethodDelta> methodDeltaList;
+            public bool RetainFile = false;
 
             // Adjust lists to include empty methods in diff|base for methods that appear only in base|diff.
             // Also adjust delta to take these methods into account.
@@ -943,7 +944,6 @@ namespace ManagedCodeGen
             int fileRegressionCount = sortedFileRegressions.Count();
             int sortedFileCount = fileImprovementCount + fileRegressionCount;
             int unchangedFileCount = fileDeltaList.Count() - sortedFileCount;
-            List<string> retainFilesList = new List<string>();
 
             void DisplayFileMetric(string headerText, int metricCount, IEnumerable<FileDelta> list)
             {
@@ -956,7 +956,7 @@ namespace ManagedCodeGen
                             fileDelta.deltaMetrics.GetMetric(metricName).ValueString,
                             fileDelta.deltaMetrics.GetMetric(metricName).Value / fileDelta.baseMetrics.GetMetric(metricName).Value));
 
-                        retainFilesList.Add(fileDelta.basePath);
+                        fileDelta.RetainFile = config.RetainOnlyTopFiles;
                     }
                 }
             }
@@ -1057,29 +1057,32 @@ namespace ManagedCodeGen
                 }
             }
 
-            if (config.RetainBigDiffFilesOnly)
+            if (config.RetainOnlyTopFiles)
             {
-                Console.WriteLine($"Deleting files other than top {config.Count} improvements/regressions.");
-                SearchOption searchOption = (config.Recursive) ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-                var baseFiles = Directory.EnumerateFiles(config.BasePath, "*.dasm", searchOption);
-                foreach (var file in baseFiles)
+                if ((fileDeltaList.Count() > 0))
                 {
-                    if (retainFilesList.Contains(Path.GetFileName(file)))
+                    void DeleteFile(string path)
                     {
-                        continue;
+                        try
+                        {
+                            File.Delete(path);
+                        }
+                        catch (Exception) { }
                     }
-                    try { File.Delete(file); } catch (Exception ex) { }
-                }
 
-
-                var diffFiles = Directory.EnumerateFiles(config.DiffPath, "*.dasm", searchOption);
-                foreach (var file in diffFiles)
-                {
-                    if (retainFilesList.Contains(Path.GetFileName(file)))
+                    int filesDeleted = 0;
+                    foreach (var fileToDelete in fileDeltaList)
                     {
-                        continue;
+                        if (!fileToDelete.RetainFile)
+                        {
+                            DeleteFile(Path.Combine(config.BasePath, fileToDelete.basePath));
+                            DeleteFile(Path.Combine(config.DiffPath, fileToDelete.diffPath));
+                            filesDeleted += 2;
+                        }
                     }
-                    try { File.Delete(file); } catch (Exception) { }
+
+                    Console.WriteLine($"Deleted {filesDeleted} .dasm files.");
+
                 }
             }
 
