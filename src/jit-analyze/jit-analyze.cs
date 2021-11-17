@@ -113,7 +113,7 @@ namespace ManagedCodeGen
                     syntax.DefineOption("skiptextdiff", ref _skipTextDiff,
                         "Skip analysis that checks for files that have textual diffs but no metric diffs.");
                     syntax.DefineOption("retainOnlyTopFiles ", ref _retainOnlyTopFiles,
-                        "Retain only the .dasm files that has top 'count' improvements/regressions. Delete other files. Useful in CI scenario to reduce the upload size.");
+                        "Retain only the top 'count' improvements/regressions .dasm files. Delete other files. Useful in CI scenario to reduce the upload size.");
                     syntax.DefineOption("override-total-base-metric", ref _overrideTotalBaseMetric, ParseDouble,
                         "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known.");
                     syntax.DefineOption("override-total-diff-metric", ref _overrideTotalDiffMetric, ParseDouble,
