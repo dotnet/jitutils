@@ -6,7 +6,7 @@
     <title>Microsoft.NETCore Instruction-wise Disassembler</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
-    <license type="file">LICENSE.txt</license>
+    <license type="file">LICENSE.TXT</license>
     <projectUrl>https://github.com/dotnet/jitutils</projectUrl>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
     <description>Disassembly Tools for dotnet/runtime</description>
