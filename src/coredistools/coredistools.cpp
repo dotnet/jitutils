@@ -501,7 +501,7 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
     }
   }
 
-  IP->printInst(&BIter.Inst, OS, "", *STI);
+  IP->printInst(&BIter.Inst, BIter.Addr, "", *STI, OS);
   Print->Dump(OS.str().c_str());
 }
 
