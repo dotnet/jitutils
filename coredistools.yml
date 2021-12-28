@@ -133,7 +133,7 @@ jobs:
   displayName: Build coredistools macOS x64
 
   pool:
-    vmImage: macOS-10.14
+    vmImage: macOS-10.15
 
   variables:
     TargetOSArchitecture: osx-x64
