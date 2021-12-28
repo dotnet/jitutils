@@ -191,6 +191,7 @@ private:
   bool setTarget();
 
   string TargetTriple;
+  unique_ptr<Triple> TheTriple;
   const Target *TheTarget;
 
   unique_ptr<MCRegisterInfo> MRI;
@@ -267,11 +268,11 @@ bool CorDisasm::setTarget() {
 
   TargetTriple = sys::getDefaultTargetTriple();
   TargetTriple = Triple::normalize(TargetTriple);
-  Triple TheTriple(TargetTriple);
+  TheTriple.reset(new Triple(TargetTriple));
 
   switch (TheTargetArch) {
   case Target_Host:
-    switch (TheTriple.getArch()) {
+    switch (TheTriple->getArch()) {
     case Triple::x86:
       TheTargetArch = Target_X86;
       break;
@@ -286,27 +287,27 @@ bool CorDisasm::setTarget() {
       break;
     default:
       Print->Error("Unsupported Architecture: %s\n",
-                   Triple::getArchTypeName(TheTriple.getArch()));
+                   Triple::getArchTypeName(TheTriple->getArch()));
       return false;
     }
     break;
 
   case Target_Thumb:
     // TODO: Use TheTriple.setArch(Triple::thumb, Triple::ARMSubArch_v7) when the API becomes publicly available.
-    TheTriple.setArchName("thumbv7");
+    TheTriple->setArchName("thumbv7");
     break;
   case Target_Arm64:
-    TheTriple.setArch(Triple::aarch64);
+    TheTriple->setArch(Triple::aarch64);
     break;
   case Target_X86:
-    TheTriple.setArch(Triple::x86);
+    TheTriple->setArch(Triple::x86);
     break;
   case Target_X64:
-    TheTriple.setArch(Triple::x86_64);
+    TheTriple->setArch(Triple::x86_64);
     break;
   default:
     Print->Error("Unsupported Architecture: %s\n",
-                 Triple::getArchTypeName(TheTriple.getArch()));
+                 Triple::getArchTypeName(TheTriple->getArch()));
     return false;
   }
 
@@ -315,14 +316,14 @@ bool CorDisasm::setTarget() {
   // Get the target specific parser.
   string Error;
   string ArchName; // Target architecture is picked up from TargetTriple.
-  TheTarget = TargetRegistry::lookupTarget(ArchName, TheTriple, Error);
+  TheTarget = TargetRegistry::lookupTarget(ArchName, *TheTriple, Error);
   if (TheTarget == nullptr) {
     Print->Error(Error.c_str());
     return false;
   }
 
   // Update the triple name and return the found target.
-  TargetTriple = TheTriple.getTriple();
+  TargetTriple = TheTriple->getTriple();
   return true;
 }
 
@@ -397,7 +398,7 @@ bool CorDisasm::init() {
   }
 
   IP.reset(TheTarget->createMCInstPrinter(
-      Triple(TargetTriple), AsmPrinterVariant, *AsmInfo, *MII, *MRI));
+      *TheTriple, AsmPrinterVariant, *AsmInfo, *MII, *MRI));
 
   if (!IP) {
     Print->Error("error: No Instruction Printer for target %s\n",
