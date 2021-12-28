@@ -198,7 +198,6 @@ private:
   unique_ptr<const MCAsmInfo> AsmInfo;
   unique_ptr<const MCSubtargetInfo> STI;
   unique_ptr<const MCInstrInfo> MII;
-  unique_ptr<const MCObjectFileInfo> MOFI;
   unique_ptr<MCContext> Ctx;
   unique_ptr<MCDisassembler> Disassembler;
   unique_ptr<MCInstPrinter> IP;
@@ -376,8 +375,7 @@ bool CorDisasm::init() {
     return false;
   }
 
-  MOFI.reset(new MCObjectFileInfo);
-  Ctx.reset(new MCContext(AsmInfo.get(), MRI.get(), MOFI.get()));
+  Ctx.reset(new MCContext(*TheTriple, AsmInfo.get(), MRI.get(), STI.get()));
 
   Disassembler.reset(TheTarget->createMCDisassembler(*STI, *Ctx));
 
