@@ -65,6 +65,7 @@ if [ "$CrossCompiling" -eq 1 ]; then
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
         -DCMAKE_STRIP=/usr/$LLVMHostTriple/bin/strip \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
+        -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
@@ -79,6 +80,7 @@ else
         -DCMAKE_C_COMPILER=$(which clang) \
         -DCMAKE_CXX_COMPILER=$(which clang++) \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
+        -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \
