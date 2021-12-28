@@ -348,7 +348,8 @@ bool CorDisasm::init() {
   }
 
   // Set up disassembler.
-  AsmInfo.reset(TheTarget->createMCAsmInfo(*MRI, TargetTriple.c_str()));
+  MCTargetOptions TargetOpts;
+  AsmInfo.reset(TheTarget->createMCAsmInfo(*MRI, TargetTriple.c_str(), TargetOpts));
   if (!AsmInfo) {
     Print->Error("error: no assembly info for target %s\n");
     return false;
