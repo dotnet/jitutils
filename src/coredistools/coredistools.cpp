@@ -693,13 +693,21 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
           if (OperandL.getReg() != OperandR.getReg()) {
             return fail("Operand Register Mismatch", Left, Right);
           }
-        } else if (OperandL.isFPImm()) {
-          if (!OperandR.isFPImm()) {
+        } else if (OperandL.isSFPImm()) {
+          if (!OperandR.isSFPImm()) {
             return fail("Operand Kind Mismatch", Left, Right);
           }
 
-          if (OperandL.getFPImm() != OperandR.getFPImm()) {
-            return fail("Operand FP value Mismatch", Left, Right);
+          if (OperandL.getSFPImm() != OperandR.getSFPImm()) {
+            return fail("Operand Single-FP Immediate Mismatch", Left, Right);
+          }
+        } else if (OperandL.isDFPImm()) {
+          if (!OperandR.isDFPImm()) {
+            return fail("Operand Kind Mismatch", Left, Right);
+          }
+
+          if (OperandL.getDFPImm() != OperandR.getDFPImm()) {
+            return fail("Operand Double-FP Immediate Mismatch", Left, Right);
           }
         } else if (OperandL.isImm()) {
           if (!OperandR.isImm()) {
