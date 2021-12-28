@@ -292,6 +292,7 @@ bool CorDisasm::setTarget() {
     break;
 
   case Target_Thumb:
+    // TODO: Use TheTriple.setArch(Triple::thumb, Triple::ARMSubArch_v7) when the API becomes publicly available.
     TheTriple.setArchName("thumbv7");
     break;
   case Target_Arm64:
