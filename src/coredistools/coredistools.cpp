@@ -408,11 +408,10 @@ bool CorDisasm::init() {
 
 bool CorDisasm::decodeInstruction(BlockIterator &BIter, bool MayFail) const {
   raw_ostream &CommentStream = nulls();
-  raw_ostream &DebugOut = nulls();
   ArrayRef<uint8_t> ByteArray(BIter.Ptr, BIter.BlockSize);
   bool IsDecoded =
       Disassembler->getInstruction(BIter.Inst, BIter.InstrSize, ByteArray,
-                                   BIter.Addr, DebugOut, CommentStream);
+                                   BIter.Addr, CommentStream);
 
   if (!IsDecoded) {
     BIter.InstrSize = 0;
