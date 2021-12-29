@@ -69,6 +69,7 @@ if [ "$CrossCompiling" -eq 1 ]; then
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
+        -DLLVM_INCLUDE_TESTS=OFF \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
@@ -83,6 +84,7 @@ else
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
+        -DLLVM_INCLUDE_TESTS=OFF \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
