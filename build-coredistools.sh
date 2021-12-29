@@ -10,32 +10,47 @@ EnsureCrossRootfsDirectoryExists () {
     fi
 }
 
+CMakeOSXArchitectures=
+LLVMTargetsToBuild="AArch64;ARM;X86"
+
 case "$TargetOSArchitecture" in
     linux-arm)
-        CrossCompiling=1
+        CMakeCrossCompiling=ON
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
-        LLVMTargetsToBuild="AArch64;ARM"
+        LLVMTargetsToBuild=ARM
         EnsureCrossRootfsDirectoryExists
         ;;
 
     linux-arm64)
-        CrossCompiling=1
-        LLVMDefaultTargetTriple=aarch64-linux-gnu
+        CMakeCrossCompiling=ON
         LLVMHostTriple=aarch64-linux-gnu
-        LLVMTargetsToBuild="AArch64;ARM"
         EnsureCrossRootfsDirectoryExists
         ;;
 
-    linux-x64|osx-x64)
-        CrossCompiling=0
-        LLVMTargetsToBuild="AArch64;ARM;X86"
+    linux-x64)
+        CMakeCrossCompiling=OFF
+        LLVMHostTriple=x86_64-linux-gnu
+        ;;
+
+    osx-arm64)
+        CMakeCrossCompiling=ON
+        CMakeOSXArchitectures=arm64
+        LLVMHostTriple=arm64-apple-macos
+        ;;
+
+    osx-x64)
+        CMakeCrossCompiling=OFF
+        CMakeOSXArchitectures=x86_64
+        LLVMHostTriple=x86_64-apple-darwin
         ;;
 
     *)
         echo "Unknown target OS and architecture: $TargetOSArchitecture"
         exit 1
 esac
+
+LLVMDefaultTargetTriple=${LLVMDefaultTargetTriple:-$LLVMHostTriple}
 
 RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 SourcesDirectory=$RootDirectory/src
@@ -55,19 +70,17 @@ fi
 
 pushd "$BinariesDirectory"
 
-if [ "$CrossCompiling" -eq 1 ]; then
+if [ -z "$CrossRootfsDirectory" ]; then
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CROSSCOMPILING=ON \
+        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$(which clang) \
-        -DCMAKE_C_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
+        -DCMAKE_C_FLAGS="-target $LLVMHostTriple" \
         -DCMAKE_CXX_COMPILER=$(which clang++) \
-        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
-        -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
+        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple" \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
-        -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
-        -DCMAKE_STRIP=/usr/$LLVMHostTriple/bin/strip \
+        -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
@@ -82,12 +95,20 @@ else
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$(which clang) \
+        -DCMAKE_C_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
         -DCMAKE_CXX_COMPILER=$(which clang++) \
+        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
+        -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
+        -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
+        -DCMAKE_STRIP=/usr/$LLVMHostTriple/bin/strip \
+        -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
+        -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_INCLUDE_TESTS=OFF \
         -DLLVM_TABLEGEN=$(which llvm-tblgen) \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
