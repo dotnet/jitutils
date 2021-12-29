@@ -100,6 +100,7 @@ fi
 
 cmake \
     --build $BinariesDirectory \
+    --parallel \
     --target install-coredistools-stripped
 
 if [ "$?" -ne 0 ]; then
