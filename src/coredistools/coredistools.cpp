@@ -214,9 +214,9 @@ private:
   static const OpcodeMap X86Prefix[X86NumPrefixes];
 
   // The following constants is a workaround and the opcode numbers
-  // were copied from TableGen-erated lib/Target/ARM/ARMGenInstrInfo.inc
-  static const unsigned int Thumb2MoveImmediateOpcode = 3887; // Corresponds to t2MOVi16
-  static const unsigned int Thumb2MoveTopOpcode = 3885; // Correspond to t2MOVTi16
+  // were copied from TableGen-erated ${LLVM_BINARY_DIR}/lib/Target/ARM/ARMGenInstrInfo.inc
+  static const unsigned int Thumb2MoveImmediateOpcode = 4069; // Corresponds to t2MOVi16
+  static const unsigned int Thumb2MoveTopOpcode = 4067; // Correspond to t2MOVTi16
 };
 
 struct CorAsmDiff : public CorDisasm {
