@@ -3,12 +3,20 @@
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
+EnsureCrossRootfsDirectoryExists () {
+    if [ ! -d "$CrossRootfsDirectory" ]; then
+        echo "Invalid or unspecified CrossRootfsDirectory: $CrossRootfsDirectory"
+        exit 1
+    fi
+}
+
 case "$TargetOSArchitecture" in
     linux-arm)
         CrossCompiling=1
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
         LLVMTargetsToBuild="AArch64;ARM"
+        EnsureCrossRootfsDirectoryExists
         ;;
 
     linux-arm64)
@@ -16,6 +24,7 @@ case "$TargetOSArchitecture" in
         LLVMDefaultTargetTriple=aarch64-linux-gnu
         LLVMHostTriple=aarch64-linux-gnu
         LLVMTargetsToBuild="AArch64;ARM"
+        EnsureCrossRootfsDirectoryExists
         ;;
 
     linux-x64|osx-x64)
@@ -27,11 +36,6 @@ case "$TargetOSArchitecture" in
         echo "Unknown target OS and architecture: $TargetOSArchitecture"
         exit 1
 esac
-
-if [[ $CrossCompiling -eq 1 && ! -d $CrossRootfsDirectory ]]; then
-    echo "Invalid or unspecified CrossRootfsDirectory: $CrossRootfsDirectory"
-    exit 1
-fi
 
 RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 SourcesDirectory=$RootDirectory/src
