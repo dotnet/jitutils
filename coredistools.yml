@@ -191,8 +191,6 @@ jobs:
         TargetOSArchitecture: win-x64
       x86:
         TargetOSArchitecture: win-x86
-      arm:
-        TargetOSArchitecture: win-arm
       arm64:
         TargetOSArchitecture: win-arm64
 
@@ -235,7 +233,7 @@ jobs:
     displayName: Download artifacts
 
   - script: |
-      for %%I in (linux-arm linux-arm64 linux-x64 osx-x64 win-arm win-arm64 win-x64 win-x86) do (
+      for %%I in (linux-arm linux-arm64 linux-x64 osx-x64 win-arm64 win-x64 win-x86) do (
         mkdir "$(Build.BinariesDirectory)\%%I"
         xcopy "$(Pipeline.Workspace)\coredistools-%%I\*" "$(Build.BinariesDirectory)\%%I"
       )

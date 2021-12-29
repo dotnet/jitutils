@@ -4,12 +4,7 @@ setlocal EnableDelayedExpansion EnableExtensions
 set TargetOSArchitecture=%1
 set LLVMTargetsToBuild=AArch64;ARM;X86
 
-if /i "%TargetOSArchitecture%" == "win-arm" (
-    set GeneratorPlatform=ARM
-    set LLVMDefaultTargetTriple=thumbv7-pc-windows-msvc
-    set LLVMHostTriple=arm-pc-windows-msvc
-    set LLVMTargetsToBuild=AArch64;ARM
-) else if /i "%TargetOSArchitecture%" == "win-arm64" (
+if /i "%TargetOSArchitecture%" == "win-arm64" (
     set GeneratorPlatform=ARM64
     set LLVMHostTriple=aarch64-pc-windows-msvc
     set LLVMTargetsToBuild=AArch64;ARM
