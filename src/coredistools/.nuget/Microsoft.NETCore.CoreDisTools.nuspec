@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
     <id>Microsoft.NETCore.CoreDisTools </id>
-    <version>1.0.1-prerelease-00006</version>
+    <version>1.1.0</version>
     <title>Microsoft.NETCore Instruction-wise Disassembler</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
@@ -18,8 +18,8 @@
     <file src="$BinariesDirectory$\linux-arm\libcoredistools.so" target="runtimes\linux-arm\native\libcoredistools.so" />
     <file src="$BinariesDirectory$\linux-arm64\libcoredistools.so" target="runtimes\linux-arm64\native\libcoredistools.so" />
     <file src="$BinariesDirectory$\linux-x64\libcoredistools.so" target="runtimes\linux-x64\native\libcoredistools.so" />
+    <file src="$BinariesDirectory$\osx-arm64\libcoredistools.dylib" target="runtimes\osx-arm64\native\libcoredistools.dylib" />
     <file src="$BinariesDirectory$\osx-x64\libcoredistools.dylib" target="runtimes\osx-x64\native\libcoredistools.dylib" />
-    <file src="$BinariesDirectory$\win-arm\coredistools.dll" target="runtimes\win-arm\native\coredistools.dll" />
     <file src="$BinariesDirectory$\win-arm64\coredistools.dll" target="runtimes\win-arm64\native\coredistools.dll" />
     <file src="$BinariesDirectory$\win-x64\coredistools.dll" target="runtimes\win-x64\native\coredistools.dll" />
     <file src="$BinariesDirectory$\win-x86\coredistools.dll" target="runtimes\win-x86\native\coredistools.dll" />

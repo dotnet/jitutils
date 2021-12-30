@@ -23,6 +23,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/Host.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/SourceMgr.h"
@@ -190,13 +191,13 @@ private:
   bool setTarget();
 
   string TargetTriple;
+  unique_ptr<Triple> TheTriple;
   const Target *TheTarget;
 
   unique_ptr<MCRegisterInfo> MRI;
   unique_ptr<const MCAsmInfo> AsmInfo;
   unique_ptr<const MCSubtargetInfo> STI;
   unique_ptr<const MCInstrInfo> MII;
-  unique_ptr<const MCObjectFileInfo> MOFI;
   unique_ptr<MCContext> Ctx;
   unique_ptr<MCDisassembler> Disassembler;
   unique_ptr<MCInstPrinter> IP;
@@ -213,9 +214,9 @@ private:
   static const OpcodeMap X86Prefix[X86NumPrefixes];
 
   // The following constants is a workaround and the opcode numbers
-  // were copied from TableGen-erated lib/Target/ARM/ARMGenInstrInfo.inc
-  static const unsigned int Thumb2MoveImmediateOpcode = 3887; // Corresponds to t2MOVi16
-  static const unsigned int Thumb2MoveTopOpcode = 3885; // Correspond to t2MOVTi16
+  // were copied from TableGen-erated ${LLVM_BINARY_DIR}/lib/Target/ARM/ARMGenInstrInfo.inc
+  static const unsigned int Thumb2MoveImmediateOpcode = 4069; // Corresponds to t2MOVi16
+  static const unsigned int Thumb2MoveTopOpcode = 4067; // Correspond to t2MOVTi16
 };
 
 struct CorAsmDiff : public CorDisasm {
@@ -266,11 +267,11 @@ bool CorDisasm::setTarget() {
 
   TargetTriple = sys::getDefaultTargetTriple();
   TargetTriple = Triple::normalize(TargetTriple);
-  Triple TheTriple(TargetTriple);
+  TheTriple.reset(new Triple(TargetTriple));
 
   switch (TheTargetArch) {
   case Target_Host:
-    switch (TheTriple.getArch()) {
+    switch (TheTriple->getArch()) {
     case Triple::x86:
       TheTargetArch = Target_X86;
       break;
@@ -285,26 +286,27 @@ bool CorDisasm::setTarget() {
       break;
     default:
       Print->Error("Unsupported Architecture: %s\n",
-                   Triple::getArchTypeName(TheTriple.getArch()));
+                   Triple::getArchTypeName(TheTriple->getArch()));
       return false;
     }
     break;
 
   case Target_Thumb:
-    TheTriple.setArchName("thumbv7");
+    // TODO: Use TheTriple.setArch(Triple::thumb, Triple::ARMSubArch_v7) when the API becomes publicly available.
+    TheTriple->setArchName("thumbv7");
     break;
   case Target_Arm64:
-    TheTriple.setArch(Triple::aarch64);
+    TheTriple->setArch(Triple::aarch64);
     break;
   case Target_X86:
-    TheTriple.setArch(Triple::x86);
+    TheTriple->setArch(Triple::x86);
     break;
   case Target_X64:
-    TheTriple.setArch(Triple::x86_64);
+    TheTriple->setArch(Triple::x86_64);
     break;
   default:
     Print->Error("Unsupported Architecture: %s\n",
-                 Triple::getArchTypeName(TheTriple.getArch()));
+                 Triple::getArchTypeName(TheTriple->getArch()));
     return false;
   }
 
@@ -313,14 +315,14 @@ bool CorDisasm::setTarget() {
   // Get the target specific parser.
   string Error;
   string ArchName; // Target architecture is picked up from TargetTriple.
-  TheTarget = TargetRegistry::lookupTarget(ArchName, TheTriple, Error);
+  TheTarget = TargetRegistry::lookupTarget(ArchName, *TheTriple, Error);
   if (TheTarget == nullptr) {
     Print->Error(Error.c_str());
     return false;
   }
 
   // Update the triple name and return the found target.
-  TargetTriple = TheTriple.getTriple();
+  TargetTriple = TheTriple->getTriple();
   return true;
 }
 
@@ -346,7 +348,8 @@ bool CorDisasm::init() {
   }
 
   // Set up disassembler.
-  AsmInfo.reset(TheTarget->createMCAsmInfo(*MRI, TargetTriple.c_str()));
+  MCTargetOptions TargetOpts;
+  AsmInfo.reset(TheTarget->createMCAsmInfo(*MRI, TargetTriple.c_str(), TargetOpts));
   if (!AsmInfo) {
     Print->Error("error: no assembly info for target %s\n");
     return false;
@@ -373,8 +376,7 @@ bool CorDisasm::init() {
     return false;
   }
 
-  MOFI.reset(new MCObjectFileInfo);
-  Ctx.reset(new MCContext(AsmInfo.get(), MRI.get(), MOFI.get()));
+  Ctx.reset(new MCContext(*TheTriple, AsmInfo.get(), MRI.get(), STI.get()));
 
   Disassembler.reset(TheTarget->createMCDisassembler(*STI, *Ctx));
 
@@ -395,7 +397,7 @@ bool CorDisasm::init() {
   }
 
   IP.reset(TheTarget->createMCInstPrinter(
-      Triple(TargetTriple), AsmPrinterVariant, *AsmInfo, *MII, *MRI));
+      *TheTriple, AsmPrinterVariant, *AsmInfo, *MII, *MRI));
 
   if (!IP) {
     Print->Error("error: No Instruction Printer for target %s\n",
@@ -408,11 +410,10 @@ bool CorDisasm::init() {
 
 bool CorDisasm::decodeInstruction(BlockIterator &BIter, bool MayFail) const {
   raw_ostream &CommentStream = nulls();
-  raw_ostream &DebugOut = nulls();
   ArrayRef<uint8_t> ByteArray(BIter.Ptr, BIter.BlockSize);
   bool IsDecoded =
       Disassembler->getInstruction(BIter.Inst, BIter.InstrSize, ByteArray,
-                                   BIter.Addr, DebugOut, CommentStream);
+                                   BIter.Addr, CommentStream);
 
   if (!IsDecoded) {
     BIter.InstrSize = 0;
@@ -502,7 +503,7 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
     }
   }
 
-  IP->printInst(&BIter.Inst, OS, "", *STI);
+  IP->printInst(&BIter.Inst, BIter.Addr, "", *STI, OS);
   Print->Dump(OS.str().c_str());
 }
 
@@ -693,13 +694,21 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
           if (OperandL.getReg() != OperandR.getReg()) {
             return fail("Operand Register Mismatch", Left, Right);
           }
-        } else if (OperandL.isFPImm()) {
-          if (!OperandR.isFPImm()) {
+        } else if (OperandL.isSFPImm()) {
+          if (!OperandR.isSFPImm()) {
             return fail("Operand Kind Mismatch", Left, Right);
           }
 
-          if (OperandL.getFPImm() != OperandR.getFPImm()) {
-            return fail("Operand FP value Mismatch", Left, Right);
+          if (OperandL.getSFPImm() != OperandR.getSFPImm()) {
+            return fail("Operand Single-FP Immediate Mismatch", Left, Right);
+          }
+        } else if (OperandL.isDFPImm()) {
+          if (!OperandR.isDFPImm()) {
+            return fail("Operand Kind Mismatch", Left, Right);
+          }
+
+          if (OperandL.getDFPImm() != OperandR.getDFPImm()) {
+            return fail("Operand Double-FP Immediate Mismatch", Left, Right);
           }
         } else if (OperandL.isImm()) {
           if (!OperandR.isImm()) {

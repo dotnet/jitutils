@@ -36,7 +36,7 @@ resources:
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
   LLVMSourceBundle: llvm-project.bundle
-  LLVMSourceVersion: llvmorg-9.0.1
+  LLVMSourceVersion: llvmorg-13.0.0
 
 jobs:
 - job: checkout_llvm
@@ -128,15 +128,21 @@ jobs:
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
-- job: build_coredistools_macos_x64
+- job: build_coredistools_macos
   dependsOn: checkout_llvm
-  displayName: Build coredistools macOS x64
+  displayName: Build coredistools macOS
 
   pool:
-    vmImage: macOS-10.14
+    vmImage: $(VMImage)
 
-  variables:
-    TargetOSArchitecture: osx-x64
+  strategy:
+    matrix:
+      x64:
+        TargetOSArchitecture: osx-x64
+        VMImage: macOS-10.15
+      arm64:
+        TargetOSArchitecture: osx-arm64
+        VMImage: macOS-11
 
   workspace:
     clean: all
@@ -191,8 +197,6 @@ jobs:
         TargetOSArchitecture: win-x64
       x86:
         TargetOSArchitecture: win-x86
-      arm:
-        TargetOSArchitecture: win-arm
       arm64:
         TargetOSArchitecture: win-arm64
 
@@ -220,7 +224,7 @@ jobs:
   dependsOn:
   - crossbuild_coredistools_linux
   - build_coredistools_linux_x64
-  - build_coredistools_macos_x64
+  - build_coredistools_macos
   - build_coredistools_windows
   displayName: Build coredistools NuGet packages
 
@@ -235,7 +239,7 @@ jobs:
     displayName: Download artifacts
 
   - script: |
-      for %%I in (linux-arm linux-arm64 linux-x64 osx-x64 win-arm win-arm64 win-x64 win-x86) do (
+      for %%I in (linux-arm linux-arm64 linux-x64 osx-arm64 osx-x64 win-arm64 win-x64 win-x86) do (
         mkdir "$(Build.BinariesDirectory)\%%I"
         xcopy "$(Pipeline.Workspace)\coredistools-%%I\*" "$(Build.BinariesDirectory)\%%I"
       )
