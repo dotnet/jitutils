@@ -81,6 +81,7 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple" \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
+        -DCMAKE_STRIP=$(which strip) \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
