@@ -36,7 +36,7 @@ resources:
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
   LLVMSourceBundle: llvm-project.bundle
-  LLVMSourceVersion: llvmorg-13.0.0
+  LLVMSourceVersion: llvmorg-13.0.1
 
 jobs:
 - job: checkout_llvm
