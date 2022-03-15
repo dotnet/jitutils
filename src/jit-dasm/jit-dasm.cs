@@ -53,6 +53,8 @@ namespace ManagedCodeGen
         private IReadOnlyList<string> _platformPaths = Array.Empty<string>();
         private bool _dumpGCInfo = false;
         private bool _dumpDebugInfo = false;
+        private string _crossgenOptLevel = null;
+        private string _crossgenMibc = null;
         private bool _verbose = false;
         private bool _noDiffable = false;
         private CodeGenerator _codeGenerator;
@@ -63,6 +65,8 @@ namespace ManagedCodeGen
             {
                 syntax.DefineOption("altjit", ref _altjit, "If set, the name of the altjit to use (e.g., clrjit_win_arm64_x64.dll).");
                 syntax.DefineOption("c|crossgen", ref _crossgenExe, "The crossgen or crossgen2 compiler exe.");
+                syntax.DefineOption("crossgen-optlevel", ref _crossgenOptLevel, "Set optimization level for crossgen, can be: -O (default), -Od (disabled), -Os (space), -Ot (performance).");
+                syntax.DefineOption("crossgen-mibc", ref _crossgenMibc, "Set path to mibc file.");
                 syntax.DefineOption("j|jit", ref _jitPath, "The full path to the jit library.");
                 syntax.DefineOption("o|output", ref _rootPath, "The output path.");
                 syntax.DefineOption("f|file", ref _fileName, "Name of file to take list of assemblies from. Both a file and assembly list can be used.");
@@ -158,23 +162,25 @@ namespace ManagedCodeGen
             }
         }
 
-        public bool HasUserAssemblies { get { return AssemblyList.Count > 0; } }
-        public bool WaitForDebugger { get { return _wait; } }
-        public bool UseJitPath { get { return (_jitPath != null); } }
-        public bool Recursive { get { return _recursive; } }
-        public bool UseFileName { get { return (_fileName != null); } }
-        public bool DumpGCInfo { get { return _dumpGCInfo; } }
-        public bool DumpDebugInfo { get { return _dumpDebugInfo; } }
-        public bool DoVerboseOutput { get { return _verbose; } }
-        public bool NoDiffable { get { return _noDiffable; } }
-        public string CrossgenExecutable { get { return _crossgenExe; } }
-        public string JitPath { get { return _jitPath; } }
-        public string AltJit { get { return _altjit; } }
-        public string RootPath { get { return _rootPath; } }
-        public IReadOnlyList<string> PlatformPaths { get { return _platformPaths; } }
-        public string FileName { get { return _fileName; } }
-        public IReadOnlyList<string> AssemblyList { get { return _assemblyList; } }
-        public CodeGenerator CodeGenerator { get { return _codeGenerator; } }
+        public bool HasUserAssemblies => AssemblyList.Count > 0;
+        public bool WaitForDebugger => _wait;
+        public bool UseJitPath => _jitPath != null;
+        public bool Recursive => _recursive;
+        public bool UseFileName => (_fileName != null);
+        public bool DumpGCInfo => _dumpGCInfo;
+        public bool DumpDebugInfo => _dumpDebugInfo;
+        public bool DoVerboseOutput => _verbose;
+        public bool NoDiffable => _noDiffable;
+        public string CrossgenExecutable => _crossgenExe;
+        public string JitPath => _jitPath;
+        public string AltJit => _altjit;
+        public string RootPath => _rootPath;
+        public IReadOnlyList<string> PlatformPaths => _platformPaths;
+        public string FileName => _fileName;
+        public IReadOnlyList<string> AssemblyList => _assemblyList;
+        public CodeGenerator CodeGenerator => _codeGenerator;
+        public string CrossgenMibc => _crossgenMibc;
+        public string CrossgenOptLevel => _crossgenOptLevel;
     }
 
     public class AssemblyInfo
@@ -672,9 +678,14 @@ namespace ManagedCodeGen
 
         sealed private class Crossgen2DisasmEngine : DisasmEngine
         {
+            private string _optLevel;
+            private string _mibc;
+
             public Crossgen2DisasmEngine(string executable, Config config, string outputPath,
                 List<AssemblyInfo> assemblyInfoList) : base(executable, config, outputPath, assemblyInfoList)
             {
+                _optLevel = string.IsNullOrEmpty(config.CrossgenOptLevel) ? "-O" : config.CrossgenOptLevel;
+                _mibc = config.CrossgenMibc;
             }
 
             override protected void AddSilentOption(List<string> commandArgs)
@@ -705,17 +716,34 @@ namespace ManagedCodeGen
 
             override protected void AddOptimizationOption(List<string> commandArgs)
             {
-                commandArgs.Add("--optimize");
+                commandArgs.Add(_optLevel);
             }
 
             override protected ProcessResult ExecuteProcess(List<string> commandArgs, bool capture)
             {
+                if (!string.IsNullOrEmpty(_mibc))
+                {
+                    commandArgs.Add("--embed-pgo-data");
+                    commandArgs.Add("--mibc:" + _mibc);
+                }
+
                 commandArgs.Add("--parallelism 1");
                 foreach (var envVar in _environmentVariables)
                 {
                     commandArgs.Add("--codegenopt");
-                    string complusPrefix = "COMPlus_";
-                    commandArgs.Add(String.Format("{0}={1}", envVar.Key.Substring(complusPrefix.Length), envVar.Value));
+
+                    // Drop DOTNET_ and COMPLUS_ prefixes
+                    string envVarKey = envVar.Key;
+                    if (envVarKey.StartsWith("DOTNET_", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        envVarKey = envVarKey.Substring("DOTNET_".Length);
+                    }
+                    else if (envVarKey.StartsWith("COMPlus_", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        envVarKey = envVarKey.Substring("COMPlus_".Length);
+                    }
+
+                    commandArgs.Add($"{envVarKey}={envVar.Value}");
                 }
                 return Utility.ExecuteProcess(_executablePath, commandArgs, capture);
             }
