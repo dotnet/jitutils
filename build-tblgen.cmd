@@ -20,7 +20,7 @@ if not exist "%BinariesDirectory%" (
 pushd "%BinariesDirectory%"
 
 cmake.exe ^
-    -G "Visual Studio 16 2019" ^
+    -G "Visual Studio 17 2022" ^
     -DCMAKE_INSTALL_PREFIX="%RootDirectory%\" ^
     -DLLVM_TARGETS_TO_BUILD=AArch64;ARM;X86 ^
     "%SourcesDirectory%\llvm-project\llvm"
