@@ -53,7 +53,7 @@ if not exist "%BinariesDirectory%" (
 pushd "%BinariesDirectory%"
 
 cmake.exe ^
-    -G "Visual Studio 16 2019" ^
+    -G "Visual Studio 17 2022" ^
     -A %GeneratorPlatform% ^
     -DCMAKE_INSTALL_PREFIX="%StagingDirectory%" ^
     -DLLVM_DEFAULT_TARGET_TRIPLE=%LLVMDefaultTargetTriple% ^

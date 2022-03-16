@@ -28,15 +28,15 @@ trigger:
 
 resources:
   containers:
-  - container: ubuntu-16.04-arm
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-20210719121212-8a8d3be
-  - container: ubuntu-16.04-arm64
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-arm64-20210719121212-8a8d3be
+  - container: ubuntu-18.04-arm
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-20220312201346-b9de666
+  - container: ubuntu-18.04-arm64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-arm64-20220312201346-b2c2436
 
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
   LLVMSourceBundle: llvm-project.bundle
-  LLVMSourceVersion: llvmorg-13.0.0
+  LLVMSourceVersion: llvmorg-13.0.1
 
 jobs:
 - job: checkout_llvm
@@ -73,12 +73,12 @@ jobs:
   strategy:
     matrix:
       arm:
-        ContainerImage: ubuntu-16.04-arm
+        ContainerImage: ubuntu-18.04-arm
         CrossRootfsDirectory: /crossrootfs/arm
         TargetOSArchitecture: linux-arm
 
       arm64:
-        ContainerImage: ubuntu-16.04-arm64
+        ContainerImage: ubuntu-18.04-arm64
         CrossRootfsDirectory: /crossrootfs/arm64
         TargetOSArchitecture: linux-arm64
 
