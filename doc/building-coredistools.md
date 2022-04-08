@@ -1,6 +1,6 @@
 # Building coredistools
 
-## Building on Windows with Visual Studio 2019
+## Building on Windows with Visual Studio 2022
 
 1. Checkout the jitutils repository:
 ```
@@ -10,7 +10,7 @@ cd jitutils
 
 2. Checkout the LLVM project repository:
 ```
-git clone --depth 1 --branch llvmorg-9.0.1 https://github.com/llvm/llvm-project.git src\llvm-project
+git clone --depth 1 --branch llvmorg-13.0.1 https://github.com/llvm/llvm-project.git src\llvm-project
 ```
 
 4. Build `llvm-tblgen.exe`:
@@ -44,6 +44,11 @@ build-coredistools.cmd win-arm
 build-coredistools.cmd win-arm64
 ```
 
+### Building Debug binaries
+
+The `build-coredistools.cmd` script is set up to build a Release build. To create a Debug build with a PDB file,
+for debugging, change the `--config Release` line to `--config Debug`.
+
 ## Building on Linux
 
 1. Checkout the jitutils repository:
@@ -54,24 +59,24 @@ cd jitutils
 
 2. Checkout the LLVM project repository:
 ```
-git clone --depth 1 --branch llvmorg-9.0.1 https://github.com/llvm/llvm-project.git src/llvm-project
+git clone --depth 1 --branch llvmorg-13.0.1 https://github.com/llvm/llvm-project.git src/llvm-project
 ```
 
 3. Download LLVM release from GitHub:
 
 ```
-python3 eng/download-llvm-release.py -release llvmorg-9.0.1 -os linux
+python3 eng/download-llvm-release.py -release llvmorg-13.0.1 -os linux
 ```
 
 4. Locate under the current directory file `llvm-tblgen`
 ```
 find -name llvm-tblgen
-./clang+llvm-9.0.1-x86_64-linux-gnu-ubuntu-16.04/bin/llvm-tblgen
+./clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04/bin/llvm-tblgen
 ```
 and add its parent directory location to the `PATH`:
 
 ```
-export PATH=$(pwd)/clang+llvm-9.0.1-x86_64-linux-gnu-ubuntu-16.04/bin:$PATH
+export PATH=$(pwd)/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH
 ```
 
 5. Build `libcoredistools.so` for Linux x64:
@@ -89,15 +94,15 @@ find ./artifacts -name libcoredistools.so
 6. Build `libcoredistools.so` for Linux arm64 under Docker:
 
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-arm64-20200413125008-cfdd435
-export PATH=$(pwd)/clang+llvm-9.0.1-x86_64-linux-gnu-ubuntu-16.04/bin:$PATH
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-arm64-20220312201346-b2c2436
+export PATH=$(pwd)/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH
 ./build-coredistools.sh linux-arm64 /crossrootfs/arm64
 ```
 
 7. Build `libcoredistools.so` for Linux arm under Docker:
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-16.04-cross-20200413125008-09ec757
-export PATH=$(pwd)/clang+llvm-9.0.1-x86_64-linux-gnu-ubuntu-16.04/bin:$PATH
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-20220312201346-b9de666
+export PATH=$(pwd)/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH
 ./build-coredistools.sh linux-arm /crossrootfs/arm
 ```
 
