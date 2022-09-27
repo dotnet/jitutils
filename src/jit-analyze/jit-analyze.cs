@@ -73,6 +73,8 @@ namespace ManagedCodeGen
             private bool _retainOnlyTopFiles = false;
             private double? _overrideTotalBaseMetric;
             private double? _overrideTotalDiffMetric;
+            private bool _isDiffsOnly = false;
+            private bool _isSubsetOfDiffs = false;
 
             public Config(string[] args)
             {
@@ -118,6 +120,10 @@ namespace ManagedCodeGen
                         "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known.");
                     syntax.DefineOption("override-total-diff-metric", ref _overrideTotalDiffMetric, ParseDouble,
                         "Override the total diff metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known.");
+                    syntax.DefineOption("is-diffs-only", ref _isDiffsOnly,
+                        "Specify that the disassembly files are only produced for contexts with diffs, so avoid producing output making assumptions about the number of contexts.");
+                    syntax.DefineOption("is-subset-of-diffs", ref _isSubsetOfDiffs,
+                        "Specify that the disassembly files are only a subset of the contexts with diffs, so avoid producing output making assumptions about the remaining diffs.");
                 });
 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
@@ -172,6 +178,8 @@ namespace ManagedCodeGen
             public string Note { get { return _note; } }
             public double? OverrideTotalBaseMetric => _overrideTotalBaseMetric;
             public double? OverrideTotalDiffMetric => _overrideTotalDiffMetric;
+            public bool IsDiffsOnly => _isDiffsOnly;
+            public bool IsSubsetOfDiffs => _isSubsetOfDiffs;
 
             public string Filter {  get { return _filter; } }
 
@@ -1034,7 +1042,17 @@ namespace ManagedCodeGen
             DisplayMethodMetric("Top method regressions", "percentage", methodRegressionCount, sortedMethodRegressionsByPercentage);
             DisplayMethodMetric("Top method improvements", "percentage", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
-            summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed), {unchangedMethodCount} unchanged.");
+            if (!config.IsSubsetOfDiffs)
+            {
+                if (config.IsDiffsOnly)
+                {
+                    summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed).");
+                }
+                else
+                {
+                    summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed), {unchangedMethodCount} unchanged.");
+                }
+            }
 
             if (!config.SkipTextDiff)
             {
