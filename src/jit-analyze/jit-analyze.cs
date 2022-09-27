@@ -1042,16 +1042,16 @@ namespace ManagedCodeGen
             DisplayMethodMetric("Top method regressions", "percentage", methodRegressionCount, sortedMethodRegressionsByPercentage);
             DisplayMethodMetric("Top method improvements", "percentage", methodImprovementCount, sortedMethodImprovementsByPercentage);
 
-            if (config.IsSubsetOfDiffs)
+            if (!config.IsSubsetOfDiffs)
             {
-            }
-            else if (config.IsDiffsOnly)
-            {
-                summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed).");
-            }
-            else
-            {
-                summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed), {unchangedMethodCount} unchanged.");
+                if (config.IsDiffsOnly)
+                {
+                    summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed).");
+                }
+                else
+                {
+                    summaryContents.AppendLine($"\n{sortedMethodCount} total methods with {metricDisplayName} differences ({methodImprovementCount} improved, {methodRegressionCount} regressed), {unchangedMethodCount} unchanged.");
+                }
             }
 
             if (!config.SkipTextDiff)
