@@ -8,17 +8,17 @@
 //
 
 using System;
-using System.Diagnostics;
+using System.Collections.Generic;
 using System.CommandLine;
+using System.Diagnostics;
 using System.IO;
-using System.Xml;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Xml;
 
 namespace ManagedCodeGen
 {
@@ -46,7 +46,7 @@ namespace ManagedCodeGen
             private string _compileCommands = null;
             private bool _rewriteCompileCommands = false;
 
-            private JObject _jObj;
+            private JsonObject _jObj;
             private string _jitUtilsRoot = null;
 
             public Config(string[] args)
@@ -332,7 +332,7 @@ namespace ManagedCodeGen
                     {
                         string configJson = File.ReadAllText(path);
 
-                        _jObj = JObject.Parse(configJson);
+                        _jObj = (JsonObject)JsonObject.Parse(configJson);
                         
                         // Check if there is any default config specified.
                         if (_jObj[s_configFileRootKey]["default"] != null)
@@ -395,7 +395,7 @@ namespace ManagedCodeGen
 
                     try
                     {
-                        return token.Value<T>();
+                        return token.GetValue<T>();
                     }
                     catch (System.FormatException e)
                     {
@@ -580,17 +580,17 @@ namespace ManagedCodeGen
         public static string rewriteCompileCommands (string compileCommandFile, string project)
         {
             string allCommands = File.ReadAllText(compileCommandFile);
-            JArray commands = (JArray)JArray.Parse(allCommands);
+            JsonArray commands = (JsonArray)JsonArray.Parse(allCommands);
             List<CompileCommand> newCommands = new List<CompileCommand>();
 
-            foreach (JObject command in commands.Children<JObject>())
+            foreach (JsonObject command in commands)
             {
                 // Search for directory entries containing jit/<project>
-                if (command["directory"].Value<string>().Contains("jit/" + project))
+                if (command["directory"].ToString().Contains("jit/" + project))
                 {
                     // Add the command to our list of new commands
-                    string directory = command["directory"].Value<string>();
-                    string compileCommand = command["command"].Value<string>().Replace("-I", "-isystem").Replace("\\","/");
+                    string directory = command["directory"].ToString();
+                    string compileCommand = command["command"].ToString().Replace("-I", "-isystem").Replace("\\","/");
                     if (compileCommand.Contains("cl.exe"))
                     {
                         // First extract cl.exe path: it may contain spaces.
@@ -622,7 +622,7 @@ namespace ManagedCodeGen
                             }
                         }
                     }
-                    string file = command["file"].Value<string>();
+                    string file = command["file"].ToString();
                     newCommands.Add(new CompileCommand(directory, compileCommand, file));
                 }
 
@@ -630,7 +630,7 @@ namespace ManagedCodeGen
 
             // write commands back to a file.
             string newCompileCommandsFileName = Path.Combine(Path.GetDirectoryName(compileCommandFile), "compile_commands.json");
-            string json = JsonConvert.SerializeObject(newCommands.ToArray(), Newtonsoft.Json.Formatting.Indented);
+            string json = JsonSerializer.Serialize(newCommands.ToArray(), new JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(newCompileCommandsFileName, json);
 
             return newCompileCommandsFileName;

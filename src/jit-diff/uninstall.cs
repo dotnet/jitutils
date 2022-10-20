@@ -6,8 +6,8 @@ using System;
 using System.CommandLine;
 using System.IO;
 using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace ManagedCodeGen
 {
@@ -17,7 +17,7 @@ namespace ManagedCodeGen
         {
             var configFilePath = Path.Combine(config.JitUtilsRoot, s_configFileName);
             string configJson = File.ReadAllText(configFilePath);
-            var jObj = JObject.Parse(configJson);
+            var jObj = JsonObject.Parse(configJson);
 
             if ((jObj[s_configFileRootKey] == null) || (jObj[s_configFileRootKey]["tools"] == null))
             {
@@ -25,9 +25,8 @@ namespace ManagedCodeGen
                 return -1;
             }
 
-            var tools = (JArray)jObj[s_configFileRootKey]["tools"];
-            var elem = tools.Children()
-                            .Where(x => (string)x["tag"] == config.Tag);
+            var tools = (JsonArray)jObj[s_configFileRootKey]["tools"];
+            var elem = tools.Where(x => (string)x["tag"] == config.Tag);
             if (!elem.Any())
             {
                 Console.WriteLine("{0} is not installed in {1}.", config.Tag, s_configFileName);
@@ -47,16 +46,13 @@ namespace ManagedCodeGen
             }
 
             Console.WriteLine("Removing tag {0} from config file.", config.Tag);
-            jobj.Remove();
+            tools.Remove(jobj);
 
             // Overwrite current config.json with new data.
-            using (var file = File.CreateText(configFilePath))
+            using (var sw = File.CreateText(configFilePath))
             {
-                using (JsonTextWriter writer = new JsonTextWriter(file))
-                {
-                    writer.Formatting = Formatting.Indented;
-                    jObj.WriteTo(writer);
-                }
+                var json = JsonSerializer.Serialize (jObj, new JsonSerializerOptions { WriteIndented = true });
+                sw.Write(json);
             }
 
             return 0;
