@@ -49,7 +49,7 @@ A common task for developers is to format their changes before submitting a GitH
 A developer can run the tool using the tests/scripts/format.py script in the coreclr repo:
 
 ```
-python src\tests\Common\scripts\format.py --coreclr C:\gh\coreclr --arch x64 --os windows
+python src\coreclr\scripts\jitformat.py --coreclr C:\gh\runtime\src\coreclr --arch x64 --os windows
 ```
 
 This will run all build flavors and all projects for the user. This should be done on both
