@@ -3,17 +3,20 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-using System.Diagnostics;
-using System.CommandLine;
-using System.IO;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
-using Newtonsoft.Json;
-using System.Text;
-using System.Runtime.CompilerServices;
+using System.CommandLine;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Xml;
 
 namespace ManagedCodeGen
 {
@@ -397,7 +400,7 @@ namespace ManagedCodeGen
                 }
             }
 
-            [JsonProperty()]
+            [JsonInclude]
             private Metric[] metrics;
 
             public MetricCollection()
@@ -1185,7 +1188,7 @@ namespace ManagedCodeGen
         {
             StringBuilder fileContents = new StringBuilder();
 
-            fileContents.AppendLine(JsonConvert.SerializeObject(compareList.Where(file => !file.deltaMetrics.IsZero()), Formatting.Indented));
+            fileContents.AppendLine(JsonSerializer.Serialize(compareList.Where(file => !file.deltaMetrics.IsZero()), new JsonSerializerOptions { WriteIndented = true }));
 
             return fileContents;
         }
