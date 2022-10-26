@@ -2,24 +2,24 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.CommandLine;
-using System.CommandLine.Parsing;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.MSBuild;
+using System;
+using System.Collections.Generic;
+using System.CommandLine;
+using System.CommandLine.Invocation;
+using System.Data;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 
-// TODO:
+// TODO: 
 // * Fix dependent project limitation
 // * Find better way of piping in references needed for compilation, and resolving what's needed to run
 // * Try random stuff from https://github.com/dotnet/roslyn-sdk/tree/master/samples/CSharp/TreeTransforms
@@ -29,10 +29,33 @@ using Microsoft.CodeAnalysis.MSBuild;
 // Useful if you can express what you want in C# and need to see how to get a transform to create it for you.
 
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
+using static MutateTest.OptionHolder;
 
 namespace MutateTest
 {
-    public class MutateTestException : Exception { }
+    class OptionHolder
+    {
+        public string InputFile { get; set; }
+        public bool EhStress { get; set; }
+        public bool StructStress { get; set; }
+        public bool ShowResults { get; set; }
+        public bool Recursive { get; set; }
+        public bool Verbose { get; set; }
+        public bool Quiet { get; set; }
+        public bool StopAtFirstFailure { get; set; }
+        public int Seed { get; set; }
+        public int SizeLimit { get; set; }
+        public int TimeLimit { get; set; }
+        public bool Projects { get; set; }
+        public bool OnlyFailures { get; set; }
+
+        public static OptionHolder Options { get; set; }
+    }
+
+    public class MutateTestException : Exception
+    {
+
+    }
 
     enum ExecutionResultKind
     {
@@ -60,7 +83,7 @@ namespace MutateTest
         public int value;
 
         public bool Success => kind == ExecutionResultKind.RanNormally;
-        public bool OriginalCompileFailed => kind == ExecutionResultKind.CompilationFailed || kind == ExecutionResultKind.CompilationException
+        public bool OriginalCompileFailed => kind == ExecutionResultKind.CompilationFailed || kind == ExecutionResultKind.CompilationException 
             || kind == ExecutionResultKind.HasDependentProjects || kind == ExecutionResultKind.SkipSpecialCase;
 
         public bool CompileFailed => kind == ExecutionResultKind.CompilationFailed || kind == ExecutionResultKind.CompilationException
@@ -81,8 +104,8 @@ namespace MutateTest
                 case ExecutionResultKind.CompilationFailed: return "base compilation failed";
                 case ExecutionResultKind.MutantCompilationException: return "mutant compilation caused exception";
                 case ExecutionResultKind.MutantCompilationFailed: return "mutant compilation failed";
-                case ExecutionResultKind.SizeTooLarge: return $"test case size {value} bytes exceeds current size limit {Program.SizeLimit} bytes";
-                case ExecutionResultKind.RanTooLong: return $"base compile or excution time {value} ms exceeds current time limit {Program.TimeLimit} ms";
+                case ExecutionResultKind.SizeTooLarge: return $"test case size {value} bytes exceeds current size limit {Options.SizeLimit} bytes";
+                case ExecutionResultKind.RanTooLong: return $"base compile or excution time {value} ms exceeds current time limit {Options.TimeLimit} ms";
                 case ExecutionResultKind.LoadFailed: return "base assembly load failed";
                 case ExecutionResultKind.ThrewException: return "base execution threw an exception";
                 case ExecutionResultKind.BadExitCode: return $"base execution returned bad exit code {value}";
@@ -98,12 +121,8 @@ namespace MutateTest
         }
     }
 
-    internal sealed class Program
+    public class Program
     {
-        public static int SizeLimit;
-        public static int TimeLimit;
-        public static bool Verbose;
-
         private static readonly CSharpCompilationOptions DebugOptions =
             new CSharpCompilationOptions(OutputKind.ConsoleApplication, concurrentBuild: false, optimizationLevel: OptimizationLevel.Debug).WithAllowUnsafe(true);
 
@@ -131,30 +150,21 @@ namespace MutateTest
             MetadataReference.CreateFromFile(Assembly.Load(new AssemblyName("System.Threading.Tasks")).Location),
         };
 
-        public readonly Random _random;
-        private readonly List<Mutator> _mutators;
-        private readonly MutateTestRootCommand _command;
-        private readonly bool _quiet;
+        public static Random Random;
 
-        public Program(MutateTestRootCommand command)
+        static IEnumerable<Mutator> Mutators;
+
+        static IEnumerable<Mutator> GetMutators()
         {
-            _command = command;
-            _random = new Random(Get(command.Seed));
-            _quiet = Get(_command.Quiet);
+            var mutators = new List<Mutator>();
 
-            SizeLimit = Get(_command.SizeLimit);
-            TimeLimit = Get(_command.TimeLimit);
-            Verbose = Get(_command.Verbose);
-
-            _mutators = new List<Mutator>();
-
-            SplitBlocksInTwo splitBlocks = new SplitBlocksInTwo(_random);
-            _mutators.Add(splitBlocks);
+            SplitBlocksInTwo splitBlocks = new SplitBlocksInTwo(Random);
+            mutators.Add(splitBlocks);
 
             AddBlocks addBlocks = new AddBlocks();
-            _mutators.Add(addBlocks);
+            mutators.Add(addBlocks);
 
-            if (Get(_command.EHStress))
+            if (Options.EhStress)
             {
                 // Singletons
                 Mutator tryCatch = new WrapBlocksInTryCatch();
@@ -181,16 +191,16 @@ namespace MutateTest
                 Mutator randomMoveToCatchx2 = new RepeatMutator(randomMoveToCatch, 2);
 
                 // Random @ mutation time
-                Mutator tryCatchRandom = new RandomMutator(tryCatch, _random, 0.25);
-                Mutator tryEmtpyFinallyRandom = new RandomMutator(tryEmptyFinally, _random, 0.25);
-                Mutator emptyTryFinallyRandom = new RandomMutator(emptyTryFinally, _random, 0.25);
-                Mutator moveToCatchRandom = new RandomMutator(randomMoveToCatch, _random, 0.25);
+                Mutator tryCatchRandom = new RandomMutator(tryCatch, Random, 0.25);
+                Mutator tryEmtpyFinallyRandom = new RandomMutator(tryEmptyFinally, Random, 0.25);
+                Mutator emptyTryFinallyRandom = new RandomMutator(emptyTryFinally, Random, 0.25);
+                Mutator moveToCatchRandom = new RandomMutator(randomMoveToCatch, Random, 0.25);
 
                 // Alternative
-                Mutator either12 = new RandomChoiceMutator(tryCatch, tryEmptyFinally, _random, 0.5);
-                Mutator either34 = new RandomChoiceMutator(randomMoveToCatch, tryEmptyFinally, _random, 0.5);
-                Mutator either1s = new RandomChoiceMutator(tryCatch, splitBlocks, _random, 0.5);
-                Mutator either2s = new RandomChoiceMutator(randomMoveToCatch, splitBlocks, _random, 0.5);
+                Mutator either12 = new RandomChoiceMutator(tryCatch, tryEmptyFinally, Random, 0.5);
+                Mutator either34 = new RandomChoiceMutator(randomMoveToCatch, tryEmptyFinally, Random, 0.5);
+                Mutator either1s = new RandomChoiceMutator(tryCatch, splitBlocks, Random, 0.5);
+                Mutator either2s = new RandomChoiceMutator(randomMoveToCatch, splitBlocks, Random, 0.5);
 
                 // Combination
                 Mutator addSplit = new ComboMutator(addBlocks, splitBlocks);
@@ -210,40 +220,94 @@ namespace MutateTest
                 Mutator combo1s2 = new ComboMutator(combo1s, combo2);
                 Mutator combo4s3 = new ComboMutator(combo4s, combo3);
 
-                _mutators.AddRange(new Mutator[]
-                {
-                    addSplit,
-                    tryCatch, tryCatchx2,
-                    tryEmptyFinally, tryEmtpyFinallyx2,
-                    emptyTryFinally, emptyTryFinallyx2,
-                    randomTryCatch, randomTryEmptyFinally, randomEmptyTryFinally,
-                    randomMoveToCatch, randomMoveToCatchx2,
-                    tryCatchRandom, tryEmtpyFinallyRandom,
-                    emptyTryFinallyRandom, moveToCatchRandom,
-                    either12, either34, either1s, either2s,
-                    combo1, combo2, combo3, combo4,
-                    combo1s, combo2s, combo3s, combo4s,
-                    combo2s1, combo3s4, combo1s2, combo4s3,
-                });
+                mutators.AddRange(new Mutator[] {
+                        addSplit,
+                        tryCatch, tryCatchx2,
+                        tryEmptyFinally, tryEmtpyFinallyx2,
+                        emptyTryFinally, emptyTryFinallyx2,
+                        randomTryCatch, randomTryEmptyFinally, randomEmptyTryFinally,
+                        randomMoveToCatch, randomMoveToCatchx2,
+                        tryCatchRandom, tryEmtpyFinallyRandom,
+                        emptyTryFinallyRandom, moveToCatchRandom,
+                        either12, either34, either1s, either2s,
+                        combo1, combo2, combo3, combo4,
+                        combo1s, combo2s, combo3s, combo4s,
+                        combo2s1, combo3s4, combo1s2, combo4s3,
+                    });
             }
+
+            return mutators;
         }
 
         public static bool EnsureStack() => RuntimeHelpers.TryEnsureSufficientExecutionStack();
 
         private static bool isFirstRun = true;
 
-        private T Get<T>(Option<T> option) => _command.Result.GetValueForOption(option);
-
-        private static int Main(string[] args) =>
-            new CommandLineBuilder(new MutateTestRootCommand(args))
-                .UseVersionOption("-v")
-                .UseHelp()
-                .UseParseErrorReporting()
-                .Build()
-                .Invoke(args);
-
-        public int Run()
+        static int Main(string[] args)
         {
+            RootCommand rootCommand = new RootCommand();
+            rootCommand.Description = "Take an existing test case and produce new test cases via mutation";
+
+            Argument inputFile = new Argument<string>();
+            inputFile.Name = "InputFile";
+            inputFile.Description = "Input test case file or directory (for --recursive)";
+            rootCommand.AddArgument(inputFile);
+
+            Option ehStressOption = new Option("--ehStress", "add EH to methods", new Argument<bool>());
+            rootCommand.AddOption(ehStressOption);
+
+            Option structStressOption = new Option("--structStress", "replace locals with structs", new Argument<bool>());
+            rootCommand.AddOption(structStressOption);
+
+            Option showResultsOption = new Option("--showResults", "print modified programs to stdout", new Argument<bool>());
+            rootCommand.AddOption(showResultsOption);
+
+            Option verboseOption = new Option("--verbose", "describe each transformation", new Argument<bool>());
+            rootCommand.AddOption(verboseOption);
+
+            Option quietOption = new Option("--quiet", "produce minimal output", new Argument<bool>());
+            rootCommand.AddOption(quietOption);
+
+            Option recursiveOption = new Option("--recursive", "process each file recursively", new Argument<bool>());
+            rootCommand.AddOption(recursiveOption);
+
+            Option seedOption = new Option("--seed", "random seed", new Argument<int>(42));
+            rootCommand.AddOption(seedOption);
+
+            Option stopAtFirstFailureOption = new Option("--stopAtFirstFailure", "stop each test at first failure", new Argument<bool>());
+            rootCommand.AddOption(stopAtFirstFailureOption);
+
+            Option emptyBlocks = new Option("--emptyBlocks", "transform empty blocks", new Argument<bool>());
+            rootCommand.AddOption(emptyBlocks);
+
+            Option sizeLimit = new Option("--sizeLimit", "don't process programs larger than this size", new Argument<int>(10000));
+            rootCommand.AddOption(sizeLimit);
+
+            Option timeLimit = new Option("--timeLimit", "don't stress programs where compile + run takes more than this many milliseconds", new Argument<int>(1000));
+            rootCommand.AddOption(timeLimit);
+
+            Option projectsOption = new Option("--projects", "look for .csproj files instead of .cs files when doing recursive exploration", new Argument<bool>());
+            rootCommand.AddOption(projectsOption);
+
+            Option onlyFailuresOption = new Option("--onlyFailures", "only emit output for cases that fail at runtime", new Argument<bool>());
+            rootCommand.AddOption(onlyFailuresOption);
+
+            rootCommand.Handler = CommandHandler.Create<OptionHolder>((options) =>
+            {
+                Options = options;
+                return InnerMain();
+            });
+
+            return rootCommand.InvokeAsync(args).Result;
+        }
+
+        static int InnerMain()
+        {
+            // Setup option-dependent statics
+
+            Random = new Random(Options.Seed);
+            Mutators = GetMutators();
+
             int total = 0;
             int skipped = 0;
             int failed = 0;
@@ -252,23 +316,22 @@ namespace MutateTest
             int variantFailedToCompile = 0;
             int variantFailedToRun = 0;
 
-            if (Get(_command.Projects))
+            if (Options.Projects)
             {
                 MSBuildLocator.RegisterDefaults();
             }
 
-            string inputFilePath = _command.Result.GetValueForArgument(_command.InputFilePath);
-            if (Get(_command.Recursive))
+            if (Options.Recursive)
             {
-                if (!Directory.Exists(inputFilePath))
+                if (!Directory.Exists(Options.InputFile))
                 {
-                    Console.WriteLine($"Unable to access directory '{inputFilePath}'");
+                    Console.WriteLine($"Unable to access directory '{Options.InputFile}'");
                     return -1;
                 }
 
-                string suffix = Get(_command.Projects) ? ".csproj" : ".cs";
-                string kind = Get(_command.Projects) ? "projects" : "test files";
-                var inputFiles = Directory.EnumerateFiles(inputFilePath, "*", SearchOption.AllDirectories)
+                string suffix = Options.Projects ? ".csproj" : ".cs";
+                string kind = Options.Projects ? "projects" : "test files";
+                var inputFiles = Directory.EnumerateFiles(Options.InputFile, "*", SearchOption.AllDirectories)
                                     .Where(s => (s.EndsWith(suffix)));
 
                 Console.WriteLine($"Processing {inputFiles.Count()} {kind}\n");
@@ -283,7 +346,7 @@ namespace MutateTest
 
                     ExecutionResult result;
 
-                    if (Get(_command.Projects))
+                    if (Options.Projects)
                     {
                         result = MutateOneProject(subInputFile, ref subVariantTotal, ref subVariantFailedToCompile, ref subVariantFailedToRun);
                     }
@@ -294,7 +357,7 @@ namespace MutateTest
 
                     if (result.Success)
                     {
-                        if (!Get(_command.OnlyFailures))
+                        if (!Options.OnlyFailures)
                         {
                             Console.WriteLine($"// {subInputFile}: {subVariantTotal} variants, all passed");
                         }
@@ -304,7 +367,7 @@ namespace MutateTest
                     {
                         if (result.OriginalCompileFailed || result.OriginalRunFailed || result.NoMutationsAttempted)
                         {
-                            if (!Get(_command.OnlyFailures))
+                            if (!Options.OnlyFailures)
                             {
                                 Console.WriteLine($"// {subInputFile}: {result}");
                             }
@@ -317,7 +380,7 @@ namespace MutateTest
                                 failed++;
                             }
 
-                            if ((subVariantFailedToRun > 0) || !Get(_command.OnlyFailures))
+                            if ((subVariantFailedToRun > 0) || !Options.OnlyFailures)
                             {
                                 int successes = subVariantTotal - subVariantFailedToCompile - subVariantFailedToRun;
                                 Console.WriteLine($"// {subInputFile}: {subVariantTotal} variants, {successes} passed" +
@@ -347,18 +410,18 @@ namespace MutateTest
             {
                 ExecutionResult result;
 
-                if (Get(_command.Projects))
+                if (Options.Projects)
                 {
-                    result = MutateOneProject(inputFilePath, ref variantTotal, ref variantFailedToCompile, ref variantFailedToRun);
+                    result = MutateOneProject(Options.InputFile, ref variantTotal, ref variantFailedToCompile, ref variantFailedToRun);
                 }
                 else
                 {
-                    result = MutateOneTestFile(inputFilePath, ref variantTotal, ref variantFailedToCompile, ref variantFailedToRun);
+                    result = MutateOneTestFile(Options.InputFile, ref variantTotal, ref variantFailedToCompile, ref variantFailedToRun);
                 }
 
                 if (result.Success)
                 {
-                    Console.WriteLine($"// {inputFilePath}: {variantTotal} variants, all passed");
+                    Console.WriteLine($"// {Options.InputFile}: {variantTotal} variants, all passed");
                     succeeded++;
                     return 100;
                 }
@@ -366,22 +429,22 @@ namespace MutateTest
                 if (result.OriginalCompileFailed || result.OriginalRunFailed || result.NoMutationsAttempted)
                 {
                     // base case did not compile
-                    Console.WriteLine($"// {inputFilePath}: {result}");
+                    Console.WriteLine($"// {Options.InputFile}: {result}");
                 }
                 else
                 {
                     int successes = variantTotal - variantFailedToCompile - variantFailedToRun;
-                    Console.WriteLine($"// {inputFilePath}: {variantTotal} variants, {successes} passed" +
+                    Console.WriteLine($"// {Options.InputFile}: {variantTotal} variants, {successes} passed" +
                         $" [{variantFailedToCompile} did not compile, {variantFailedToRun} did not run correctly]");
                 }
-
+                
                 return -1;
             }
         }
 
-        private ExecutionResult MutateOneTestFile(string testFile, ref int attempted, ref int failedToCompile, ref int failedToRun)
+        static ExecutionResult MutateOneTestFile(string testFile, ref int attempted, ref int failedToCompile, ref int failedToRun)
         {
-            if (!_quiet)
+            if (!Options.Quiet)
             {
                 Console.WriteLine("---------------------------------------");
                 Console.WriteLine("// Original Program");
@@ -404,9 +467,9 @@ namespace MutateTest
             return MutateOneCompilation(compilation, Path.GetFileName(testFile), ref attempted, ref failedToCompile, ref failedToRun);
         }
 
-        private ExecutionResult MutateOneProject(string projectFile, ref int attempted, ref int failedToCompile, ref int failedToRun)
+        static ExecutionResult MutateOneProject(string projectFile, ref int attempted, ref int failedToCompile, ref int failedToRun)
         {
-            if (!_quiet)
+            if (!Options.Quiet)
             {
                 Console.WriteLine("---------------------------------------");
                 Console.WriteLine("// Original Program");
@@ -430,11 +493,11 @@ namespace MutateTest
 
                 // Seems like we need to spoon feed in the assembly references here?
                 // Probably missing some important step.
-                var compilation = project.GetCompilationAsync().Result.AddReferences(References);
+                var compilation = project.GetCompilationAsync().Result.AddReferences(References);  
 
-                if (!_quiet)
+                if (!Options.Quiet)
                 {
-                    if (Get(_command.ShowResults))
+                    if (Options.ShowResults)
                     {
                         // Would be nice to show breakdown by file....
                         foreach (SyntaxTree s in compilation.SyntaxTrees)
@@ -448,7 +511,7 @@ namespace MutateTest
             }
         }
 
-        private ExecutionResult MutateOneCompilation(CSharpCompilation compilation, string name, ref int attempted, ref int failedToCompile, ref int failedToRun)
+        static ExecutionResult MutateOneCompilation(CSharpCompilation compilation, string name, ref int attempted, ref int failedToCompile, ref int failedToRun)
         {
             // Bail on some specific tests
             // We use substring match as there are often variants
@@ -470,7 +533,7 @@ namespace MutateTest
 
             if (exclusions.Any(x => name.Contains(x)))
             {
-                return new ExecutionResult { kind = ExecutionResultKind.SkipSpecialCase };
+                return new ExecutionResult() { kind = ExecutionResultKind.SkipSpecialCase };
             }
 
             Stopwatch s = new Stopwatch();
@@ -487,13 +550,13 @@ namespace MutateTest
 
             int inputSize = compilation.SyntaxTrees.Sum(x => x.Length);
 
-            if (inputSize > Get(_command.SizeLimit))
+            if (inputSize > Options.SizeLimit)
             {
-                return new ExecutionResult { kind = ExecutionResultKind.SizeTooLarge, value = inputSize };
+                return new ExecutionResult() { kind = ExecutionResultKind.SizeTooLarge, value = inputSize };
             }
 
             // First run will be slower because of jitting (sigh)
-            int timeLimit = Program.TimeLimit;
+            int timeLimit = Options.TimeLimit;
             if (isFirstRun)
             {
                 timeLimit *= 3;
@@ -502,15 +565,15 @@ namespace MutateTest
 
             if (s.ElapsedMilliseconds > timeLimit)
             {
-                return new ExecutionResult { kind = ExecutionResultKind.RanTooLong, value = (int) s.ElapsedMilliseconds };
+                return new ExecutionResult() { kind = ExecutionResultKind.RanTooLong, value = (int) s.ElapsedMilliseconds };
             }
 
             // Ok, we have a compile and runnable test case. Now, mess with it....
             int variantNumber = 0;
 
-            ExecutionResult result = new ExecutionResult { kind = ExecutionResultKind.RanNormally };
+            ExecutionResult result = new ExecutionResult() { kind = ExecutionResultKind.RanNormally };
 
-            foreach (var mutator in _mutators)
+            foreach (var mutator in Mutators)
             {
                 attempted++;
                 ExecutionResult mutationResult = ApplyMutations(variantNumber++, mutator, compilation);
@@ -518,7 +581,7 @@ namespace MutateTest
                 if (!mutationResult.Success)
                 {
                     // count assembly load failures as compile failures for now.
-                    if (mutationResult.CompileFailed || mutationResult.AssemblyLoadFailed)
+                    if (mutationResult.CompileFailed || mutationResult.AssemblyLoadFailed)               
                     {
                         failedToCompile++;
                     }
@@ -538,12 +601,12 @@ namespace MutateTest
             return result;
         }
 
-        private ExecutionResult ApplyMutations(int variantNumber, Mutator m, CSharpCompilation compilation)
+        static ExecutionResult ApplyMutations(int variantNumber, Mutator m, CSharpCompilation compilation)
         {
             string shortTitle = $"Mutation [{variantNumber}]";
             string title = $"// {shortTitle}: {m.Name}";
 
-            if (!_quiet)
+            if (!Options.Quiet)
             {
                 Console.WriteLine();
                 Console.WriteLine("---------------------------------------");
@@ -561,11 +624,11 @@ namespace MutateTest
                 transformedTrees.Add(SyntaxTree(transformedRoot));
             }
 
-            if (!_quiet)
+            if (!Options.Quiet)
             {
                 Console.WriteLine($"// {shortTitle}: made {totalTransformCount} mutations");
 
-                if (Get(_command.ShowResults))
+                if (Options.ShowResults)
                 {
                     foreach (SyntaxTree s in transformedTrees)
                     {
@@ -579,7 +642,7 @@ namespace MutateTest
             return CompileAndExecute(newCompilation, shortTitle, isMutant: true);
         }
 
-        private ExecutionResult CompileAndExecute(CSharpCompilation compilation, string name, bool isMutant = false)
+        static ExecutionResult CompileAndExecute(CSharpCompilation compilation, string name, bool isMutant = false)
         {
             using (var ms = new MemoryStream())
             {
@@ -590,7 +653,7 @@ namespace MutateTest
                 }
                 catch (Exception ex)
                 {
-                    if (!_quiet)
+                    if (!Options.Quiet)
                     {
                         Console.WriteLine($"// Compilation of '{name}' failed: {ex.Message}");
                     }
@@ -599,7 +662,7 @@ namespace MutateTest
 
                 if (!emitResult.Success)
                 {
-                    if (!_quiet)
+                    if (!Options.Quiet)
                     {
                         Console.WriteLine($"// Compilation of '{name}' failed: {emitResult.Diagnostics.Length} errors");
                         foreach (var d in emitResult.Diagnostics)
@@ -610,7 +673,7 @@ namespace MutateTest
                     return new ExecutionResult() { kind = isMutant ? ExecutionResultKind.MutantCompilationFailed : ExecutionResultKind.CompilationFailed };
                 }
 
-                if (!_quiet)
+                if (!Options.Quiet)
                 {
                     Console.WriteLine($"// Compiled '{name}' successfully");
                 }
@@ -679,7 +742,7 @@ namespace MutateTest
                     return new ExecutionResult() { kind = isMutant? ExecutionResultKind.MutantBadExitCode : ExecutionResultKind.BadExitCode, value = (int)inputResult };
                 }
 
-                if (!_quiet)
+                if (!Options.Quiet)
                 {
                     Console.WriteLine($"// Execution of '{name}' succeeded (exitCode {inputResult})");
                 }
@@ -718,7 +781,7 @@ namespace MutateTest
 
         protected virtual void Announce(SyntaxNode node, string message = "")
         {
-            if (Program.Verbose)
+            if (Options.Verbose)
             {
                 var lineSpan = node.GetLocation().GetMappedLineSpan();
                 Console.WriteLine($"// {Name} [{TransformCount}] @ lines {lineSpan.StartLinePosition.Line}-{lineSpan.EndLinePosition.Line} {message}");
@@ -728,7 +791,7 @@ namespace MutateTest
 
         protected void AnnounceSkip(SyntaxNode node, string message = "")
         {
-            if (Program.Verbose)
+            if (Options.Verbose)
             {
                 var lineSpan = node.GetLocation().GetMappedLineSpan();
                 Console.WriteLine($"// SKIP {Name} [{TransformCount}] @ lines {lineSpan.StartLinePosition.Line}-{lineSpan.EndLinePosition.Line} {message}");
@@ -787,12 +850,12 @@ namespace MutateTest
             // before we see a block. Bail for now.
             return node.DescendantNodes(descendIntoTrivia: false).Any(
                 x =>
-                x.IsKind(SyntaxKind.ReturnStatement)
-                || x.IsKind(SyntaxKind.ThrowStatement)
-                || x.IsKind(SyntaxKind.ImplicitStackAllocArrayCreationExpression)
-                || x.IsKind(SyntaxKind.StackAllocArrayCreationExpression)
-                || x.IsKind(SyntaxKind.GotoStatement)
-                || x.IsKind(SyntaxKind.BreakStatement)
+                x.Kind() == SyntaxKind.ReturnStatement
+                || x.Kind() == SyntaxKind.ThrowStatement
+                || x.Kind() == SyntaxKind.ImplicitStackAllocArrayCreationExpression
+                || x.Kind() == SyntaxKind.StackAllocArrayCreationExpression
+                || x.Kind() == SyntaxKind.GotoStatement
+                || x.Kind() == SyntaxKind.BreakStatement
                 ); ;
         }
 
@@ -801,32 +864,32 @@ namespace MutateTest
         {
             // Throw is legally ok, but we disallow to try and avoid causing stack overflow
             return node.DescendantNodes(descendIntoTrivia: false).Any(
-                x => x.IsKind(SyntaxKind.ImplicitStackAllocArrayCreationExpression)
-                || x.IsKind(SyntaxKind.StackAllocArrayCreationExpression)
-                || x.IsKind(SyntaxKind.ThrowStatement)
+                x => x.Kind() == SyntaxKind.ImplicitStackAllocArrayCreationExpression
+                || x.Kind() == SyntaxKind.StackAllocArrayCreationExpression
+                || x.Kind() == SyntaxKind.ThrowStatement
                 );
         }
 
         protected static bool IsEnclosedInLoop(SyntaxNode node)
         {
             return node.Ancestors().Any(
-                x => x.IsKind(SyntaxKind.ForStatement)
-                || x.IsKind(SyntaxKind.DoStatement)
-                || x.IsKind(SyntaxKind.WhileStatement)
-                || x.IsKind(SyntaxKind.ForEachStatement)
+                x => x.Kind() == SyntaxKind.ForStatement
+                || x.Kind() == SyntaxKind.DoStatement
+                || x.Kind() == SyntaxKind.WhileStatement
+                || x.Kind() == SyntaxKind.ForEachStatement
                 );
         }
 
         protected static bool IsEnclosedInCatch(SyntaxNode node)
         {
             return node.Ancestors().Any(
-                x => x.IsKind(SyntaxKind.CatchClause)
+                x => x.Kind() == SyntaxKind.CatchClause
                 );
         }
 
         protected static bool DefinesLabel(SyntaxNode node)
         {
-            return node.DescendantNodes().Any(x => x.IsKind(SyntaxKind.LabeledStatement));
+            return node.DescendantNodes().Any(x => x.Kind() == SyntaxKind.LabeledStatement);
         }
 
     public SyntaxNode Mutate(SyntaxNode node, out int transformCount)
@@ -838,7 +901,7 @@ namespace MutateTest
         }
     }
 
-    // Rewrite <block> as
+    // Rewrite <block> as 
     // try { <block> } catch (MutateTest.MutateTestException) { throw; }
     public class WrapBlocksInTryCatch : Mutator
     {
@@ -1268,7 +1331,7 @@ namespace MutateTest
         {
             node = (ExpressionStatementSyntax)base.VisitExpressionStatement(node);
 
-            if (node.Parent.IsKind(SyntaxKind.Block))
+            if (node.Parent.Kind() == SyntaxKind.Block)
             {
                 AnnounceSkip(node);
                 return node;
@@ -1283,7 +1346,7 @@ namespace MutateTest
         {
             node = (ReturnStatementSyntax)base.VisitReturnStatement(node);
 
-            if (node.Parent.IsKind(SyntaxKind.Block))
+            if (node.Parent.Kind() == SyntaxKind.Block)
             {
                 AnnounceSkip(node);
                 return node;

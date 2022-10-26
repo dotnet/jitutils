@@ -2,12 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Text.Json;
 using MethodDB = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<AnalyzeAsm.PositionInfo>>>;
 
 namespace AnalyzeAsm
@@ -135,7 +135,7 @@ namespace AnalyzeAsm
                 index.AddFile(dasmFile);
             }
 
-            string contents = JsonSerializer.Serialize(index);
+            string contents = JsonConvert.SerializeObject(index);
             File.WriteAllText(Path.Combine(folderPath, indexFileName), contents);
 
             stopWatch.Stop();
@@ -158,7 +158,7 @@ namespace AnalyzeAsm
                 return false;
             }
 
-            index = JsonSerializer.Deserialize<MethodIndex>(File.ReadAllText(indexFilePath));
+            index = JsonConvert.DeserializeObject<MethodIndex>(File.ReadAllText(indexFilePath));
             var expectedExeTimeStamp = index.LastModifiedTimeOfExe;
             var actualExeTimeStamp = File.GetLastWriteTimeUtc(Assembly.GetExecutingAssembly().Location);
 

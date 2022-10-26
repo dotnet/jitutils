@@ -3,18 +3,13 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-using System.Collections.Generic;
 using System.CommandLine;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Xml;
+using System.Linq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace ManagedCodeGen
 {
@@ -24,7 +19,7 @@ namespace ManagedCodeGen
         {
             var configFilePath = Path.Combine(config.JitUtilsRoot, s_configFileName);
             string configJson = File.ReadAllText(configFilePath);
-            var jObj = JsonObject.Parse(configJson);
+            var jObj = JObject.Parse(configJson);
 
             if ((jObj[s_configFileRootKey] == null) || (jObj[s_configFileRootKey]["tools"] == null))
             {
@@ -37,7 +32,7 @@ namespace ManagedCodeGen
                 return -1;
             }
 
-            var tools = (JsonArray)jObj[s_configFileRootKey]["tools"];
+            var tools = (JArray)jObj[s_configFileRootKey]["tools"];
 
             // Early out if the tool is already installed. We can only do this if we're not doing
             // "--last_successful", in which case we don't know what the build number (and hence
@@ -139,6 +134,8 @@ namespace ManagedCodeGen
 
             toolPath = Path.Combine(toolPath, tag);
 
+            JObject newTool = new JObject();
+            newTool.Add("tag", tag);
             string platformPath = Path.Combine(toolPath, "Product");
             if (!Directory.Exists(platformPath))
             {
@@ -151,20 +148,27 @@ namespace ManagedCodeGen
             {
                 if (Path.GetFileName(dir).ToUpper().Contains(buildOS))
                 {
-                    tools.Add(new JsonObject
+                    newTool.Add("path", Path.GetFullPath(dir));
+                    if (tools.HasValues)
                     {
-                        ["tag"] = tag,
-                        ["path"] = Path.GetFullPath(dir)
-                    });
+                        tools.Last.AddAfterSelf(newTool);
+                    }
+                    else
+                    {
+                        tools.Add(newTool);
+                    }
                     break;
                 }
             }
 
             // Overwrite current config.json with new data.
-            using (var sw = File.CreateText(configFilePath))
+            using (var file = File.CreateText(configFilePath))
             {
-                var json = JsonSerializer.Serialize (jObj, new JsonSerializerOptions { WriteIndented = true });
-                sw.Write(json);
+                using (JsonTextWriter writer = new JsonTextWriter(file))
+                {
+                    writer.Formatting = Formatting.Indented;
+                    jObj.WriteTo(writer);
+                }
             }
 
             return 0;

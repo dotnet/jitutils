@@ -1,10 +1,10 @@
 Notes:
 
-* The code in `Program.cs` has **lot of redundant code**. Most of the methods are copied from previous methods with little tweak.
+* The code in `Program.cs` has **lot of redundant code**. Most of the methods are copied from previous methods with little tweak. 
 * All the methods rely on `ngen_arm64.txt` / `ngen_amd64.txt` file that are produced by doing the following:
-  * `set DOTNET_NGenDisasm=1`
-  * Running `build-test.cmd crossgen > ngen_arm64.txt`
-* The path locations of these files are hardcoded too.
+  * `set COMPlus_NGenDisasm=1`
+  * Running `build-test.cmd crossgen > ngen_arm64.txt` 
+* The path locations of these files are hardcoded too. 
 
 
 `FindLdrGroups_1()` finds patterns:

@@ -23,17 +23,17 @@
 
 
 using System;
-using System.Collections.Generic;
-using System.CommandLine;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.CommandLine;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.IO.Compression;
+using Newtonsoft.Json;
 
 namespace ManagedCodeGen
 {
@@ -386,7 +386,7 @@ namespace ManagedCodeGen
                     if (response.IsSuccessStatusCode)
                     {
                         var json = await response.Content.ReadAsStringAsync();
-                        var productJobs = JsonSerializer.Deserialize<ProductJobs>(json);
+                        var productJobs = JsonConvert.DeserializeObject<ProductJobs>(json);
                         return productJobs.jobs;
                     }
                     else
@@ -414,7 +414,7 @@ namespace ManagedCodeGen
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
-                    var jobBuilds = JsonSerializer.Deserialize<JobBuilds>(json);
+                    var jobBuilds = JsonConvert.DeserializeObject<JobBuilds>(json);
 
                     if (lastSuccessfulBuild)
                     {
@@ -492,7 +492,7 @@ namespace ManagedCodeGen
                 if (response.IsSuccessStatusCode)
                 {
                     var buildInfoJson = await response.Content.ReadAsStringAsync();
-                    var info = JsonSerializer.Deserialize<BuildInfo>(buildInfoJson);
+                    var info = JsonConvert.DeserializeObject<BuildInfo>(buildInfoJson);
                     return info;
                 }
                 else

@@ -24,7 +24,7 @@ using System.Text;
 
 namespace ManagedCodeGen
 {
-    // Define options to be parsed
+    // Define options to be parsed 
     public class Config
     {
         private ArgumentSyntax _syntaxResult;
@@ -481,10 +481,10 @@ namespace ManagedCodeGen
                         }
                     }
 
-                    // Pick up ambient DOTNET settings.
+                    // Pick up ambient COMPlus settings.
                     foreach (string envVar in Environment.GetEnvironmentVariables().Keys)
                     {
-                        if (envVar.IndexOf("DOTNET_") == 0)
+                        if (envVar.IndexOf("COMPlus_") == 0)
                         {
                             string value = Environment.GetEnvironmentVariable(envVar);
                             AppendEnvironmentVariableToPmiEnv(envVar, value);
@@ -492,45 +492,45 @@ namespace ManagedCodeGen
                     }
 
                     // Set up environment do PMI based disasm.
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitDisasm", "*");
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitDisasmAssemblies", Path.GetFileNameWithoutExtension(assembly.Name));
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitUnwindDump", "*");
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitEHDump", "*");
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitDisasm", "*");
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitDisasmAssemblies", Path.GetFileNameWithoutExtension(assembly.Name));
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitUnwindDump", "*");
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitEHDump", "*");
                     if (!this._config.NoDiffable)
                     {
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_JitDiffableDasm", "1");
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_JitDiffableDasm", "1");
                     }
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_ReadyToRun", "0");
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_ZapDisable", "1");
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitNoForceFallback", "1");      // Don't stress noway fallback path.
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
-
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_ReadyToRun", "0");
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_ZapDisable", "1");
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitNoForceFallback", "1");      // Don't stress noway fallback path.
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
+                    
                     // We likely don't want tiering enabled, but allow it, if user wants tier0 codegen
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_TieredCompilation", _config.Tier0 ? "1" : "0");
+                    AppendEnvironmentVariableToPmiEnv("COMPlus_TieredCompilation", _config.Tier0 ? "1" : "0");
 
                     if (_config.Tier0)
                     {
                         // jit all methods at tier0
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_TC_QuickJitForLoops", "1");
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_TC_QuickJitForLoops", "1");
                         // don't promote any method to tier1
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_TC_CallCounting", "0");
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_TC_CallCounting", "0");
                     }
 
                     if (this.doGCDump)
                     {
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_JitGCDump", "*");
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_JitGCDump", "*");
                     }
 
                     if (this.doDebugDump)
                     {
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_JitDebugDump", "*");
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_JitDebugDump", "*");
                     }
 
                     if (this._altjit != null)
                     {
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_AltJit", "*");
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_AltJitName", _altjit);
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_AltJit", "*");
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_AltJitName", _altjit);
 
                         const string arm64AsTarget = "_arm64_";
                         int targetArm64 = _altjit.IndexOf(arm64AsTarget);
@@ -541,7 +541,7 @@ namespace ManagedCodeGen
                             {
                                 // If this looks like a cross-targeting altjit with a arm64 target and a different host
                                 // then fix the SIMD size.
-                                AppendEnvironmentVariableToPmiEnv("DOTNET_SIMD16ByteOnly", "1");
+                                AppendEnvironmentVariableToPmiEnv("COMPlus_SIMD16ByteOnly", "1");
                             }
                         }
                     }
@@ -565,7 +565,7 @@ namespace ManagedCodeGen
 
                         Utility.EnsureParentDirectoryExists(dasmPath);
 
-                        AppendEnvironmentVariableToPmiEnv("DOTNET_JitStdOutFile", dasmPath);
+                        AppendEnvironmentVariableToPmiEnv("COMPlus_JitStdOutFile", dasmPath);
 
                         AddEnvironmentVariable("PMIENV", pmiEnv.ToString());
 
@@ -610,7 +610,7 @@ namespace ManagedCodeGen
 
                         if (hasOutput && File.Exists(logPath) && !File.Exists(dasmPath))
                         {
-                            // Looks like the JIT does not support DOTNET_JitStdOutFile so
+                            // Looks like the JIT does not support COMPlus_JitStdOutFile so
                             // the assembly output must be in the log file.
                             File.Move(logPath, dasmPath);
                         }

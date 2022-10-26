@@ -3,13 +3,12 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
-using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Linq;
+using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 
@@ -153,7 +152,7 @@ namespace ManagedCodeGen
             private bool _cctors;
             private int  _count = 20;
             private string _metric = "CodeSize";
-            private JsonObject _jObj;
+            private JObject _jObj;
             private bool _configFileLoaded = false;
             private bool _noJitUtilsRoot = false;
             private bool _validationError = false;
@@ -702,7 +701,7 @@ namespace ManagedCodeGen
                     return;
                 }
 
-                var tools = (JsonArray)_jObj[s_configFileRootKey]["tools"];
+                var tools = _jObj[s_configFileRootKey]["tools"];
                 if (tools == null)
                 {
                     return;
@@ -949,13 +948,13 @@ namespace ManagedCodeGen
                 {
                     found = true;
 
-                    string tag = token.ToString();
+                    string tag = token.Value<string>();
 
                     // Extract set value for tool and see if we can find it
                     // in the installed tools.
-                    var tools = (JsonArray)_jObj[s_configFileRootKey]["tools"];
-                    var path = tools.Where(x => (string)x["tag"] == tag)
-                                    .Select(x => (string)x["path"]);
+                    var path = _jObj[s_configFileRootKey]["tools"].Children()
+                                        .Where(x => (string)x["tag"] == tag)
+                                        .Select(x => (string)x["path"]);
                     // If the tag resolves to a tool return it, otherwise just return it 
                     // as a posible path.
                     return path.Any() ? path.First() : tag;
@@ -982,7 +981,7 @@ namespace ManagedCodeGen
 
                     try
                     {
-                        return token.GetValue<T>();
+                        return token.Value<T>();
                     }
                     catch (System.FormatException e)
                     {
@@ -1014,9 +1013,9 @@ namespace ManagedCodeGen
 
                 try
                 {
-                    _jObj = (JsonObject)JsonObject.Parse(configJson);
+                    _jObj = JObject.Parse(configJson);
                 }
-                catch (JsonException ex)
+                catch (Newtonsoft.Json.JsonReaderException ex)
                 {
                     Console.Error.WriteLine("Error reading config file: {0}", ex.Message);
                     Console.Error.WriteLine("Continuing; ignoring config file.");
@@ -1228,12 +1227,12 @@ namespace ManagedCodeGen
 
                 // Print list of the installed tools.
 
-                var tools = (JsonArray)asmdiffNode["tools"];
+                var tools = asmdiffNode["tools"];
                 if (tools != null)
                 {
                     Console.WriteLine("Installed tools:");
 
-                    foreach (JsonObject tool in tools)
+                    foreach (var tool in tools.Children())
                     {
                         string tag = (string)tool["tag"];
                         string path = (string)tool["path"];

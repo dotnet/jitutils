@@ -10,7 +10,7 @@
 //  tools to validate ongoing development.
 //
 //  Scenario 1: Pass A and B compilers to jitdasm.  Using the --base and --diff
-//  arguments pass two seperate compilers and a passed set of assemblies.  This
+//  arguments pass two seperate compilers and a passed set of assemblies.  This 
 //  is the most common scenario.
 //
 //  Scenario 2: Iterativly call jitdasm with a series of compilers tagging
@@ -37,7 +37,7 @@ namespace ManagedCodeGen
         Crossgen2
     }
 
-    // Define options to be parsed
+    // Define options to be parsed 
     public class Config
     {
         private ArgumentSyntax _syntaxResult;
@@ -207,7 +207,7 @@ namespace ManagedCodeGen
             // Builds assemblyInfoList on jitdasm
 
             List<AssemblyInfo> assemblyWorkList = GenerateAssemblyWorklist(config);
-
+            
             // The disasm engine encapsulates a particular set of diffs.  An engine is
             // produced with a given code generator and assembly list, which then produces
             // a set of disasm outputs.
@@ -224,7 +224,7 @@ namespace ManagedCodeGen
                 crossgenDisasm = new Crossgen2DisasmEngine(config.CrossgenExecutable, config, config.RootPath, assemblyWorkList);
             }
             crossgenDisasm.GenerateAsm();
-
+            
             if (crossgenDisasm.ErrorCount > 0)
             {
                 Console.Error.WriteLine("{0} errors compiling set.", crossgenDisasm.ErrorCount);
@@ -466,10 +466,10 @@ namespace ManagedCodeGen
 
                     commandArgs.Add(fullPathAssembly);
 
-                    // Pick up ambient DOTNET_ settings.
+                    // Pick up ambient COMPlus settings.
                     foreach (string envVar in Environment.GetEnvironmentVariables().Keys)
                     {
-                        if (envVar.IndexOf("DOTNET_") == 0)
+                        if (envVar.IndexOf("COMPlus_") == 0)
                         {
                             string value = Environment.GetEnvironmentVariable(envVar);
                             AddEnvironmentVariable(envVar, value);
@@ -477,32 +477,32 @@ namespace ManagedCodeGen
                     }
 
                     // Set up environment do disasm.
-                    AddEnvironmentVariable("DOTNET_NgenDisasm", "*");
-                    AddEnvironmentVariable("DOTNET_NgenUnwindDump", "*");
-                    AddEnvironmentVariable("DOTNET_NgenEHDump", "*");
+                    AddEnvironmentVariable("COMPlus_NgenDisasm", "*");
+                    AddEnvironmentVariable("COMPlus_NgenUnwindDump", "*");
+                    AddEnvironmentVariable("COMPlus_NgenEHDump", "*");
                     if (!this._config.NoDiffable)
                     {
-                        AddEnvironmentVariable("DOTNET_JitDiffableDasm", "1");
+                        AddEnvironmentVariable("COMPlus_JitDiffableDasm", "1");
                     }
-                    AddEnvironmentVariable("DOTNET_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
-                    AddEnvironmentVariable("DOTNET_JitNoForceFallback", "1");      // Don't stress noway fallback path.
-                    AddEnvironmentVariable("DOTNET_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
+                    AddEnvironmentVariable("COMPlus_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
+                    AddEnvironmentVariable("COMPlus_JitNoForceFallback", "1");      // Don't stress noway fallback path.
+                    AddEnvironmentVariable("COMPlus_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
 
                     if (this.doGCDump)
                     {
-                        AddEnvironmentVariable("DOTNET_NgenGCDump", "*");
+                        AddEnvironmentVariable("COMPlus_NgenGCDump", "*");
                     }
 
                     if (this.doDebugDump)
                     {
-                        AddEnvironmentVariable("DOTNET_NgenDebugDump", "*");
+                        AddEnvironmentVariable("COMPlus_NgenDebugDump", "*");
                     }
 
                     if (this._altjit != null)
                     {
-                        AddEnvironmentVariable("DOTNET_AltJit", "*");
-                        AddEnvironmentVariable("DOTNET_AltJitNgen", "*");
-                        AddEnvironmentVariable("DOTNET_AltJitName", _altjit);
+                        AddEnvironmentVariable("COMPlus_AltJit", "*");
+                        AddEnvironmentVariable("COMPlus_AltJitNgen", "*");
+                        AddEnvironmentVariable("COMPlus_AltJitName", _altjit);
                     }
 
                     string dasmPath = null;
@@ -514,7 +514,7 @@ namespace ManagedCodeGen
 
                         Utility.EnsureParentDirectoryExists(dasmPath);
 
-                        AddEnvironmentVariable("DOTNET_JitStdOutFile", dasmPath);
+                        AddEnvironmentVariable("COMPlus_JitStdOutFile", dasmPath);
                     }
 
                     if (this.verbose)
@@ -568,7 +568,7 @@ namespace ManagedCodeGen
 
                         if (hasOutput && File.Exists(logPath) && !File.Exists(dasmPath))
                         {
-                            // Looks like the JIT does not support DOTNET_JitStdOutFile so
+                            // Looks like the JIT does not support COMPlus_JitStdOutFile so
                             // the assembly output must be in the log file.
                             File.Move(logPath, dasmPath);
                         }
@@ -714,8 +714,8 @@ namespace ManagedCodeGen
                 foreach (var envVar in _environmentVariables)
                 {
                     commandArgs.Add("--codegenopt");
-                    string dotnetPrefix = "DOTNET_";
-                    commandArgs.Add(String.Format("{0}={1}", envVar.Key.Substring(dotnetPrefix.Length), envVar.Value));
+                    string complusPrefix = "COMPlus_";
+                    commandArgs.Add(String.Format("{0}={1}", envVar.Key.Substring(complusPrefix.Length), envVar.Value));
                 }
                 return Utility.ExecuteProcess(_executablePath, commandArgs, capture);
             }
