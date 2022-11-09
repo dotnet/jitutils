@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.Globalization;
 
 namespace ManagedCodeGen
 {
@@ -17,13 +18,13 @@ namespace ManagedCodeGen
         public Option<bool> Recursive { get; } =
             new(new[] { "--recursive", "-r" }, "Search directories recursively");
         public Option<string> FileExtension { get; } =
-            new("--file-extension", _ => ".dasm", true, "File extension to look for");
+            new("--file-extension", () => ".dasm", "File extension to look for");
         public Option<int> Count { get; } =
-            new(new[] { "--count", "-c" }, _ => 20, true, "Count of files and methods (at most) to output in the summary. (count) improvements and (count) regressions of each will be included");
+            new(new[] { "--count", "-c" }, () => 20, "Count of files and methods (at most) to output in the summary. (count) improvements and (count) regressions of each will be included");
         public Option<bool> Warn { get; } =
             new(new[] { "--warn", "-w" }, "Generate warning output for files/methods that only exists in one dataset or the other (only in base or only in diff)");
         public Option<List<string>> Metrics { get; } =
-            new(new[] { "--metrics", "-m" }, _ =>  new List<string> { "CodeSize" }, true, $"Comma-separated metric to use for diff computations. Available metrics: {MetricCollection.ListMetrics()}");
+            new(new[] { "--metrics", "-m" }, () =>  new List<string> { "CodeSize" }, $"Metrics to use for diff computations. Available metrics: {MetricCollection.ListMetrics()}");
         public Option<string> Note { get; } =
             new("--note", "Descriptive note to add to summary output");
         public Option<bool> NoReconcile { get; } =
@@ -41,9 +42,23 @@ namespace ManagedCodeGen
         public Option<bool> RetainOnlyTopFiles { get; } =
             new("--retain-only-top-files", "Retain only the top 'count' improvements/regressions .dasm files. Delete other files. Useful in CI scenario to reduce the upload size");
         public Option<double> OverrideTotalBaseMetric { get; } =
-            new("--override-total-base-metric", "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known");
+            new("--override-total-base-metric", result =>
+            {
+                if (double.TryParse(result.Tokens[0].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
+                    return val;
+
+                 result.ErrorMessage = $"Cannot parse argument '{result.Tokens[0].Value}' for option '--override-total-base-metric' as expected type 'System.Double'.";
+                 return 0;
+            }, false, "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known");
         public Option<double> OverrideTotalDiffMetric { get; } =
-            new("--override-total-diff-metric", "Override the total diff metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known");
+            new("--override-total-diff-metric", result =>
+            {
+                if (double.TryParse(result.Tokens[0].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
+                    return val;
+
+                 result.ErrorMessage = $"Cannot parse argument '{result.Tokens[0].Value}' for option '--override-total-diff-metric' as expected type 'System.Double'.";
+                 return 0;
+            }, false, "Override the total diff metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known");
         public Option<bool> IsDiffsOnly { get; } =
             new("--is-diffs-only", "Specify that the disassembly files are only produced for contexts with diffs, so avoid producing output making assumptions about the number of contexts");
         public Option<bool> IsSubsetOfDiffs { get; } =

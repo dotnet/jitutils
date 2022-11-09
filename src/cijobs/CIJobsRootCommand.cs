@@ -17,9 +17,9 @@ namespace ManagedCodeGen
         public Option<string> JobName { get; } =
             new(new[] { "--job", "-j" }, "Name of the job.");
         public Option<string> BranchName { get; } =
-            new(new[] { "--branch", "-b" }, _ => "master", true, "Name of the branch.");
+            new(new[] { "--branch", "-b" }, () => "master", "Name of the branch.");
         public Option<string> RepoName { get; } =
-            new(new[] { "--repo", "-r" }, _ => "dotnet_coreclr", true, "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr).");
+            new(new[] { "--repo", "-r" }, () => "dotnet_coreclr", "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr).");
         public Option<string> MatchPattern { get; } =
             new(new[] { "--match", "-m" }, "Regex pattern used to select jobs output.");
         public Option<int> JobNumber { get; } =
