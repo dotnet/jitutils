@@ -44,19 +44,21 @@ namespace ManagedCodeGen
         public Option<double> OverrideTotalBaseMetric { get; } =
             new("--override-total-base-metric", result =>
             {
-                if (double.TryParse(result.Tokens[0].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
-                    return val;
+                string optionValue = result.Tokens[0].Value;
+                if (double.TryParse(optionValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedValue))
+                    return parsedValue;
 
-                 result.ErrorMessage = $"Cannot parse argument '{result.Tokens[0].Value}' for option '--override-total-base-metric' as expected type 'System.Double'.";
+                 result.ErrorMessage = $"Cannot parse argument '{optionValue}' for option '--override-total-base-metric' as expected type '{typeof(double).FullName}'.";
                  return 0;
             }, false, "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known");
         public Option<double> OverrideTotalDiffMetric { get; } =
             new("--override-total-diff-metric", result =>
             {
-                if (double.TryParse(result.Tokens[0].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
-                    return val;
+                string optionValue = result.Tokens[0].Value;
+                if (double.TryParse(optionValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedValue))
+                    return parsedValue;
 
-                 result.ErrorMessage = $"Cannot parse argument '{result.Tokens[0].Value}' for option '--override-total-diff-metric' as expected type 'System.Double'.";
+                 result.ErrorMessage = $"Cannot parse argument '{optionValue}' for option '--override-total-diff-metric' as expected type '{typeof(double).FullName}'.";
                  return 0;
             }, false, "Override the total diff metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known");
         public Option<bool> IsDiffsOnly { get; } =
