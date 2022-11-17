@@ -477,9 +477,9 @@ namespace ManagedCodeGen
                     }
 
                     // Set up environment do disasm.
-                    AddEnvironmentVariable("DOTNET_NgenDisasm", "*");
-                    AddEnvironmentVariable("DOTNET_NgenUnwindDump", "*");
-                    AddEnvironmentVariable("DOTNET_NgenEHDump", "*");
+                    AddEnvironmentVariable("DOTNET_JitDisasm", "*");
+                    AddEnvironmentVariable("DOTNET_JitUnwindDump", "*");
+                    AddEnvironmentVariable("DOTNET_JitEHDump", "*");
                     if (!this._config.NoDiffable)
                     {
                         AddEnvironmentVariable("DOTNET_JitDiffableDasm", "1");
@@ -490,18 +490,17 @@ namespace ManagedCodeGen
 
                     if (this.doGCDump)
                     {
-                        AddEnvironmentVariable("DOTNET_NgenGCDump", "*");
+                        AddEnvironmentVariable("DOTNET_JitGCDump", "*");
                     }
 
                     if (this.doDebugDump)
                     {
-                        AddEnvironmentVariable("DOTNET_NgenDebugDump", "*");
+                        AddEnvironmentVariable("DOTNET_JitDebugDump", "*");
                     }
 
                     if (this._altjit != null)
                     {
                         AddEnvironmentVariable("DOTNET_AltJit", "*");
-                        AddEnvironmentVariable("DOTNET_AltJitNgen", "*");
                         AddEnvironmentVariable("DOTNET_AltJitName", _altjit);
                     }
 
@@ -699,7 +698,7 @@ namespace ManagedCodeGen
 
             override protected void AddOutputPathOption(List<string> commandArgs, string outputPath)
             {
-                commandArgs.Add("--outputfilepath");
+                commandArgs.Add("--out");
                 commandArgs.Add(outputPath);
             }
 
