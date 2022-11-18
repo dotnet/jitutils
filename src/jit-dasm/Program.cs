@@ -293,7 +293,7 @@ namespace ManagedCodeGen
 
                     Utility.EnsureParentDirectoryExists(nativeOutput);
 
-                    commandArgs.Add(_command.CodeGeneratorV1 ? "/out" : "--outputfilepath");
+                    commandArgs.Add(_command.CodeGeneratorV1 ? "/out" : "--out");
                     commandArgs.Add(nativeOutput);
                 }
 
@@ -315,9 +315,9 @@ namespace ManagedCodeGen
                 }
 
                 // Set up environment do disasm.
-                AddEnvironmentVariable("DOTNET_NgenDisasm", "*");
-                AddEnvironmentVariable("DOTNET_NgenUnwindDump", "*");
-                AddEnvironmentVariable("DOTNET_NgenEHDump", "*");
+                AddEnvironmentVariable("DOTNET_JitDisasm", "*");
+                AddEnvironmentVariable("DOTNET_JitUnwindDump", "*");
+                AddEnvironmentVariable("DOTNET_JitEHDump", "*");
                 if (!Get(_command.NoDiffable))
                 {
                     AddEnvironmentVariable("DOTNET_JitDiffableDasm", "1");
@@ -328,19 +328,18 @@ namespace ManagedCodeGen
 
                 if (Get(_command.DumpGCInfo ))
                 {
-                    AddEnvironmentVariable("DOTNET_NgenGCDump", "*");
+                    AddEnvironmentVariable("DOTNET_JitGCDump", "*");
                 }
 
                 if (Get(_command.DumpDebugInfo))
                 {
-                    AddEnvironmentVariable("DOTNET_NgenDebugDump", "*");
+                    AddEnvironmentVariable("DOTNET_JitDebugDump", "*");
                 }
 
                 string altJit = Get(_command.AltJit);
                 if (altJit != null)
                 {
                     AddEnvironmentVariable("DOTNET_AltJit", "*");
-                    AddEnvironmentVariable("DOTNET_AltJitNgen", "*");
                     AddEnvironmentVariable("DOTNET_AltJitName", altJit);
                 }
 
