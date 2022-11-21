@@ -67,7 +67,7 @@ namespace ManagedCodeGen
                 try
                 {
                     List<string> errors = new();
-                    string crossgen = Result.GetValueForOption(CrossgenPath);
+                    string crossgen = Result.GetValue(CrossgenPath);
                     if (crossgen == null || !File.Exists(crossgen))
                     {
                         errors.Add("Can't find --crossgen tool.");
@@ -83,18 +83,18 @@ namespace ManagedCodeGen
                         errors.Add("--crossgen tool should be crossgen or crossgen2.");
                     }
 
-                    if (Result.FindResultFor(Filename) == null && Result.GetValueForOption(AssemblyList).Count == 0)
+                    if (Result.FindResultFor(Filename) == null && Result.GetValue(AssemblyList).Count == 0)
                     {
                         errors.Add("No input: Specify --file <arg> or list input assemblies.");
                     }
 
-                    string jitPath = Result.GetValueForOption(JitPath);
+                    string jitPath = Result.GetValue(JitPath);
                     if (jitPath != null && !File.Exists(jitPath))
                     {
                         errors.Add("Can't find --jit library.");
                     }
 
-                    string filename = Result.GetValueForOption(Filename);
+                    string filename = Result.GetValue(Filename);
                     if (filename != null && !File.Exists(filename))
                     {
                         errors.Add($"Error reading input file {filename}, file not found.");

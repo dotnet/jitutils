@@ -97,17 +97,17 @@ namespace ManagedCodeGen
                 try
                 {
                     List<string> errors = new();
-                    if (Result.GetValueForOption(BasePath) == null)
+                    if (Result.GetValue(BasePath) == null)
                     {
                         errors.Add("Base path (--base) is required");
                     }
 
-                    if (Result.GetValueForOption(DiffPath) == null)
+                    if (Result.GetValue(DiffPath) == null)
                     {
                         errors.Add("Diff path (--diff) is required");
                     }
 
-                    foreach (string metricName in Result.GetValueForOption(Metrics))
+                    foreach (string metricName in Result.GetValue(Metrics))
                     {
                         if (!MetricCollection.ValidateMetric(metricName))
                         {

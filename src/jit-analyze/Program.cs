@@ -884,7 +884,7 @@ namespace ManagedCodeGen
             return fileToTextDiffCount;
         }
 
-        private T Get<T>(Option<T> option) => _command.Result.GetValueForOption(option);
+        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
 
         private static int Main(string[] args) =>
             new CommandLineBuilder(new JitAnalyzeRootCommand(args))

@@ -80,7 +80,7 @@ namespace ManagedCodeGen
             return errorCount;
         }
 
-        private T Get<T>(Option<T> option) => _command.Result.GetValueForOption(option);
+        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
 
         private static int Main(string[] args) =>
             new CommandLineBuilder(new JitDasmRootCommand(args))

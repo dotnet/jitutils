@@ -60,9 +60,9 @@ namespace ManagedCodeGen
 
             listCommand.SetHandler(context => TryExecuteWithContextAsync(context, "list", result =>
             {
-                int jobNumber = result.GetValueForOption(JobNumber);
-                bool showLastSuccessful = result.GetValueForOption(ShowLastSuccessful);
-                string commit = result.GetValueForOption(Commit);
+                int jobNumber = result.GetValue(JobNumber);
+                bool showLastSuccessful = result.GetValue(ShowLastSuccessful);
+                string commit = result.GetValue(Commit);
 
                 if (result.FindResultFor(JobNumber) == null)
                 {
@@ -81,7 +81,7 @@ namespace ManagedCodeGen
                         errors.Add("Must select --job <name> to specify --commit <commit>.");
                     }
 
-                    if (result.GetValueForOption(ShowArtifacts))
+                    if (result.GetValue(ShowArtifacts))
                     {
                         errors.Add("Must select --job <name> to specify --artifacts.");
                     }
@@ -93,7 +93,7 @@ namespace ManagedCodeGen
                         errors.Add("Must have at most one of --number <num>, --last_successful, and --commit <commit> for list.");
                     }
 
-                    if (!string.IsNullOrEmpty(result.GetValueForOption(MatchPattern)))
+                    if (!string.IsNullOrEmpty(result.GetValue(MatchPattern)))
                     {
                         errors.Add("Match pattern not valid with --job");
                     }
@@ -124,14 +124,14 @@ ContentPath(p) parameter")
 
             copyCommand.SetHandler(context => TryExecuteWithContextAsync(context, "copy", result =>
             {
-                if (result.GetValueForOption(JobName) == null)
+                if (result.GetValue(JobName) == null)
                 {
                     errors.Add("Must have --job <name> for copy.");
                 }
 
-                int jobNumber = result.GetValueForOption(JobNumber);
-                bool shwoLastSuccessful = result.GetValueForOption(ShowLastSuccessful);
-                string commit = result.GetValueForOption(Commit);
+                int jobNumber = result.GetValue(JobNumber);
+                bool shwoLastSuccessful = result.GetValue(ShowLastSuccessful);
+                string commit = result.GetValue(Commit);
                 if (jobNumber == 0 && !shwoLastSuccessful && commit == null)
                 {
                     errors.Add("Must have --number <num>, --last_successful, or --commit <commit> for copy.");
@@ -142,8 +142,8 @@ ContentPath(p) parameter")
                     errors.Add("Must have only one of --number <num>, --last_successful, and --commit <commit> for copy.");
                 }
 
-                string outputPath = result.GetValueForOption(OutputPath);
-                string outputRoot = result.GetValueForOption(OutputRoot);
+                string outputPath = result.GetValue(OutputPath);
+                string outputRoot = result.GetValue(OutputRoot);
                 if (outputPath == null && outputRoot == null)
                 {
                     errors.Add("Must specify either --output <path> or --output_root <path> for copy.");

@@ -232,7 +232,7 @@ namespace MutateTest
 
         private static bool isFirstRun = true;
 
-        private T Get<T>(Option<T> option) => _command.Result.GetValueForOption(option);
+        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
 
         private static int Main(string[] args) =>
             new CommandLineBuilder(new MutateTestRootCommand(args))
@@ -257,7 +257,7 @@ namespace MutateTest
                 MSBuildLocator.RegisterDefaults();
             }
 
-            string inputFilePath = _command.Result.GetValueForArgument(_command.InputFilePath);
+            string inputFilePath = _command.Result.GetValue(_command.InputFilePath);
             if (Get(_command.Recursive))
             {
                 if (!Directory.Exists(inputFilePath))

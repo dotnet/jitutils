@@ -69,7 +69,7 @@ namespace ManagedCodeGen
             return await CopyAsync(cic);
         }
 
-        private T Get<T>(Option<T> option) => _command.Result.GetValueForOption(option);
+        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
 
         private static Task<int> Main(string[] args) =>
             new CommandLineBuilder(new CIJobsRootCommand(args))
