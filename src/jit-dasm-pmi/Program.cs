@@ -283,8 +283,7 @@ namespace ManagedCodeGen
                     continue;
                 }
 
-                Assembly thisAssembly = typeof(Program).Assembly;
-                string binDir = Path.GetDirectoryName(thisAssembly.Location);
+                string binDir = Path.GetDirectoryName(System.AppContext.BaseDirectory);
                 string command = "DRIVEALL-QUIET";
                 if (Get(_command.Cctors))
                 {

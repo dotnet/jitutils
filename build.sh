@@ -53,7 +53,7 @@ declare -a projects=(jit-dasm jit-diff jit-analyze jit-format pmi jit-dasm-pmi j
 for proj in "${projects[@]}"
 do
     if [ "$publish" == true ]; then
-        dotnet publish -c $buildType -o $appInstallDir ./src/$proj
+        dotnet publish -c $buildType -o $appInstallDir ./src/$proj -p:PublishSingleFile=true
         exit_code=$?
         if [ $exit_code != 0 ]; then
             echo "${__ErrMsgPrefix}dotnet publish of ./src/${proj} failed."

@@ -49,7 +49,7 @@ set projects=jit-diff jit-dasm jit-analyze jit-format pmi jit-dasm-pmi jit-decis
 REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
-        dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
+        dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p -p:PublishSingleFile=true
         if errorlevel 1 echo ERROR: dotnet publish failed for .\src\%%p.&set __ExitCode=1
     ) else (
         dotnet build -c %buildType% .\src\%%p

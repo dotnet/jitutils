@@ -174,7 +174,7 @@ public class CustomLoadContext : AssemblyLoadContext
         // Add in current assembly path and framework path
         pmiPath += Path.GetDirectoryName(assemblyPath);
         pmiPath += ";";
-        pmiPath += Path.GetDirectoryName(typeof(object).Assembly.Location);
+        pmiPath += Path.GetDirectoryName(System.AppContext.BaseDirectory);
 
         PmiPath = pmiPath;
     }
