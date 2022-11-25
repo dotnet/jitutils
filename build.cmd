@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 
 REM Build and optionally publish sub projects
 REM
@@ -49,7 +49,13 @@ set projects=jit-diff jit-dasm jit-analyze jit-format pmi jit-dasm-pmi jit-decis
 REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
-        dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p -p:PublishSingleFile=true
+        REM Publish *PMI* projects without single-file
+        set "string=%%p"
+        if not "!string:pmi=!"=="!string!" (
+            dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
+        ) else (
+            dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p -p:PublishSingleFile=true
+        )
         if errorlevel 1 echo ERROR: dotnet publish failed for .\src\%%p.&set __ExitCode=1
     ) else (
         dotnet build -c %buildType% .\src\%%p
@@ -62,7 +68,7 @@ exit /b %__ExitCode%
 
 :usage
 echo.
-echo  build.cmd [-b ^<BUILD TYPE^>] [-f] [-h] [-p]
+echo  build.cmd [-b ^<BUILD TYPE^>] [-h] [-p]
 echo.
 echo      -b ^<BUILD TYPE^>   : Build type, can be Debug or Release.
 echo      -h                : Show this message.
