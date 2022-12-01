@@ -26,7 +26,7 @@ namespace ManagedCodeGen
         public Option<bool> DumpDebugInfo { get; } =
             new("--debuginfo", "Add Debug info to the disasm output");
         public Option<bool> Verbose { get; } =
-            new(new[] { "--verbose", "-v" }, "Enable verbose output");
+            new("--verbose", "Enable verbose output");
         public Option<bool> NoDiffable { get; } =
             new("--nodiffable", "Generate non-diffable asm (pointer values will be left in output)");
         public Option<bool> Recursive { get; } =

@@ -75,7 +75,7 @@ namespace ManagedCodeGen
 
         private static int Main(string[] args) =>
             new CommandLineBuilder(new JitDasmPmiRootCommand(args))
-                .UseVersionOption("-v")
+                .UseVersionOption("--version", "-v")
                 .UseHelp()
                 .UseParseErrorReporting()
                 .Build()

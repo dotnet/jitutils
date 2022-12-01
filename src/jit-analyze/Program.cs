@@ -888,7 +888,7 @@ namespace ManagedCodeGen
 
         private static int Main(string[] args) =>
             new CommandLineBuilder(new JitAnalyzeRootCommand(args))
-                .UseVersionOption("-v")
+                .UseVersionOption("--version", "-v")
                 .UseHelp()
                 .UseParseErrorReporting()
                 .Build()

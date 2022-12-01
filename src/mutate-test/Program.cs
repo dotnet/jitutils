@@ -236,7 +236,7 @@ namespace MutateTest
 
         private static int Main(string[] args) =>
             new CommandLineBuilder(new MutateTestRootCommand(args))
-                .UseVersionOption("-v")
+                .UseVersionOption("--version", "-v")
                 .UseHelp()
                 .UseParseErrorReporting()
                 .Build()
