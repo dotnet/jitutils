@@ -53,6 +53,7 @@ for proj in "${projects[@]}"
 do
     if [ "$publish" = 1 ]; then
         case "$proj" in
+            # Publish src/pmi project without single-file, so it can be executed with a custom build of the runtime/JIT
             pmi) dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" ;;
             *)   dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" -p:PublishSingleFile=true ;;
         esac

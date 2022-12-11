@@ -49,7 +49,7 @@ set projects=jit-diff jit-dasm jit-analyze jit-format pmi jit-dasm-pmi jit-decis
 REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
-        REM Publish *PMI* projects without single-file
+        REM Publish src/pmi project without single-file, so it can be executed with a custom build of the runtime/JIT
         if "%%p"=="pmi" (
             dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
         ) else (
