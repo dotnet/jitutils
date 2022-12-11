@@ -50,11 +50,10 @@ REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
         REM Publish *PMI* projects without single-file
-        set "string=%%p"
-        if not "!string:pmi=!"=="!string!" (
-            dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
-        ) else (
+        if "%%p"=="pmi" (
             dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p -p:PublishSingleFile=true
+        ) else (
+            dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
         )
         if errorlevel 1 echo ERROR: dotnet publish failed for .\src\%%p.&set __ExitCode=1
     ) else (

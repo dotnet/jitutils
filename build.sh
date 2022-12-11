@@ -53,8 +53,8 @@ for proj in "${projects[@]}"
 do
     if [ "$publish" = 1 ]; then
         case "$proj" in
-            **[Pp][Mm][Ii]**) dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" ;;
-            *)                dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" -p:PublishSingleFile=true ;;
+            pmi) dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" ;;
+            *)   dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" -p:PublishSingleFile=true ;;
         esac
         exit_code=$?
         if [ $exit_code != 0 ]; then
