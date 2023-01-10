@@ -35,7 +35,7 @@ namespace ManagedCodeGen
             new(new[] { "--platform", "-p" }, "Path to platform assemblies");
         public Option<List<string>> Methods { get; } =
             new(new[] { "--methods", "-m" }, "List of methods to disasm");
-        public Option<List<string>> AssemblyList { get; } =
+        public Argument<List<string>> AssemblyList { get; } =
             new("--assembly", "The list of assemblies or directories to scan for assemblies");
         public Option<bool> WaitForDebugger { get; } =
             new(new[] { "--wait", "-w" }, "Wait for debugger to attach");
@@ -57,8 +57,9 @@ namespace ManagedCodeGen
             AddOption(Recursive);
             AddOption(PlatformPaths);
             AddOption(Methods);
-            AddOption(AssemblyList);
             AddOption(WaitForDebugger);
+
+            AddArgument(AssemblyList);
 
             this.SetHandler(context =>
             {
