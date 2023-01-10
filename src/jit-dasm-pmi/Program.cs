@@ -72,6 +72,7 @@ namespace ManagedCodeGen
         }
 
         private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
+        private T Get<T>(Argument<T> arg) => _command.Result.GetValue(arg);
 
         private static int Main(string[] args) =>
             new CommandLineBuilder(new JitDasmPmiRootCommand(args))
