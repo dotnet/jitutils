@@ -73,15 +73,17 @@ namespace ManagedCodeGen
                     {
                         errors.Add("Can't find --crossgen tool.");
                     }
-
-                    string crossgenFilename = Path.GetFileNameWithoutExtension(crossgen).ToLower();
-                    if (crossgenFilename == "crossgen")
+                    else
                     {
-                        CodeGeneratorV1 = true;
-                    }
-                    else if (crossgenFilename != "crossgen2")
-                    {
-                        errors.Add("--crossgen tool should be crossgen or crossgen2.");
+                        string crossgenFilename = Path.GetFileNameWithoutExtension(crossgen).ToLower();
+                        if (crossgenFilename == "crossgen")
+                        {
+                            CodeGeneratorV1 = true;
+                        }
+                        else if (crossgenFilename != "crossgen2")
+                        {
+                            errors.Add("--crossgen tool should be crossgen or crossgen2.");
+                        }
                     }
 
                     if (Result.FindResultFor(Filename) == null && Result.GetValue(AssemblyList).Count == 0)
