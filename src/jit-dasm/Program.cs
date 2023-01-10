@@ -327,7 +327,7 @@ namespace ManagedCodeGen
                 AddEnvironmentVariable("DOTNET_JitNoForceFallback", "1");      // Don't stress noway fallback path.
                 AddEnvironmentVariable("DOTNET_JitRequired", "1");             // Force NO_WAY to generate assert. Also generates assert for BADCODE/BADCODE3.
 
-                if (Get(_command.DumpGCInfo ))
+                if (Get(_command.DumpGCInfo))
                 {
                     AddEnvironmentVariable("DOTNET_JitGCDump", "*");
                 }
@@ -453,7 +453,7 @@ namespace ManagedCodeGen
                 {
                     commandArgs.Add("--codegenopt");
                     string dotnetPrefix = "DOTNET_";
-                 commandArgs.Add(string.Format("{0}={1}", envVar.Key.Substring(dotnetPrefix.Length), envVar.Value));
+                    commandArgs.Add(string.Format("{0}={1}", envVar.Key.Substring(dotnetPrefix.Length), envVar.Value));
                 }
                 return Utility.ExecuteProcess(_crossgenPath, commandArgs, capture);
             }
