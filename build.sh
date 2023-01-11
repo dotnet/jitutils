@@ -9,7 +9,7 @@
 function usage
 {
     echo ""
-    echo "build.sh [-b <BUILD TYPE>] [-f] [-h] [-p]"
+    echo "build.sh [-b <BUILD TYPE>] [-h] [-p]"
     echo ""
     echo "    -b <BUILD TYPE> : Build type, can be Debug or Release."
     echo "    -h              : Show this message."
@@ -21,17 +21,13 @@ function usage
 __ErrMsgPrefix="ERROR: "
 final_exit_code=0
 buildType="Release"
-publish=false
-workingDir="$PWD"
-cd "`dirname \"$0\"`"
-scriptDir="$PWD"
-cd $workingDir
-platform="`dotnet --info | awk '/RID/ {print $2}'`"
+publish=0
+scriptDir="$(cd "$(dirname "$0")" || exit; pwd -P)"
 # default install in 'bin' dir at script location
 appInstallDir="$scriptDir/bin"
 
 # process for '-h', '-p', '-b <arg>'
-while getopts "hpfb:" opt; do
+while getopts "hpb:" opt; do
     case "$opt" in
     h)
         usage
@@ -41,7 +37,10 @@ while getopts "hpfb:" opt; do
         buildType=$OPTARG
         ;;
     p)  
-        publish=true
+        publish=1
+        ;;
+    *)  echo "ERROR: unknown argument $opt"
+        exit 1
         ;;
     esac
 done
@@ -52,15 +51,19 @@ declare -a projects=(jit-dasm jit-diff jit-analyze jit-format pmi jit-dasm-pmi j
 # for each project either build or publish
 for proj in "${projects[@]}"
 do
-    if [ "$publish" == true ]; then
-        dotnet publish -c $buildType -o $appInstallDir ./src/$proj
+    if [ "$publish" = 1 ]; then
+        case "$proj" in
+            # Publish src/pmi project without single-file, so it can be executed with a custom build of the runtime/JIT
+            pmi) dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" ;;
+            *)   dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" -p:PublishSingleFile=true ;;
+        esac
         exit_code=$?
         if [ $exit_code != 0 ]; then
             echo "${__ErrMsgPrefix}dotnet publish of ./src/${proj} failed."
             final_exit_code=1
         fi
     else
-        dotnet build -c $buildType ./src/$proj
+        dotnet build -c "$buildType" ./src/"$proj"
         exit_code=$?
         if [ $exit_code != 0 ]; then
             echo "${__ErrMsgPrefix}dotnet build  of ./src/${proj} failed."
@@ -69,4 +72,4 @@ do
     fi
 done
 
-exit $final_exit_code
+exit "$final_exit_code"
