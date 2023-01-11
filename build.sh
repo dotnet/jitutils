@@ -25,6 +25,8 @@ publish=0
 scriptDir="$(cd "$(dirname "$0")" || exit; pwd -P)"
 # default install in 'bin' dir at script location
 appInstallDir="$scriptDir/bin"
+rid=$(dotnet --info | grep RID:)
+rid=${rid##*RID:* }
 
 # process for '-h', '-p', '-b <arg>'
 while getopts "hpb:" opt; do
@@ -55,7 +57,7 @@ do
         case "$proj" in
             # Publish src/pmi project without single-file, so it can be executed with a custom build of the runtime/JIT
             pmi) dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" ;;
-            *)   dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" -p:PublishSingleFile=true ;;
+            *)   dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" --self-contained -r $rid -p:PublishSingleFile=true ;;
         esac
         exit_code=$?
         if [ $exit_code != 0 ]; then
