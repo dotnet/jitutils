@@ -39,7 +39,7 @@ while getopts "hpb:" opt; do
     p)  
         publish=1
         ;;
-    *)  echo "ERROR: unknown argument %opt"
+    *)  echo "ERROR: unknown argument $opt"
         exit 1
         ;;
     esac
