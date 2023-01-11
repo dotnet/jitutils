@@ -13,7 +13,7 @@ set buildType=Release
 set publish=false
 
 for /f "usebackq tokens=1,2" %%a in (`dotnet --info`) do (
-    if "%%a"=="RID:" set platform=%%b
+    if "%%a"=="RID:" set rid=%%b
 )
 
 :argLoop
@@ -53,7 +53,7 @@ for %%p in (%projects%) do (
         if "%%p"=="pmi" (
             dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
         ) else (
-            dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p -p:PublishSingleFile=true
+            dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p --self-contained -r:%rid% -p:PublishSingleFile=true
         )
         if errorlevel 1 echo ERROR: dotnet publish failed for .\src\%%p.&set __ExitCode=1
     ) else (
