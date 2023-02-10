@@ -33,6 +33,12 @@ case "$TargetOSArchitecture" in
         LLVMHostTriple=x86_64-linux-gnu
         ;;
 
+    linux-loongarch64)
+        CMakeCrossCompiling=OFF
+        LLVMHostTriple=loongarch64-linux-gnu
+        LLVMTargetsToBuild="LoongArch"
+        ;;
+
     osx-arm64)
         CMakeCrossCompiling=ON
         CMakeOSXArchitectures=arm64

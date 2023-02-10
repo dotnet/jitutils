@@ -284,6 +284,9 @@ bool CorDisasm::setTarget() {
     case Triple::aarch64:
       TheTargetArch = Target_Arm64;
       break;
+    case Triple::loongarch64:
+      TheTargetArch = Target_LoongArch64;
+      break;
     default:
       Print->Error("Unsupported Architecture: %s\n",
                    Triple::getArchTypeName(TheTriple->getArch()));
@@ -303,6 +306,9 @@ bool CorDisasm::setTarget() {
     break;
   case Target_X64:
     TheTriple->setArch(Triple::x86_64);
+    break;
+  case Target_LoongArch64:
+    TheTriple->setArch(Triple::loongarch64);
     break;
   default:
     Print->Error("Unsupported Architecture: %s\n",
