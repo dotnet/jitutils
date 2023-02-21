@@ -41,7 +41,8 @@ enum TargetArch {
     Target_X86,
     Target_X64,
     Target_Thumb,
-    Target_Arm64
+    Target_Arm64,
+    Target_LoongArch64
 };
 
 struct CorDisasm;
