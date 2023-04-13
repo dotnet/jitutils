@@ -90,7 +90,7 @@ function download_tools {
     clangFormatUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-format
 
     if validate_url "$clangFormatUrl" > /dev/null; then
-        echo "Downloading clang-format to bin directory"
+        echo "Downloading clang-format to bin directory from: $clangFormatUrl"
         # download appropriate version of clang-format
         if (( _machineHasCurl == 1 )); then
             curl --retry 4 --progress-bar --location --fail "$clangFormatUrl" -o bin/clang-format
@@ -105,7 +105,7 @@ function download_tools {
     clangTidyUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-tidy
 
     if validate_url "$clangTidyUrl" > /dev/null; then
-        echo "Downloading clang-tidy to bin directory"
+        echo "Downloading clang-tidy to bin directory from:  $clangTidyUrl"
         # download appropriate version of clang-tidy
         if (( _machineHasCurl == 1 )); then
             curl --retry 4 --progress-bar --location --fail "$clangTidyUrl" -o bin/clang-tidy

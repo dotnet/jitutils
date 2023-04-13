@@ -144,10 +144,11 @@ echo Tools can be found at http://llvm.org/releases/download.html#3.8.0
 
 :: Download clang-format and clang-tidy
 echo Downloading formatting tools
-
+echo Downloading clang-format from "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe"
 call :download_url clang-format "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" bin\clang-format.exe
 if %__ExitCode% NEQ 0 goto :eof
 
+echo Downloading clang-tidy from "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe"
 call :download_url clang-tidy "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" bin\clang-tidy.exe
 if %__ExitCode% NEQ 0 goto :eof
 
