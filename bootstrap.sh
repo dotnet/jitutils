@@ -52,6 +52,7 @@ function validate_url {
         status="${response[1]}"
     fi
 
+    echo "validate_url status: $status"
     if (( status >= 200 || status < 400 )); then
         return 0;
     else
