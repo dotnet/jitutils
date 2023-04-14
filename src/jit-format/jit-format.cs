@@ -300,7 +300,11 @@ namespace ManagedCodeGen
                         if (!File.Exists(Path.Combine(compileCommandsPath)))
                         {
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
-                            string[] commandArgs = { _arch, _build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
+                            List<string> commandArgs = new() { _arch, _build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
+                            if (_os.ToLower() == "linux")
+                            {
+                                commandArgs.Add("-cross");
+                            }
                             string buildPath = Path.Combine(_rootPath, "build-runtime.sh");
 
                             if (_verbose)
