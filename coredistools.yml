@@ -28,17 +28,22 @@ trigger:
 
 resources:
   containers:
-  - container: ubuntu-18.04-arm
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-20220312201346-b9de666
-  - container: ubuntu-18.04-arm64
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-arm64-20220312201346-b2c2436
+  - container: linux_x64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-amd64-20230414190614-8100bf7
+  - container: linux_arm
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm-20230414190614-8100bf7
+  - container: linux_arm64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm64-20230414190614-8100bf7
 
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
   LLVMSourceBundle: llvm-project.bundle
-  LLVMSourceVersion: llvmorg-13.0.1
+  LLVMSourceVersion: llvmorg-16.0.1
 
 jobs:
+
+################################ Check out LLVM source tree; publish to artifacts for future jobs
+
 - job: checkout_llvm
   displayName: Checkout LLVM
 
@@ -61,6 +66,8 @@ jobs:
     artifact: $(LLVMSourceBundle)
     displayName: Publish LLVM bundle
 
+################################ Cross-build coredistools for linux-x64, linux-arm, linux-arm64 in CBL-Mariner Docker container
+
 - job: crossbuild_coredistools_linux
   dependsOn: checkout_llvm
   displayName: Build coredistools Linux
@@ -72,13 +79,18 @@ jobs:
 
   strategy:
     matrix:
+      x64:
+        ContainerImage: linux_x64
+        CrossRootfsDirectory: /crossrootfs/x64
+        TargetOSArchitecture: linux-x64
+
       arm:
-        ContainerImage: ubuntu-18.04-arm
+        ContainerImage: linux_arm
         CrossRootfsDirectory: /crossrootfs/arm
         TargetOSArchitecture: linux-arm
 
       arm64:
-        ContainerImage: ubuntu-18.04-arm64
+        ContainerImage: linux_arm64
         CrossRootfsDirectory: /crossrootfs/arm64
         TargetOSArchitecture: linux-arm64
 
@@ -88,11 +100,6 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  - template: /eng/download-llvm-release.yml
-    parameters:
-      os: linux
-      release: $(LLVMSourceVersion)
-
   - script: ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
     displayName: Build coredistools
 
@@ -100,33 +107,7 @@ jobs:
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
-- job: build_coredistools_linux_x64
-  dependsOn: checkout_llvm
-  displayName: Build coredistools Linux x64
-
-  pool:
-    vmImage: ubuntu-18.04
-
-  variables:
-    TargetOSArchitecture: linux-x64
-
-  workspace:
-    clean: all
-
-  steps:
-  - template: /eng/download-checkout-llvm.yml
-
-  - template: /eng/download-llvm-release.yml
-    parameters:
-      os: linux
-      release: $(LLVMSourceVersion)
-
-  - script: ./build-coredistools.sh $(TargetOSArchitecture)
-    displayName: Build coredistools
-
-  - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
-    artifact: coredistools-$(TargetOSArchitecture)
-    displayName: Publish coredistools
+################################ Build coredistools for macos-x64, macos-arm64
 
 - job: build_coredistools_macos
   dependsOn: checkout_llvm
@@ -139,10 +120,10 @@ jobs:
     matrix:
       x64:
         TargetOSArchitecture: osx-x64
-        VMImage: macOS-10.15
+        VMImage: macOS-latest
       arm64:
         TargetOSArchitecture: osx-arm64
-        VMImage: macOS-11
+        VMImage: macOS-latest
 
   workspace:
     clean: all
@@ -150,17 +131,14 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  - template: /eng/download-llvm-release.yml
-    parameters:
-      os: macos
-      release: $(LLVMSourceVersion)
-
   - script: ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.dylib
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
+
+################################ Build llvm-tblgen on Windows
 
 - job: build_tblgen_windows
   dependsOn: checkout_llvm
@@ -181,6 +159,8 @@ jobs:
   - publish: $(Build.SourcesDirectory)\bin\llvm-tblgen.exe
     artifact: tblgen-windows
     displayName: Publish llvm-tblgen
+
+################################ Build coredistools for win-x64, win-x86, win-arm64
 
 - job: build_coredistools_windows
   dependsOn:
@@ -220,10 +200,11 @@ jobs:
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
+################################ Build coredistools NuGet packages
+
 - job: build_coredistools_nuget_packages
   dependsOn:
   - crossbuild_coredistools_linux
-  - build_coredistools_linux_x64
   - build_coredistools_macos
   - build_coredistools_windows
   displayName: Build coredistools NuGet packages

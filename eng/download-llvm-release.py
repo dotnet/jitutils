@@ -15,6 +15,10 @@ Release_urls = {
   'llvmorg-13.0.1': {
       'linux': 'https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.1/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04.tar.xz',
       'macos': 'https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.1/clang+llvm-13.0.1-x86_64-apple-darwin.tar.xz'
+  },
+  'llvmorg-16.0.1': {
+      'linux': 'https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.1/clang+llvm-16.0.0-x86_64-linux-gnu-ubuntu-18.04.tar.xz',
+      'macos': 'https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.1/clang+llvm-13.0.1-x86_64-apple-darwin.tar.xz'
   }
 }
 

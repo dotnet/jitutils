@@ -13,12 +13,29 @@ EnsureCrossRootfsDirectoryExists () {
 CMakeOSXArchitectures=
 LLVMTargetsToBuild="AArch64;ARM;X86"
 
+# Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
+# `llvm-strip` is available in CBL-Mariner container; `strip` is available on macOS.
+StripTool=$(command -v llvm-strip)
+if [ -z "$StripTool" ]; then
+    StripTool=$(command -v strip)
+    if [ -z "$StripTool" ]; then
+        echo "Strip tool not found"
+        exit 1
+    fi
+fi
+
+TblGenTool=$(command -v llvm-tblgen)
+if [ -z "$TblGenTool" ]; then
+    echo "llvm-tblgen tool not found"
+    exit 1
+fi
+
 case "$TargetOSArchitecture" in
     linux-arm)
         CMakeCrossCompiling=ON
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
-        LLVMTargetsToBuild=ARM
+        LLVMTargetsToBuild="ARM"
         EnsureCrossRootfsDirectoryExists
         ;;
 
@@ -29,8 +46,9 @@ case "$TargetOSArchitecture" in
         ;;
 
     linux-x64)
-        CMakeCrossCompiling=OFF
+        CMakeCrossCompiling=ON
         LLVMHostTriple=x86_64-linux-gnu
+        EnsureCrossRootfsDirectoryExists
         ;;
 
     linux-loongarch64)
@@ -63,7 +81,7 @@ SourcesDirectory=$RootDirectory/src
 BinariesDirectory=$RootDirectory/obj/$TargetOSArchitecture
 StagingDirectory=$RootDirectory/artifacts/$TargetOSArchitecture
 
-which cmake >/dev/null 2>&1
+command -v cmake >/dev/null 2>&1
 
 if [ "$?" -ne 0 ]; then
     echo "ERROR: cmake is not found in the PATH"
@@ -81,20 +99,20 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(which clang) \
+        -DCMAKE_C_COMPILER=$(command -v clang) \
         -DCMAKE_C_FLAGS="-target $LLVMHostTriple" \
-        -DCMAKE_CXX_COMPILER=$(which clang++) \
+        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
         -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple" \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
-        -DCMAKE_STRIP=$(which strip) \
+        -DCMAKE_STRIP=$StripTool \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_INCLUDE_TESTS=OFF \
-        -DLLVM_TABLEGEN=$(which llvm-tblgen) \
+        -DLLVM_TABLEGEN=$TblGenTool \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
@@ -103,21 +121,21 @@ else
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(which clang) \
+        -DCMAKE_C_COMPILER=$(command -v clang) \
         -DCMAKE_C_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
-        -DCMAKE_CXX_COMPILER=$(which clang++) \
+        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
         -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
-        -DCMAKE_STRIP=/usr/$LLVMHostTriple/bin/strip \
+        -DCMAKE_STRIP=$StripTool \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_INCLUDE_TESTS=OFF \
-        -DLLVM_TABLEGEN=$(which llvm-tblgen) \
+        -DLLVM_TABLEGEN=$TblGenTool \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
