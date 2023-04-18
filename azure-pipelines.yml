@@ -9,16 +9,16 @@ jobs:
   parameters:
     agentOs: Windows_NT
     pool:
-      vmImage: windows-2019
+      vmImage: windows-latest
 
 - template: /eng/build.yml
   parameters:
     agentOs: Linux
     pool:
-      vmImage: ubuntu-20.04
+      vmImage: ubuntu-latest
 
 - template: /eng/build.yml
   parameters:
     agentOs: macOS
     pool:
-      vmImage: macOS-10.15
+      vmImage: macOS-latest
