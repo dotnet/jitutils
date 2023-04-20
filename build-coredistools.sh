@@ -95,14 +95,15 @@ fi
 pushd "$BinariesDirectory"
 
 if [ -z "$CrossRootfsDirectory" ]; then
+    BUILD_FLAGS="-target $LLVMHostTriple"
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_C_FLAGS="-target $LLVMHostTriple" \
         -DCMAKE_CXX_COMPILER=$(command -v clang++) \
-        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple" \
+        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
         -DCMAKE_STRIP=$StripTool \
@@ -117,14 +118,20 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
 else
+    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
+    # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+    # CBL-Mariner doesn't seem to have libgcc_s.so in a standard place, so as a hack, add
+    #     -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5
+    # where it does exist.
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_C_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
         -DCMAKE_CXX_COMPILER=$(command -v clang++) \
-        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
+        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
