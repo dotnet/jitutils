@@ -190,13 +190,13 @@ jobs:
   #- script: ./build-coredistools.sh $(TargetOSArchitecture)
   #  displayName: Build coredistools
   - script: |
-    echo "PATH=$PATH"
-    echo "Pipeline.Workspace=$(Pipeline.Workspace)"
-    echo "Files in $(Pipeline.Workspace):"
-    ls -AFG $(Pipeline.Workspace)
-    echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-    ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
-    ./build-coredistools.sh $(TargetOSArchitecture)
+      echo "PATH=$PATH"
+      echo "Pipeline.Workspace=$(Pipeline.Workspace)"
+      echo "Files in $(Pipeline.Workspace):"
+      ls -AFG $(Pipeline.Workspace)
+      echo "Files in $(Pipeline.Workspace)/tblgen-macos"
+      ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
+      ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.dylib
