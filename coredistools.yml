@@ -159,9 +159,7 @@ jobs:
       echo "PATH=$PATH"
       echo "Pipeline.Workspace=$(Pipeline.Workspace)"
       echo "Files in $(Pipeline.Workspace):"
-      ls $(Pipeline.Workspace)
-      echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls $(Pipeline.Workspace)/tblgen-macos
+      ls -AFG $(Pipeline.Workspace)
     displayName: Display data before download llvm-tblgen
 
   - download: current
@@ -172,9 +170,9 @@ jobs:
       echo "PATH=$PATH"
       echo "Pipeline.Workspace=$(Pipeline.Workspace)"
       echo "Files in $(Pipeline.Workspace):"
-      ls $(Pipeline.Workspace)
+      ls -AFG $(Pipeline.Workspace)
       echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls $(Pipeline.Workspace)/tblgen-macos
+      ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
     displayName: Display data before set PATH
 
   - script: 'echo ##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-macos'
@@ -184,12 +182,21 @@ jobs:
       echo "PATH=$PATH"
       echo "Pipeline.Workspace=$(Pipeline.Workspace)"
       echo "Files in $(Pipeline.Workspace):"
-      ls $(Pipeline.Workspace)
+      ls -AFG $(Pipeline.Workspace)
       echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls $(Pipeline.Workspace)/tblgen-macos
+      ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
     displayName: Display data before build coredistools
 
-  - script: ./build-coredistools.sh $(TargetOSArchitecture)
+  #- script: ./build-coredistools.sh $(TargetOSArchitecture)
+  #  displayName: Build coredistools
+  - script: |
+    echo "PATH=$PATH"
+    echo "Pipeline.Workspace=$(Pipeline.Workspace)"
+    echo "Files in $(Pipeline.Workspace):"
+    ls -AFG $(Pipeline.Workspace)
+    echo "Files in $(Pipeline.Workspace)/tblgen-macos"
+    ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
+    ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.dylib
