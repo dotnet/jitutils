@@ -159,7 +159,7 @@ jobs:
       echo "PATH=$PATH"
       echo "Pipeline.Workspace=$(Pipeline.Workspace)"
       echo "Files in $(Pipeline.Workspace):"
-      ls -AFG $(Pipeline.Workspace)
+      ls -lAF $(Pipeline.Workspace)
     displayName: Display data before download llvm-tblgen
 
   - download: current
@@ -170,9 +170,22 @@ jobs:
       echo "PATH=$PATH"
       echo "Pipeline.Workspace=$(Pipeline.Workspace)"
       echo "Files in $(Pipeline.Workspace):"
-      ls -AFG $(Pipeline.Workspace)
+      ls -lAF $(Pipeline.Workspace)
       echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
+      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
+    displayName: Display data before make llvm-tblgen executable
+
+  - script: |
+      chmod +x $(Pipeline.Workspace)/tblgen-macos/llvm-tblgen
+    displayName: Make llvm-tblgen executable
+
+  - script: |
+      echo "PATH=$PATH"
+      echo "Pipeline.Workspace=$(Pipeline.Workspace)"
+      echo "Files in $(Pipeline.Workspace):"
+      ls -lAF $(Pipeline.Workspace)
+      echo "Files in $(Pipeline.Workspace)/tblgen-macos"
+      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
     displayName: Display data before set PATH
 
   - script: |
@@ -185,9 +198,9 @@ jobs:
       echo "PATH=$PATH"
       echo "Pipeline.Workspace=$(Pipeline.Workspace)"
       echo "Files in $(Pipeline.Workspace):"
-      ls -AFG $(Pipeline.Workspace)
+      ls -lAF $(Pipeline.Workspace)
       echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
+      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
     displayName: Display data before build coredistools
 
   #- script: ./build-coredistools.sh $(TargetOSArchitecture)
@@ -196,9 +209,9 @@ jobs:
       echo "PATH=$PATH"
       echo "Pipeline.Workspace=$(Pipeline.Workspace)"
       echo "Files in $(Pipeline.Workspace):"
-      ls -AFG $(Pipeline.Workspace)
+      ls -lAF $(Pipeline.Workspace)
       echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
+      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
       ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
