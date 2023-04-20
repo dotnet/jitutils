@@ -175,7 +175,10 @@ jobs:
       ls -AFG $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
     displayName: Display data before set PATH
 
-  - script: 'echo ##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-macos'
+  - script: |
+      echo "PATH=$PATH"
+      echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-macos"
+      echo "PATH=$PATH"
     displayName: Add llvm-tblgen to the PATH
 
   - script: |
