@@ -107,10 +107,34 @@ jobs:
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
+################################ Build llvm-tblgen on Mac (x64)
+
+- job: build_tblgen_macos
+  dependsOn: checkout_llvm
+  displayName: Build llvm-tblgen macOS
+
+  pool:
+    vmImage: macOS-latest
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  - script: ./build-tblgen.sh osx-x64
+    displayName: Build llvm-tblgen
+
+  - publish: $(Build.SourcesDirectory)/bin/llvm-tblgen
+    artifact: tblgen-macos
+    displayName: Publish llvm-tblgen
+
 ################################ Build coredistools for macos-x64, macos-arm64
 
 - job: build_coredistools_macos
-  dependsOn: checkout_llvm
+  dependsOn:
+  - checkout_llvm
+  - build_tblgen_macos
   displayName: Build coredistools macOS
 
   pool:
@@ -130,6 +154,13 @@ jobs:
 
   steps:
   - template: /eng/download-checkout-llvm.yml
+
+  - download: current
+    artifact: tblgen-macos
+    displayName: Download llvm-tblgen
+
+  - script: 'echo ##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-macos'
+    displayName: Add llvm-tblgen to the PATH
 
   - script: ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools

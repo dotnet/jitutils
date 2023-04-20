@@ -66,6 +66,7 @@ pushd "$BinariesDirectory"
 if [ -z "$CrossRootfsDirectory" ]; then
     cmake \
         -G "Unix Makefiles" \
+        -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$(command -v clang) \
         -DCMAKE_CXX_COMPILER=$(command -v clang++) \
@@ -76,6 +77,7 @@ if [ -z "$CrossRootfsDirectory" ]; then
 else
     cmake \
         -G "Unix Makefiles" \
+        -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$(command -v clang) \
@@ -111,6 +113,6 @@ if [ ! -d $StagingDirectory ]; then
 fi
 
 # Copy llvm-tblgen from BinariesDirectory to StagingDirectory
-find $BinariesDirectory -name llvm-tblgen
+find $BinariesDirectory -name llvm-tblgen -type f -exec cp -v {} $StagingDirectory \;
 
 exit 0
