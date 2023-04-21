@@ -42,9 +42,9 @@ trigger:
 # Use the following for legacy Ubuntu 18.04 based Arm/Arm64 cross build (x64 build is not cross)
 resources:
   containers:
-  - container: ubuntu-18.04-arm
+  - container: linux_arm
     image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-20220312201346-b9de666
-  - container: ubuntu-18.04-arm64
+  - container: linux_arm64
     image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-arm64-20220312201346-b2c2436
 
 variables:
@@ -114,7 +114,9 @@ jobs:
   dependsOn:
   - checkout_llvm
   - build_tblgen_linux
-  displayName: Build coredistools Linux
+  # CBL-Mariner:
+  # displayName: Build coredistools Linux x64/arm/arm64
+  displayName: Build coredistools Linux arm/arm64
 
   container: $[ variables['ContainerImage'] ]
 
