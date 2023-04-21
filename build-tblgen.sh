@@ -6,10 +6,13 @@
 # linux-x64, linux-arm, linux-arm64 builds) and osx-x64 version (used for
 # osx-x64 and osx-arm64 builds).
 #
-# The linux-x64 build is itself a cross-build, using CBL-Mariner container to build.
+# The linux-x64 build is itself a cross-build when using CBL-Mariner container to build.
 
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
+
+# Set this to 1 to build using CBL-Mariner
+CrossBuildUsingMariner=0
 
 EnsureCrossRootfsDirectoryExists () {
     if [ ! -d "$CrossRootfsDirectory" ]; then
@@ -23,9 +26,13 @@ LLVMTargetsToBuild="AArch64;ARM;X86"
 
 case "$TargetOSArchitecture" in
     linux-x64)
-        CMakeCrossCompiling=ON
         LLVMHostTriple=x86_64-linux-gnu
-        EnsureCrossRootfsDirectoryExists
+        if [ $CrossBuildUsingMariner -eq 1 ]; then
+            CMakeCrossCompiling=ON
+            EnsureCrossRootfsDirectoryExists
+        else
+            CMakeCrossCompiling=OFF
+        fi
         ;;
 
     linux-loongarch64)
@@ -77,7 +84,7 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         $SourcesDirectory/llvm-project/llvm
-else
+elif [ $CrossBuildUsingMariner -eq 1 ]; then
     BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
     # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
     # CBL-Mariner doesn't seem to have libgcc_s.so in a standard place, so as a hack, add
@@ -93,6 +100,21 @@ else
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5" \
+        -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
+        -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
+        -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
+        $SourcesDirectory/llvm-project/llvm
+else
+    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
+    cmake \
+        -G "Unix Makefiles" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
+        -DCMAKE_C_COMPILER=$(command -v clang) \
+        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
+        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
