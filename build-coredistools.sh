@@ -33,6 +33,9 @@ if [ -z "$TblGenTool" ]; then
     exit 1
 fi
 
+C_COMPILER=$(command -v clang)
+CXX_COMPILER=$(command -v clang++)
+
 case "$TargetOSArchitecture" in
     linux-arm)
         CMakeCrossCompiling=ON
@@ -40,12 +43,20 @@ case "$TargetOSArchitecture" in
         LLVMHostTriple=arm-linux-gnueabihf
         LLVMTargetsToBuild="ARM"
         EnsureCrossRootfsDirectoryExists
+        if [ $CrossBuildUsingMariner -eq 0 ]; then
+            C_COMPILER=$(command -v clang-9)
+            CXX_COMPILER=$(command -v clang++-9)
+        fi
         ;;
 
     linux-arm64)
         CMakeCrossCompiling=ON
         LLVMHostTriple=aarch64-linux-gnu
         EnsureCrossRootfsDirectoryExists
+        if [ $CrossBuildUsingMariner -eq 0 ]; then
+            C_COMPILER=$(command -v clang-9)
+            CXX_COMPILER=$(command -v clang++-9)
+        fi
         ;;
 
     linux-x64)
@@ -81,6 +92,9 @@ case "$TargetOSArchitecture" in
         exit 1
 esac
 
+echo "Using $C_COMPILER"
+echo "Using $CXX_COMPILER"
+
 LLVMDefaultTargetTriple=${LLVMDefaultTargetTriple:-$LLVMHostTriple}
 
 RootDirectory="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -107,8 +121,8 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
+        -DCMAKE_C_COMPILER=${C_COMPILER} \
+        -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
@@ -134,8 +148,8 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
+        -DCMAKE_C_COMPILER=${C_COMPILER} \
+        -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5" \
@@ -159,8 +173,8 @@ else
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
+        -DCMAKE_C_COMPILER=${C_COMPILER} \
+        -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
