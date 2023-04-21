@@ -88,7 +88,9 @@ jobs:
   #container: linux_x64
 
   pool:
-    vmImage: ubuntu-latest
+    # CBL-Mariner:
+    # vmImage: ubuntu-latest
+    vmImage: ubuntu-18.04
 
   workspace:
     clean: all
@@ -156,8 +158,6 @@ jobs:
     displayName: Make llvm-tblgen executable
 
   - script: |
-      ls -lAF $(Pipeline.Workspace)
-      ls -lAF $(Pipeline.Workspace)/tblgen-linux
       echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
     displayName: Add llvm-tblgen to the PATH
 
@@ -178,7 +178,7 @@ jobs:
   displayName: Build coredistools Linux x64
 
   pool:
-    vmImage: ubuntu-latest
+    vmImage: ubuntu-18.04
 
   variables:
     TargetOSArchitecture: linux-x64
@@ -198,8 +198,6 @@ jobs:
     displayName: Make llvm-tblgen executable
 
   - script: |
-      ls -lAF $(Pipeline.Workspace)
-      ls -lAF $(Pipeline.Workspace)/tblgen-linux
       echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
     displayName: Add llvm-tblgen to the PATH
 

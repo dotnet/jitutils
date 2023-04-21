@@ -18,9 +18,9 @@ LLVMTargetsToBuild="AArch64;ARM;X86"
 
 # Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
 # `llvm-strip` is available in CBL-Mariner container; `strip` is available on macOS.
-StripTool=$(command -v llvm-strip)
+StripTool=$(command -v strip)
 if [ -z "$StripTool" ]; then
-    StripTool=$(command -v strip)
+    StripTool=$(command -v llvm-strip)
     if [ -z "$StripTool" ]; then
         echo "Strip tool not found"
         exit 1
@@ -34,7 +34,25 @@ if [ -z "$TblGenTool" ]; then
 fi
 
 C_COMPILER=$(command -v clang)
+if [ -z "$C_COMPILER" ]; then
+    C_COMPILER=$(command -v clang-9)
+    if [ -z "$C_COMPILER" ]; then
+        echo "C compiler not found"
+	# Keep going in case cmake can find one?
+    fi
+fi
+
 CXX_COMPILER=$(command -v clang++)
+if [ -z "$CXX_COMPILER" ]; then
+    CXX_COMPILER=$(command -v clang++-9)
+    if [ -z "$CXX_COMPILER" ]; then
+        echo "C++ compiler not found"
+	# Keep going in case cmake can find one?
+    fi
+fi
+
+echo "Using C compiler: $C_COMPILER"
+echo "Using C++ compiler: $CXX_COMPILER"
 
 case "$TargetOSArchitecture" in
     linux-arm)
@@ -43,20 +61,12 @@ case "$TargetOSArchitecture" in
         LLVMHostTriple=arm-linux-gnueabihf
         LLVMTargetsToBuild="ARM"
         EnsureCrossRootfsDirectoryExists
-        if [ $CrossBuildUsingMariner -eq 0 ]; then
-            C_COMPILER=$(command -v clang-9)
-            CXX_COMPILER=$(command -v clang++-9)
-        fi
         ;;
 
     linux-arm64)
         CMakeCrossCompiling=ON
         LLVMHostTriple=aarch64-linux-gnu
         EnsureCrossRootfsDirectoryExists
-        if [ $CrossBuildUsingMariner -eq 0 ]; then
-            C_COMPILER=$(command -v clang-9)
-            CXX_COMPILER=$(command -v clang++-9)
-        fi
         ;;
 
     linux-x64)
@@ -91,9 +101,6 @@ case "$TargetOSArchitecture" in
         echo "Unknown target OS and architecture: $TargetOSArchitecture"
         exit 1
 esac
-
-echo "Using $C_COMPILER"
-echo "Using $CXX_COMPILER"
 
 LLVMDefaultTargetTriple=${LLVMDefaultTargetTriple:-$LLVMHostTriple}
 
