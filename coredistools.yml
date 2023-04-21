@@ -90,7 +90,7 @@ jobs:
   pool:
     # CBL-Mariner:
     # vmImage: ubuntu-latest
-    vmImage: ubuntu-18.04
+    vmImage: ubuntu-20.04
 
   workspace:
     clean: all
@@ -178,7 +178,7 @@ jobs:
   displayName: Build coredistools Linux x64
 
   pool:
-    vmImage: ubuntu-18.04
+    vmImage: ubuntu-20.04
 
   variables:
     TargetOSArchitecture: linux-x64

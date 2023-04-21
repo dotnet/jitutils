@@ -35,19 +35,25 @@ fi
 
 C_COMPILER=$(command -v clang)
 if [ -z "$C_COMPILER" ]; then
-    C_COMPILER=$(command -v clang-9)
+    C_COMPILER=$(command -v clang-10)
     if [ -z "$C_COMPILER" ]; then
-        echo "C compiler not found"
-	# Keep going in case cmake can find one?
+        C_COMPILER=$(command -v clang-9)
+        if [ -z "$C_COMPILER" ]; then
+            echo "C compiler not found"
+            # Keep going in case cmake can find one?
+        fi
     fi
 fi
 
 CXX_COMPILER=$(command -v clang++)
 if [ -z "$CXX_COMPILER" ]; then
-    CXX_COMPILER=$(command -v clang++-9)
+    CXX_COMPILER=$(command -v clang++-10)
     if [ -z "$CXX_COMPILER" ]; then
-        echo "C++ compiler not found"
-	# Keep going in case cmake can find one?
+        CXX_COMPILER=$(command -v clang++-9)
+        if [ -z "$CXX_COMPILER" ]; then
+            echo "C++ compiler not found"
+            # Keep going in case cmake can find one?
+        fi
     fi
 fi
 
