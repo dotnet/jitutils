@@ -9,6 +9,7 @@ pr:
     - build-coredistools.cmd
     - build-coredistools.sh
     - build-tblgen.cmd
+    - build-tblgen.sh
     - coredistools.yml
     - pack-coredistools.cmd
 
@@ -66,10 +67,36 @@ jobs:
     artifact: $(LLVMSourceBundle)
     displayName: Publish LLVM bundle
 
+################################ Build llvm-tblgen on Linux (x64)
+
+- job: build_tblgen_linux
+  dependsOn: checkout_llvm
+  displayName: Build llvm-tblgen linux
+
+  container: linux_x64
+
+  pool:
+    vmImage: ubuntu-latest
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  - script: ./build-tblgen.sh linux-x64 /crossrootfs/x64
+    displayName: Build llvm-tblgen
+
+  - publish: $(Build.SourcesDirectory)/bin/llvm-tblgen
+    artifact: tblgen-linux
+    displayName: Publish llvm-tblgen
+
 ################################ Cross-build coredistools for linux-x64, linux-arm, linux-arm64 in CBL-Mariner Docker container
 
 - job: crossbuild_coredistools_linux
-  dependsOn: checkout_llvm
+  dependsOn:
+  - checkout_llvm
+  - build_tblgen_linux
   displayName: Build coredistools Linux
 
   container: $[ variables['ContainerImage'] ]
@@ -100,7 +127,22 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  - script: ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
+  - download: current
+    artifact: tblgen-linux
+    displayName: Download llvm-tblgen
+
+  - script: |
+      chmod +x $(Pipeline.Workspace)/tblgen-linux/llvm-tblgen
+    displayName: Make llvm-tblgen executable
+
+  - script: |
+      ls -lAF $(Pipeline.Workspace)
+      ls -lAF $(Pipeline.Workspace)/tblgen-linux
+      echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
+    displayName: Add llvm-tblgen to the PATH
+
+  - script: |
+      ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
     displayName: Build coredistools
 
   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
@@ -155,63 +197,19 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  - script: |
-      echo "PATH=$PATH"
-      echo "Pipeline.Workspace=$(Pipeline.Workspace)"
-      echo "Files in $(Pipeline.Workspace):"
-      ls -lAF $(Pipeline.Workspace)
-    displayName: Display data before download llvm-tblgen
-
   - download: current
     artifact: tblgen-macos
     displayName: Download llvm-tblgen
-
-  - script: |
-      echo "PATH=$PATH"
-      echo "Pipeline.Workspace=$(Pipeline.Workspace)"
-      echo "Files in $(Pipeline.Workspace):"
-      ls -lAF $(Pipeline.Workspace)
-      echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
-    displayName: Display data before make llvm-tblgen executable
 
   - script: |
       chmod +x $(Pipeline.Workspace)/tblgen-macos/llvm-tblgen
     displayName: Make llvm-tblgen executable
 
   - script: |
-      echo "PATH=$PATH"
-      echo "Pipeline.Workspace=$(Pipeline.Workspace)"
-      echo "Files in $(Pipeline.Workspace):"
-      ls -lAF $(Pipeline.Workspace)
-      echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
-    displayName: Display data before set PATH
-
-  - script: |
-      echo "PATH=$PATH"
       echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-macos"
-      echo "PATH=$PATH"
     displayName: Add llvm-tblgen to the PATH
 
   - script: |
-      echo "PATH=$PATH"
-      echo "Pipeline.Workspace=$(Pipeline.Workspace)"
-      echo "Files in $(Pipeline.Workspace):"
-      ls -lAF $(Pipeline.Workspace)
-      echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
-    displayName: Display data before build coredistools
-
-  #- script: ./build-coredistools.sh $(TargetOSArchitecture)
-  #  displayName: Build coredistools
-  - script: |
-      echo "PATH=$PATH"
-      echo "Pipeline.Workspace=$(Pipeline.Workspace)"
-      echo "Files in $(Pipeline.Workspace):"
-      ls -lAF $(Pipeline.Workspace)
-      echo "Files in $(Pipeline.Workspace)/tblgen-macos"
-      ls -lAF $(Pipeline.Workspace)/tblgen-macos || echo "Not found"
       ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
