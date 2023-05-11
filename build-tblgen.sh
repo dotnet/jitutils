@@ -12,7 +12,7 @@ TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
 # Set this to 1 to build using CBL-Mariner
-CrossBuildUsingMariner=0
+CrossBuildUsingMariner=1
 
 EnsureCrossRootfsDirectoryExists () {
     if [ ! -d "$CrossRootfsDirectory" ]; then
@@ -87,9 +87,11 @@ if [ -z "$CrossRootfsDirectory" ]; then
 elif [ $CrossBuildUsingMariner -eq 1 ]; then
     BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
     # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+    # [old info:]
     # CBL-Mariner doesn't seem to have libgcc_s.so in a standard place, so as a hack, add
     #     -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5
     # where it does exist.
+    #    -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5" \
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
@@ -99,7 +101,7 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
         -DCMAKE_CXX_COMPILER=$(command -v clang++) \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5" \
+        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \

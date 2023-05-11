@@ -4,7 +4,7 @@ TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
 # Set this to 1 to build using CBL-Mariner
-CrossBuildUsingMariner=0
+CrossBuildUsingMariner=1
 
 EnsureCrossRootfsDirectoryExists () {
     if [ ! -d "$CrossRootfsDirectory" ]; then
@@ -18,9 +18,9 @@ LLVMTargetsToBuild="AArch64;ARM;X86"
 
 # Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
 # `llvm-strip` is available in CBL-Mariner container; `strip` is available on macOS.
-StripTool=$(command -v strip)
+StripTool=$(command -v llvm-strip)
 if [ -z "$StripTool" ]; then
-    StripTool=$(command -v llvm-strip)
+    StripTool=$(command -v strip)
     if [ -z "$StripTool" ]; then
         echo "Strip tool not found"
         exit 1
@@ -35,26 +35,14 @@ fi
 
 C_COMPILER=$(command -v clang)
 if [ -z "$C_COMPILER" ]; then
-    C_COMPILER=$(command -v clang-10)
-    if [ -z "$C_COMPILER" ]; then
-        C_COMPILER=$(command -v clang-9)
-        if [ -z "$C_COMPILER" ]; then
-            echo "C compiler not found"
-            # Keep going in case cmake can find one?
-        fi
-    fi
+    echo "C compiler not found"
+    # Keep going in case cmake can find one?
 fi
 
 CXX_COMPILER=$(command -v clang++)
 if [ -z "$CXX_COMPILER" ]; then
-    CXX_COMPILER=$(command -v clang++-10)
-    if [ -z "$CXX_COMPILER" ]; then
-        CXX_COMPILER=$(command -v clang++-9)
-        if [ -z "$CXX_COMPILER" ]; then
-            echo "C++ compiler not found"
-            # Keep going in case cmake can find one?
-        fi
-    fi
+    echo "C++ compiler not found"
+    # Keep going in case cmake can find one?
 fi
 
 echo "Using C compiler: $C_COMPILER"
@@ -154,9 +142,11 @@ if [ -z "$CrossRootfsDirectory" ]; then
 elif [ $CrossBuildUsingMariner -eq 1 ]; then
     BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
     # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+    # [old info:]
     # CBL-Mariner doesn't seem to have libgcc_s.so in a standard place, so as a hack, add
     #     -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5
     # where it does exist.
+    #    -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5" \
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
@@ -165,7 +155,7 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
         -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L/crossrootfs/x64/usr/lib/gcc/x86_64-linux-gnu/5" \
+        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
