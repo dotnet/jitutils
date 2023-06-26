@@ -55,11 +55,13 @@ namespace ManagedCodeGen
 
         public class FileInfo
         {
-            public string path;
+            public string name;
             public IEnumerable<MethodInfo> methodList;
+            public bool isExplicitOnlyFile;
+
             public override string ToString()
             {
-                return path;
+                return name;
             }
         }
 
@@ -71,7 +73,7 @@ namespace ManagedCodeGen
                 if (Object.ReferenceEquals(x, y)) return true;
                 if (Object.ReferenceEquals(x, null) || Object.ReferenceEquals(y, null))
                     return false;
-                return x.path == y.path;
+                return x.name == y.name;
             }
 
             // If Equals() returns true for a pair of objects 
@@ -80,7 +82,7 @@ namespace ManagedCodeGen
             public int GetHashCode(FileInfo fi)
             {
                 if (Object.ReferenceEquals(fi, null)) return 0;
-                return fi.path == null ? 0 : fi.path.GetHashCode();
+                return fi.name == null ? 0 : fi.name.GetHashCode();
             }
         }
 
@@ -128,8 +130,8 @@ namespace ManagedCodeGen
 
         public class FileDelta
         {
-            public string basePath;
-            public string diffPath;
+            public string baseName;
+            public string diffName;
 
             public MetricCollection baseMetrics;
             public MetricCollection diffMetrics;
@@ -235,7 +237,7 @@ namespace ManagedCodeGen
             }
         }
 
-        public static IEnumerable<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
+        public static List<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
         {
             // if path is a directory, enumerate files and extract
             // otherwise just extract.
@@ -250,7 +252,7 @@ namespace ManagedCodeGen
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
                          .AsParallel().Select(p => new FileInfo
                          {
-                             path = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
+                             name = Path.GetFileName(fullRootPath),
                              methodList = ExtractMethodInfo(p)
                          }).ToList();
             }
@@ -261,8 +263,9 @@ namespace ManagedCodeGen
                 return new List<FileInfo>
                 { new FileInfo
                     {
-                        path = Path.GetFileName(path),
-                        methodList = ExtractMethodInfo(path)
+                        name = Path.GetFileName(path),
+                        methodList = ExtractMethodInfo(path),
+                        isExplicitOnlyFile = true,
                     }
                 };
             }
@@ -376,7 +379,7 @@ namespace ManagedCodeGen
             IEnumerable<FileInfo> diffInfo, string metricName)
         {
             MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
-            return baseInfo.Join(diffInfo, b => b.path, d => d.path, (b, d) =>
+            return baseInfo.Join(diffInfo, b => b.isExplicitOnlyFile ? "" : b.name, d => d.isExplicitOnlyFile ? "" : d.name, (b, d) =>
             {
                 var jointList = b.methodList.Join(d.methodList,
                         x => x.name, y => y.name, (x, y) => new MethodDelta
@@ -391,8 +394,8 @@ namespace ManagedCodeGen
 
                 FileDelta f = new FileDelta
                 {
-                    basePath = b.path,
-                    diffPath = d.path,
+                    baseName = b.name,
+                    diffName = d.name,
                     baseMetrics = jointList.Sum(x => x.baseMetrics),
                     diffMetrics = jointList.Sum(x => x.diffMetrics),
                     deltaMetrics = jointList.Sum(x => x.deltaMetrics),
@@ -530,7 +533,7 @@ namespace ManagedCodeGen
                     summaryContents.AppendLine($"\n{headerText} ({unitName}s):");
                     foreach (var fileDelta in list.Take(Math.Min(metricCount, _count)))
                     {
-                        summaryContents.AppendLine(string.Format("    {1,8} : {0} ({2:P} of base)", fileDelta.basePath,
+                        summaryContents.AppendLine(string.Format("    {1,8} : {0} ({2:P} of base)", fileDelta.diffName,
                             fileDelta.deltaMetrics.GetMetric(metricName).ValueString,
                             fileDelta.deltaMetrics.GetMetric(metricName).Value / fileDelta.baseMetrics.GetMetric(metricName).Value));
 
@@ -547,7 +550,7 @@ namespace ManagedCodeGen
             var methodDeltaList = fileDeltaList
                                         .SelectMany(fd => fd.methodDeltaList, (fd, md) => new
                                         {
-                                            path = fd.basePath,
+                                            path = fd.baseName,
                                             name = md.name,
                                             deltaMetric = md.deltaMetrics.GetMetric(metricName),
                                             baseMetric = md.baseMetrics.GetMetric(metricName),
@@ -631,8 +634,8 @@ namespace ManagedCodeGen
                 Dictionary<string, int> diffCounts = DiffInText(_diffPath, _basePath);
 
                 // TODO: resolve diffs to particular methods in the files.
-                var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffPath) && (x.deltaMetrics.IsZero()))
-                    .OrderByDescending(x => diffCounts[x.basePath]);
+                var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffName) && (x.deltaMetrics.IsZero()))
+                    .OrderByDescending(x => diffCounts[x.baseName]);
 
                 int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
                 if (zeroDiffFilesWithDiffCount > 0)
@@ -640,7 +643,7 @@ namespace ManagedCodeGen
                     summaryContents.AppendLine($"\n{zeroDiffFilesWithDiffCount} files had text diffs but no metric diffs.");
                     foreach (var zerofile in zeroDiffFilesWithDiffs.Take(_count))
                     {
-                        summaryContents.AppendLine($"{zerofile.basePath} had {diffCounts[zerofile.basePath]} diffs");
+                        summaryContents.AppendLine($"{zerofile.baseName} had {diffCounts[zerofile.baseName]} diffs");
                     }
                 }
             }
@@ -663,8 +666,8 @@ namespace ManagedCodeGen
                     {
                         if (!fileToDelete.RetainFile)
                         {
-                            DeleteFile(Path.Combine(_basePath, fileToDelete.basePath));
-                            DeleteFile(Path.Combine(_diffPath, fileToDelete.diffPath));
+                            DeleteFile(Path.Combine(_basePath, fileToDelete.baseName));
+                            DeleteFile(Path.Combine(_diffPath, fileToDelete.diffName));
                             filesDeleted += 2;
                         }
                     }
@@ -677,8 +680,14 @@ namespace ManagedCodeGen
             return (Math.Abs(totalDeltaMetric.Value) == 0 ? 0 : -1, summaryContents.ToString());
         }
 
-        public static void WarnFiles(IEnumerable<FileInfo> diffList, IEnumerable<FileInfo> baseList)
+        public static void WarnFiles(List<FileInfo> diffList, List<FileInfo> baseList)
         {
+            if (baseList.Count == 1 && baseList[0].isExplicitOnlyFile &&
+                diffList.Count == 1 && diffList[0].isExplicitOnlyFile)
+            {
+                return;
+            }
+
             FileInfoComparer fileInfoComparer = new FileInfoComparer();
             var onlyInBaseList = baseList.Except(diffList, fileInfoComparer);
             var onlyInDiffList = diffList.Except(baseList, fileInfoComparer);
@@ -692,7 +701,7 @@ namespace ManagedCodeGen
                 Console.WriteLine("\nOnly in base files:");
                 foreach (var file in onlyInBaseList)
                 {
-                    Console.WriteLine(file.path);
+                    Console.WriteLine(file.name);
                 }
             }
 
@@ -703,7 +712,7 @@ namespace ManagedCodeGen
                 Console.WriteLine("\nOnly in diff files:");
                 foreach (var file in onlyInDiffList)
                 {
-                    Console.WriteLine(file.path);
+                    Console.WriteLine(file.name);
                 }
             }
         }
@@ -717,7 +726,7 @@ namespace ManagedCodeGen
 
                 if ((onlyInBaseCount > 0) || (onlyInDiffCount > 0))
                 {
-                    Console.WriteLine("Mismatched methods in {0}", delta.basePath);
+                    Console.WriteLine("Mismatched methods in {0}", delta.baseName);
                     if (onlyInBaseCount > 0)
                     {
                         Console.WriteLine("Base:");
@@ -776,7 +785,7 @@ namespace ManagedCodeGen
                 foreach (var method in file.methodDeltaList)
                 {
                     // Method names often contain commas, so use tabs as field separators
-                    fileContents.Append($"{file.basePath}\t{method.name}\t");
+                    fileContents.Append($"{file.baseName}\t{method.name}\t");
 
                     foreach (Metric metric in MetricCollection.AllMetrics)
                     {
