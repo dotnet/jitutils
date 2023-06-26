@@ -252,7 +252,7 @@ namespace ManagedCodeGen
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
                          .AsParallel().Select(p => new FileInfo
                          {
-                             name = Path.GetFileName(fullRootPath),
+                             name = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
                              methodList = ExtractMethodInfo(p)
                          }).ToList();
             }
