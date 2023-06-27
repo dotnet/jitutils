@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
 using System.Text;
+using System.Runtime.InteropServices;
 
 namespace ManagedCodeGen
 {
@@ -385,6 +386,13 @@ namespace ManagedCodeGen
                             AppendEnvironmentVariableToPmiEnv("DOTNET_SIMD16ByteOnly", "1");
                         }
                     }
+                }
+
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    // Disable fragile relocs on non-Windows platforms, see
+                    // https://github.com/dotnet/runtime/issues/87842
+                    AddEnvironmentVariable("DOTNET_JITAllowOptionalRelocs", "0");
                 }
 
                 // Set up PMI path...

@@ -29,6 +29,7 @@ using System.Collections.Generic;
 using System.Runtime.Loader;
 using System.Linq;
 using System.Text;
+using System.Runtime.InteropServices;
 
 namespace ManagedCodeGen
 {
@@ -342,6 +343,13 @@ namespace ManagedCodeGen
                 {
                     AddEnvironmentVariable("DOTNET_AltJit", "*");
                     AddEnvironmentVariable("DOTNET_AltJitName", altJit);
+                }
+
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    // Disable fragile relocs on non-Windows platforms, see
+                    // https://github.com/dotnet/runtime/issues/87842
+                    AddEnvironmentVariable("DOTNET_JITAllowOptionalRelocs", "0");
                 }
 
                 string dasmPath = null;
