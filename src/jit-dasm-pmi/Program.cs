@@ -392,7 +392,7 @@ namespace ManagedCodeGen
                 {
                     // Disable fragile relocs on non-Windows platforms, see
                     // https://github.com/dotnet/runtime/issues/87842
-                    AddEnvironmentVariable("DOTNET_JITAllowOptionalRelocs", "0");
+                    AddEnvironmentVariable("DOTNET_JitEnableOptionalRelocs", "0");
                 }
 
                 // Set up PMI path...
