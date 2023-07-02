@@ -9,61 +9,61 @@ using System.IO;
 
 namespace ManagedCodeGen
 {
-    internal sealed class JitDasmRootCommand : RootCommand
+    internal sealed class JitDasmRootCommand : CliRootCommand
     {
-        public Option<string> AltJit { get; } =
-            new("--altjit", "If set, the name of the altjit to use (e.g., clrjit_win_arm64_x64.dll)");
-        public Option<string> CrossgenPath { get; } =
-            new(new[] { "--crossgen", "-c" }, result => result.Tokens.Count > 0 ? Path.GetFullPath(result.Tokens[0].Value) : null, true, "The crossgen or crossgen2 compiler exe.");
-        public Option<string> JitPath { get; } =
-            new(new[] { "--jit", "-j" }, result => result.Tokens.Count > 0 ? Path.GetFullPath(result.Tokens[0].Value) : null, true, "The full path to the jit library");
-        public Option<string> OutputPath { get; } =
-            new(new[] { "--output", "-o" }, "The output path");
-        public Option<string> Filename { get; } =
-            new(new[] { "--file", "-f" }, "Name of file to take list of assemblies from. Both a file and assembly list can be used");
-        public Option<bool> DumpGCInfo { get; } =
-            new("--gcinfo", "Add GC info to the disasm output");
-        public Option<bool> DumpDebugInfo { get; } =
-            new("--debuginfo", "Add Debug info to the disasm output");
-        public Option<bool> Verbose { get; } =
-            new("--verbose", "Enable verbose output");
-        public Option<bool> NoDiffable { get; } =
-            new("--nodiffable", "Generate non-diffable asm (pointer values will be left in output)");
-        public Option<bool> Recursive { get; } =
-            new(new[] { "--recursive", "-r" }, "Search directories recursively");
-        public Option<List<string>> PlatformPaths { get; } =
-            new(new[] { "--platform", "-p" }, "Path to platform assemblies");
-        public Option<List<string>> Methods { get; } =
-            new(new[] { "--methods", "-m" }, "List of methods to disasm");
-        public Argument<List<string>> AssemblyList { get; } =
-            new("--assembly", "The list of assemblies or directories to scan for assemblies");
-        public Option<bool> WaitForDebugger { get; } =
-            new(new[] { "--wait", "-w" }, "Wait for debugger to attach");
+        public CliOption<string> AltJit { get; } =
+            new("--altjit") { Description = "If set, the name of the altjit to use (e.g., clrjit_win_arm64_x64.dll)" };
+        public CliOption<string> CrossgenPath { get; } =
+            new("--crossgen", "-c") { CustomParser = Helpers.GetResolvedPath, DefaultValueFactory = Helpers.GetResolvedPath, Description = "The crossgen or crossgen2 compiler exe." };
+        public CliOption<string> JitPath { get; } =
+            new("--jit", "-j") { CustomParser = Helpers.GetResolvedPath, DefaultValueFactory = Helpers.GetResolvedPath, Description = "The full path to the jit library" };
+        public CliOption<string> OutputPath { get; } =
+            new("--output", "-o") { Description = "The output path" };
+        public CliOption<string> Filename { get; } =
+            new("--file", "-f") { Description = "Name of file to take list of assemblies from. Both a file and assembly list can be used" };
+        public CliOption<bool> DumpGCInfo { get; } =
+            new("--gcinfo") { Description = "Add GC info to the disasm output" };
+        public CliOption<bool> DumpDebugInfo { get; } =
+            new("--debuginfo") { Description = "Add Debug info to the disasm output" };
+        public CliOption<bool> Verbose { get; } =
+            new("--verbose") { Description = "Enable verbose output" };
+        public CliOption<bool> NoDiffable { get; } =
+            new("--nodiffable") { Description = "Generate non-diffable asm (pointer values will be left in output)" };
+        public CliOption<bool> Recursive { get; } =
+            new("--recursive", "-r") { Description = "Search directories recursively" };
+        public CliOption<List<string>> PlatformPaths { get; } =
+            new("--platform", "-p") { Description = "Path to platform assemblies" };
+        public CliOption<List<string>> Methods { get; } =
+            new("--methods", "-m") { Description = "List of methods to disasm" };
+        public CliArgument<List<string>> AssemblyList { get; } =
+            new("--assembly") { Description = "The list of assemblies or directories to scan for assemblies" };
+        public CliOption<bool> WaitForDebugger { get; } =
+            new("--wait", "-w") { Description = "Wait for debugger to attach" };
 
         public ParseResult Result;
         public bool CodeGeneratorV1 { get; private set; }
 
         public JitDasmRootCommand(string[] args) : base("Managed codegen diff tool (crossgen/AOT)")
         {
-            AddOption(AltJit);
-            AddOption(CrossgenPath);
-            AddOption(JitPath);
-            AddOption(OutputPath);
-            AddOption(Filename);
-            AddOption(DumpGCInfo);
-            AddOption(DumpDebugInfo);
-            AddOption(Verbose);
-            AddOption(NoDiffable);
-            AddOption(Recursive);
-            AddOption(PlatformPaths);
-            AddOption(Methods);
-            AddOption(WaitForDebugger);
+            Options.Add(AltJit);
+            Options.Add(CrossgenPath);
+            Options.Add(JitPath);
+            Options.Add(OutputPath);
+            Options.Add(Filename);
+            Options.Add(DumpGCInfo);
+            Options.Add(DumpDebugInfo);
+            Options.Add(Verbose);
+            Options.Add(NoDiffable);
+            Options.Add(Recursive);
+            Options.Add(PlatformPaths);
+            Options.Add(Methods);
+            Options.Add(WaitForDebugger);
 
-            AddArgument(AssemblyList);
+            Arguments.Add(AssemblyList);
 
-            this.SetHandler(context =>
+            SetAction(result =>
             {
-                Result = context.ParseResult;
+                Result = result;
 
                 try
                 {
@@ -86,7 +86,7 @@ namespace ManagedCodeGen
                         }
                     }
 
-                    if (Result.FindResultFor(Filename) == null && Result.GetValue(AssemblyList).Count == 0)
+                    if (Result.GetResult(Filename) == null && Result.GetValue(AssemblyList).Count == 0)
                     {
                         errors.Add("No input: Specify --file <arg> or list input assemblies.");
                     }
@@ -108,7 +108,7 @@ namespace ManagedCodeGen
                         throw new Exception(string.Join(Environment.NewLine, errors));
                     }
 
-                    context.ExitCode = new Program(this).Run();
+                    return new Program(this).Run();
                 }
                 catch (Exception e)
                 {
@@ -120,7 +120,7 @@ namespace ManagedCodeGen
 
                     Console.ResetColor();
 
-                    context.ExitCode = 1;
+                    return 1;
                 }
             });
         }

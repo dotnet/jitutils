@@ -10,34 +10,34 @@ using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
-    internal sealed class CIJobsRootCommand : RootCommand
+    internal sealed class CIJobsRootCommand : CliRootCommand
     {
-        public Option<string> Server { get; } =
-            new(new[] { "--server", "-s" }, "Url of the server. Defaults to http://ci.dot.net/");
-        public Option<string> JobName { get; } =
-            new(new[] { "--job", "-j" }, "Name of the job.");
-        public Option<string> BranchName { get; } =
-            new(new[] { "--branch", "-b" }, () => "master", "Name of the branch.");
-        public Option<string> RepoName { get; } =
-            new(new[] { "--repo", "-r" }, () => "dotnet_coreclr", "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr).");
-        public Option<string> MatchPattern { get; } =
-            new(new[] { "--match", "-m" }, "Regex pattern used to select jobs output.");
-        public Option<int> JobNumber { get; } =
-            new(new[] { "--number", "-n" }, "Job number.");
-        public Option<bool> ShowLastSuccessful { get; } =
-            new(new[] { "--last-successful", "-l", }, "Show last successful build.");
-        public Option<string> Commit { get; } =
-            new(new[] { "--commit", "-c", }, "List build at this commit.");
-        public Option<bool> ShowArtifacts { get; } =
-            new(new[] { "--artifacts", "-a" }, "Show job artifacts on server.");
-        public Option<string> OutputPath { get; } =
-            new(new[] { "--output", "-o" }, "The path where output will be placed.");
-        public Option<string> OutputRoot { get; } =
-            new("--output-root", "The root directory where output will be placed. A subdirectory named by job and build number will be created within this to store the output.");
-        public Option<bool> Unzip { get; } =
-            new(new[] { "--unzip", "-u" }, "Unzip copied artifacts");
-        public Option<string> ContentPath { get; } =
-            new(new[] { "--ContentPath", "-p" }, "Relative product zip path. Default is artifact/bin/Product/*zip*/Product.zip");
+        public CliOption<string> Server { get; } =
+            new("--server", "-s") { Description = "Url of the server. Defaults to http://ci.dot.net/" };
+        public CliOption<string> JobName { get; } =
+            new("--job", "-j") { Description = "Name of the job." };
+        public CliOption<string> BranchName { get; } =
+            new("--branch", "-b") { DefaultValueFactory = _ => "master", Description = "Name of the branch." };
+        public CliOption<string> RepoName { get; } =
+            new("--repo", "-r") { DefaultValueFactory = _ => "dotnet_coreclr", Description = "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr)." };
+        public CliOption<string> MatchPattern { get; } =
+            new("--match", "-m") { Description = "Regex pattern used to select jobs output." };
+        public CliOption<int> JobNumber { get; } =
+            new("--number", "-n") { Description = "Job number." };
+        public CliOption<bool> ShowLastSuccessful { get; } =
+            new("--last-successful", "-l") { Description = "Show last successful build." };
+        public CliOption<string> Commit { get; } =
+            new("--commit", "-c") { Description = "List build at this commit." };
+        public CliOption<bool> ShowArtifacts { get; } =
+            new("--artifacts", "-a") { Description = "Show job artifacts on server." };
+        public CliOption<string> OutputPath { get; } =
+            new("--output", "-o") { Description = "The path where output will be placed." };
+        public CliOption<string> OutputRoot { get; } =
+            new("--output-root") { Description = "The root directory where output will be placed. A subdirectory named by job and build number will be created within this to store the output." };
+        public CliOption<bool> Unzip { get; } =
+            new("--unzip", "-u") { Description = "Unzip copied artifacts" };
+        public CliOption<string> ContentPath { get; } =
+            new("--ContentPath", "-p") { Description = "Relative product zip path. Default is artifact/bin/Product/*zip*/Product.zip" };
 
         public ParseResult Result;
 
@@ -45,7 +45,7 @@ namespace ManagedCodeGen
         {
             List<string> errors = new();
 
-            Command listCommand = new("list", "List jobs on dotnet-ci.cloudapp.net for the repo.")
+            CliCommand listCommand = new("list", "List jobs on dotnet-ci.cloudapp.net for the repo.")
             {
                 Server,
                 JobName,
@@ -58,13 +58,13 @@ namespace ManagedCodeGen
                 ShowArtifacts
             };
 
-            listCommand.SetHandler(context => TryExecuteWithContextAsync(context, "list", result =>
+            listCommand.SetAction((result, cancellationToken) =>
             {
                 int jobNumber = result.GetValue(JobNumber);
                 bool showLastSuccessful = result.GetValue(ShowLastSuccessful);
                 string commit = result.GetValue(Commit);
 
-                if (result.FindResultFor(JobNumber) == null)
+                if (result.GetResult(JobNumber) == null)
                 {
                     if (jobNumber != 0)
                     {
@@ -98,11 +98,13 @@ namespace ManagedCodeGen
                         errors.Add("Match pattern not valid with --job");
                     }
                 }
-            }));
 
-            AddCommand(listCommand);
+                return TryExecuteWithContextAsync(result, "list");
+            });
 
-            Command copyCommand = new("copy", @"Copies job artifacts from dotnet-ci.cloudapp.net. This
+            Subcommands.Add(listCommand);
+
+            CliCommand copyCommand = new("copy", @"Copies job artifacts from dotnet-ci.cloudapp.net. This
 command copies a zip of artifacts from a repo (defaulted to
 dotnet_coreclr). The default location of the zips is the
 Product sub-directory, though that can be changed using the
@@ -122,7 +124,7 @@ ContentPath(p) parameter")
                 ContentPath
             };
 
-            copyCommand.SetHandler(context => TryExecuteWithContextAsync(context, "copy", result =>
+            copyCommand.SetAction((result, cancellationToken) =>
             {
                 if (result.GetValue(JobName) == null)
                 {
@@ -153,22 +155,23 @@ ContentPath(p) parameter")
                 {
                     errors.Add("Must specify only one of --output <path> or --output_root <path>.");
                 }
-            }));
 
-            AddCommand(copyCommand);
+                return TryExecuteWithContextAsync(result, "copy");
+            });
 
-            async Task TryExecuteWithContextAsync(InvocationContext context, string name, Action<ParseResult> validate)
+            Subcommands.Add(copyCommand);
+
+            async Task<int> TryExecuteWithContextAsync(ParseResult result, string name)
             {
-                Result = context.ParseResult;
+                Result = result;
                 try
                 {
-                    validate(Result);
                     if (errors.Count > 0)
                     {
                         throw new Exception(string.Join(Environment.NewLine, errors));
                     }
 
-                    context.ExitCode = await new Program(this).RunAsync(name);
+                    return await new Program(this).RunAsync(name);
                 }
                 catch (Exception e)
                 {
@@ -180,7 +183,7 @@ ContentPath(p) parameter")
 
                     Console.ResetColor();
 
-                    context.ExitCode = 1;
+                    return 1;
                 }
             }
         }
