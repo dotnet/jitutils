@@ -69,15 +69,13 @@ namespace ManagedCodeGen
             return await CopyAsync(cic);
         }
 
-        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
+        private T Get<T>(CliOption<T> option) => _command.Result.GetValue(option);
 
         private static Task<int> Main(string[] args) =>
-            new CommandLineBuilder(new CIJobsRootCommand(args))
-                .UseVersionOption("--version", "-v")
-                .UseHelp()
-                .UseParseErrorReporting()
-                .Build()
-                .InvokeAsync(args);
+            new CliConfiguration(new CIJobsRootCommand(args).UseVersion())
+            {
+                EnableParseErrorReporting = true
+            }.InvokeAsync(args);
 
         // List jobs and their details from the given project on .NETCI Jenkins instance.
         // List functionality:

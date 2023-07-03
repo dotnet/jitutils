@@ -451,9 +451,9 @@ namespace ManagedCodeGen
             }
             summaryContents.AppendLine(string.Format("\n({0} is better)\n", totalBaseMetric.LowerIsBetter ? "Lower" : "Higher"));
 
-            if (_command.Result.FindResultFor(_command.OverrideTotalBaseMetric) != null)
+            if (_command.Result.GetResult(_command.OverrideTotalBaseMetric) != null)
             {
-                Debug.Assert(_command.Result.FindResultFor(_command.OverrideTotalDiffMetric) != null);
+                Debug.Assert(_command.Result.GetResult(_command.OverrideTotalDiffMetric) != null);
                 summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of base: {1} (overridden on cmd)", unitName, _overrideTotalBaseMetric));
                 summaryContents.AppendLine(string.Format(CultureInfo.InvariantCulture, "Total {0}s of diff: {1} (overridden on cmd)", unitName, _overrideTotalDiffMetric));
                 double delta = _overrideTotalDiffMetric - _overrideTotalBaseMetric;
@@ -893,15 +893,13 @@ namespace ManagedCodeGen
             return fileToTextDiffCount;
         }
 
-        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
+        private T Get<T>(CliOption<T> option) => _command.Result.GetValue(option);
 
         private static int Main(string[] args) =>
-            new CommandLineBuilder(new JitAnalyzeRootCommand(args))
-                .UseVersionOption("--version", "-v")
-                .UseHelp()
-                .UseParseErrorReporting()
-                .Build()
-                .Invoke(args);
+            new CliConfiguration(new JitAnalyzeRootCommand(args).UseVersion())
+            {
+                EnableParseErrorReporting = true
+            }.Invoke(args);
 
         public int Run()
         {
