@@ -42,7 +42,7 @@ namespace ManagedCodeGen
         public CliOption<bool> RetainOnlyTopFiles { get; } =
             new("--retain-only-top-files") { Description = "Retain only the top 'count' improvements/regressions .dasm files. Delete other files. Useful in CI scenario to reduce the upload size" };
         public CliOption<double> OverrideTotalBaseMetric { get; } =
-            new("--override-total-base-metric") { DefaultValueFactory = result =>
+            new("--override-total-base-metric") { CustomParser = result =>
             {
                 string optionValue = result.Tokens[0].Value;
                 if (double.TryParse(optionValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedValue))
@@ -52,7 +52,7 @@ namespace ManagedCodeGen
                  return 0;
             }, Description = "Override the total base metric shown in the output with this value. Useful when only changed .dasm files are present and these values are known" };
         public CliOption<double> OverrideTotalDiffMetric { get; } =
-            new("--override-total-diff-metric") { DefaultValueFactory = result =>
+            new("--override-total-diff-metric") { CustomParser = result =>
             {
                 string optionValue = result.Tokens[0].Value;
                 if (double.TryParse(optionValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedValue))
