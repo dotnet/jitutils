@@ -71,11 +71,11 @@ namespace ManagedCodeGen
 
         private T Get<T>(CliOption<T> option) => _command.Result.GetValue(option);
 
-        private static int Main(string[] args) =>
+        private static Task<int> Main(string[] args) =>
             new CliConfiguration(new CIJobsRootCommand(args).UseVersion())
             {
                 EnableParseErrorReporting = true
-            }.Invoke(args);
+            }.InvokeAsync(args);
 
         // List jobs and their details from the given project on .NETCI Jenkins instance.
         // List functionality:
