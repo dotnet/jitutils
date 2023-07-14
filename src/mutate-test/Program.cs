@@ -25,7 +25,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 // * Try random stuff from https://github.com/dotnet/roslyn-sdk/tree/master/samples/CSharp/TreeTransforms
 // * Consider making the mutated assemblies unloadable?
 //
-// See http://roslynquoter.azurewebsites.net/ for tool that shows how use roslyn APIs for C# syntax.
+// See https://roslynquoter.azurewebsites.net/ for tool that shows how use roslyn APIs for C# syntax.
 // Useful if you can express what you want in C# and need to see how to get a transform to create it for you.
 
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;

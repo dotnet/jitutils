@@ -30,7 +30,7 @@ The "cijobs list" command has the following help message:
                   [-n <arg>] [-l] [-c <arg>] [-a]
 
         -s, --server <arg>       Url of the server. Defaults to
-                                 http://ci.dot.net/
+                                 https://ci.dot.net/
         -j, --job <arg>          Name of the job.
         -b, --branch <arg>       Name of the branch (default is master).
         -r, --repo <arg>         Name of the repo (e.g. dotnet_corefx or
@@ -48,7 +48,7 @@ The "cijobs copy" command has the following help message:
                   [-r <arg>] [-o <arg>] [-u] [-p <arg>]
 
         -s, --server <arg>         Url of the server. Defaults to
-                                   http://ci.dot.net/
+                                   https://ci.dot.net/
         -j, --job <arg>            Name of the job.
         -n, --number <arg>         Job number.
         -l, --last_successful      Copy last successful build.

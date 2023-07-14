@@ -138,7 +138,7 @@ echo jit-format requires clang-format and clang-tidy version 3.8.*. Currently in
 clang-format --version
 clang-tidy --version
 echo Please install version 3.8.* and put the tools on the PATH to use jit-format.
-echo Tools can be found at http://llvm.org/releases/download.html#3.8.0
+echo Tools can be found at https://llvm.org/releases/download.html#3.8.0
 
 :DownloadTools
 

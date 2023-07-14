@@ -119,7 +119,7 @@ function download_tools {
 
     if [ ! -f bin/clang-format -o ! -f bin/clang-tidy ]; then
         echo "Either clang-tidy or clang-format was not installed. Please install and put them on the PATH to use jit-format."
-        echo "Tools can be found at http://llvm.org/releases/download.html#3.8.0"
+        echo "Tools can be found at https://llvm.org/releases/download.html#3.8.0"
         return 1
     fi
 
@@ -135,7 +135,7 @@ get_host_os
 # Check if our required tools exist.
 
 if ! hash dotnet 2>/dev/null; then
-    echo "${__ErrMsgPrefix}Can't find dotnet! Please install from http://dot.net and add to PATH."
+    echo "${__ErrMsgPrefix}Can't find dotnet! Please install from https://dot.net and add to PATH."
     exit 1
 fi
 

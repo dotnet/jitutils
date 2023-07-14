@@ -13,7 +13,7 @@ namespace ManagedCodeGen
     internal sealed class CIJobsRootCommand : CliRootCommand
     {
         public CliOption<string> Server { get; } =
-            new("--server", "-s") { Description = "Url of the server. Defaults to http://ci.dot.net/" };
+            new("--server", "-s") { Description = "Url of the server. Defaults to https://ci.dot.net/" };
         public CliOption<string> JobName { get; } =
             new("--job", "-j") { Description = "Name of the job." };
         public CliOption<string> BranchName { get; } =
