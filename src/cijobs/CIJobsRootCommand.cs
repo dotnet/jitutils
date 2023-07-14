@@ -45,7 +45,7 @@ namespace ManagedCodeGen
         {
             List<string> errors = new();
 
-            CliCommand listCommand = new("list", "List jobs on dotnet-ci.cloudapp.net for the repo.")
+            CliCommand listCommand = new("list", "List jobs on ci.dot.net for the repo.")
             {
                 Server,
                 JobName,
@@ -104,7 +104,7 @@ namespace ManagedCodeGen
 
             Subcommands.Add(listCommand);
 
-            CliCommand copyCommand = new("copy", @"Copies job artifacts from dotnet-ci.cloudapp.net. This
+            CliCommand copyCommand = new("copy", @"Copies job artifacts from ci.dot.net. This
 command copies a zip of artifacts from a repo (defaulted to
 dotnet_coreclr). The default location of the zips is the
 Product sub-directory, though that can be changed using the
