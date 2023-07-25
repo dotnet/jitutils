@@ -14,6 +14,7 @@ using System.Runtime.Loader;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Buffers;
+using System.Threading;
 
 class Util
 {
@@ -635,9 +636,23 @@ class PrepareAll : PrepareBase
     private void WriteAndFlushNextMethodToPrepMarker()
     {
         int nextMethodToPrep = (methodCount + 1);
-        using (var writer = new StreamWriter(File.Create(markerFileName)))
+
+        const int Tries = 10;
+        for (int i = 0; i < Tries; i++)
         {
-            writer.Write($"{nextMethodToPrep}");
+            try
+            {
+                using (var writer = new StreamWriter(File.Create(markerFileName)))
+                {
+                    writer.Write($"{nextMethodToPrep}");
+                }
+
+                break;
+            }
+            catch (IOException) when (i < Tries - 1)
+            {
+                Thread.Sleep((i + 1) * 100);
+            }
         }
     }
 }
