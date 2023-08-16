@@ -40,6 +40,7 @@ namespace ManagedCodeGen
             private string _srcDirectory = null;
             private bool _untidy = false;
             private bool _noformat = false;
+            private bool _linuxCross = false;
             private bool _fix = false;
             private bool _verbose = false;
             private bool _ignoreErrors = false;
@@ -63,13 +64,14 @@ namespace ManagedCodeGen
                     syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
                     syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
                     syntax.DefineOption("noformat", ref _noformat, "Do not run clang-format");
+                    syntax.DefineOption("l|linux-cross", ref _linuxCross, "If on Linux, run the configure build as a cross build.");
                     syntax.DefineOption("f|fix", ref _fix, "Fix formatting errors discovered by clang-format and clang-tidy.");
                     syntax.DefineOption("i|ignore-errors", ref _ignoreErrors, "Ignore clang-tidy errors");
                     syntax.DefineOptionList("projects", ref _projects, "List of build projects clang-tidy should consider (e.g. dll, standalone, protojit, etc.). Default: dll");
 
                     syntax.DefineParameterList("filenames", ref _filenames, "Optional list of files that should be formatted.");
                 });
-                
+
                 // Run validation code on parsed input to ensure we have a sensible scenario.
 
                 validate();
@@ -301,7 +303,7 @@ namespace ManagedCodeGen
                         {
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
                             List<string> commandArgs = new() { _arch, _build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
-                            if (_os.ToLower() == "linux")
+                            if (_os.ToLower() == "linux" && _linuxCross)
                             {
                                 commandArgs.Add("-cross");
                             }
