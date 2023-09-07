@@ -15,8 +15,8 @@ cijobs help message:
     $ cijobs --help
     usage: cijobs <command> [<args>]
 
-        list    List jobs on dotnet-ci.cloudapp.net for the repo.
-        copy    Copies job artifacts from dotnet-ci.cloudapp.net. This
+        list    List jobs on ci.dot.net for the repo.
+        copy    Copies job artifacts from ci.dot.net. This
                 command copies a zip of artifacts from a repo (defaulted to
                 dotnet_coreclr). The default location of the zips is the
                 Product sub-directory, though that can be changed using the
@@ -30,7 +30,7 @@ The "cijobs list" command has the following help message:
                   [-n <arg>] [-l] [-c <arg>] [-a]
 
         -s, --server <arg>       Url of the server. Defaults to
-                                 http://ci.dot.net/
+                                 https://ci.dot.net/
         -j, --job <arg>          Name of the job.
         -b, --branch <arg>       Name of the branch (default is master).
         -r, --repo <arg>         Name of the repo (e.g. dotnet_corefx or
@@ -48,7 +48,7 @@ The "cijobs copy" command has the following help message:
                   [-r <arg>] [-o <arg>] [-u] [-p <arg>]
 
         -s, --server <arg>         Url of the server. Defaults to
-                                   http://ci.dot.net/
+                                   https://ci.dot.net/
         -j, --job <arg>            Name of the job.
         -n, --number <arg>         Job number.
         -l, --last_successful      Copy last successful build.

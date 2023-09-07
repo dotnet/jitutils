@@ -139,7 +139,7 @@ jit-format uses clang-format and clang-tidy to do its work.
 Currently, clang-tidy will run the `modernize-use-nullptr` and `readability-braces`
 checks. Clang-format will use the `.clang-format` specification found in the jit directory.
 A summary of what each of the options does can be found
-[here](http://llvm.org/releases/3.8.0/tools/clang/docs/ClangFormatStyleOptions.html).
+[here](https://llvm.org/releases/3.8.0/tools/clang/docs/ClangFormatStyleOptions.html).
 
 Because jit-format will build a `compile_commands.json` database from the build log on Windows,
 developers must do a full build of coreclr before running jit-format.
