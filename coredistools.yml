@@ -31,13 +31,19 @@ trigger:
 
 # CBL-Mariner:
 resources:
+  # The base CBL-Mariner tags used to build .NET are:
+  #    mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-amd64
+  #    mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm
+  #    mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm64
+  # However, these are based on Ubuntu 16.04 libs and do not have libstdc++ 7.
+  # The following containers are based on a later set of libs.
   containers:
   - container: linux_x64
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-amd64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-amd64
   - container: linux_arm
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm
   - container: linux_arm64
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm64
 
 # # Use the following for legacy Ubuntu 18.04 based Arm/Arm64 cross build (x64 build is not cross)
 # resources:

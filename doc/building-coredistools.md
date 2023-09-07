@@ -66,19 +66,15 @@ cd jitutils
 git clone --depth 1 --branch llvmorg-16.0.6 https://github.com/llvm/llvm-project.git src/llvm-project
 ```
 
-3. Download LLVM release from GitHub:
+3. Build `llvm-tblgen` in Docker:
+```
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-amd64
+./build-tblgen.sh linux-x64 /crossrootfs/x64
+```
 
-```
-python3 eng/download-llvm-release.py -release llvmorg-16.0.6 -os linux
-```
+This builds llvm-tblgen and puts it in the `bin` subdirectory.
 
-4. Locate under the current directory file `llvm-tblgen`
-```
-find -name llvm-tblgen
-./clang+llvm-16.0.6-x86_64-linux-gnu-ubuntu-18.04/bin/llvm-tblgen
-```
-and add its parent directory location to the `PATH`:
-
+4. Add `llvm-tblgen` to the PATH:
 ```
 export PATH=$(pwd)/clang+llvm-16.0.6-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH
 ```
