@@ -170,7 +170,7 @@ jobs:
     displayName: Add llvm-tblgen to the PATH
 
   - script: |
-      tdnf install -y ncurses-compat
+      sudo tdnf install -y ncurses-compat
     displayName: Install libtinfo.so.5 dependency of llvm-tblgen
 
   - script: |
