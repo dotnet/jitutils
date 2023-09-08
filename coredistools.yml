@@ -170,6 +170,10 @@ jobs:
     displayName: Add llvm-tblgen to the PATH
 
   - script: |
+      tdnf install -y ncurses-compat
+    displayName: Install libtinfo.so.5 dependency of llvm-tblgen
+
+  - script: |
       ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
     displayName: Build coredistools
 
