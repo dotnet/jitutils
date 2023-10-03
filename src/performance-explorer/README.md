@@ -7,7 +7,7 @@ It is currently specialized to explore varying the CSEs in the most dominant Tie
 
 This tool currently only works on Windows.
 
-To run Peformance Explorer, you must have local enlistments of:
+To run Performance Explorer, you must have local enlistments of:
 * [the runtime repo](https://github.com/dotnet/runtime)
 * [the performance repo](https://github.com/dotnet/performance)
 * [instructions retired explorer](https://github.com/AndyAyersMS/InstructionsRetiredExplorer)
@@ -33,7 +33,7 @@ The tool must be run as admin, in order to perform the necessary profiling.
 For each benchmark in the list, performance explorer will:
 * run the benchmark from the perf directory, with `-p ETW` so that profile data is collected
 * parse the profile data using instructions retired explorer to find the hot methods
-* also parse the BenchmarkDotNet json to determine the peformance of the benchmark
+* also parse the BenchmarkDotNet json to determine the performance of the benchmark
 * determine if there's a hot method that would be a good candidate for exploration. Currently we look for a Tier-1 method that accounts for at least 20% of the benchmark time.
 * if there is a suitable hot method:
   * run an SPMI collection for that benchmark
@@ -43,11 +43,11 @@ For each benchmark in the list, performance explorer will:
     * run the benchmark with all CSEs disabled (0 CSEs), and measure perf. Add to the exploration queue.
     * then, repeatedly, until we have run out of experiment to try, or hit some predetermined limit
       * pick the best performing experiment from the queue
-      * Determine which CSEs in the default set were not done in the experement. Say ther are M (<=N) of these
+      * Determine which CSEs in the default set were not done in the experiment. Say there are M (<=N) of these
       * Run M more experiments, each adding one of the missing CSEs
 
 Each benchmark's data is stored in a subfolder in the results directory; we also create disassembly for all the 
-experiemnts tried, and copies of all the intermediate files.
+experiments tried, and copies of all the intermediate files.
 
 There is also a master results.csv that has data from all experiments in all benchmarks, suitable for use
 in excel or as input to a machine learning algorithm.
