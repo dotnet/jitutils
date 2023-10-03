@@ -11,6 +11,8 @@ Current tools include:
 2. [CI jobs information](doc/cijobs.md): cijobs.
 3. [JIT source code formatting](doc/formatting.md): jit-format.
 4. [General tools](doc/tools.md): pmi
+5. [Experimental tools](src/performance-explorer/README.md): performance-explorer
+
 ## Getting started
 
 1. Clone the jitutils repo:
@@ -18,7 +20,7 @@ Current tools include:
     git clone https://github.com/dotnet/jitutils
 ```
 
-2. Install the 2.1 .NET Core SDK (including the `dotnet` command-line interface, or CLI) from [here](https://dot.net).
+2. Install a recent .NET Core SDK (including the `dotnet` command-line interface, or CLI) from [here](https://dot.net).
 
 3. Build the tools:
 ```
