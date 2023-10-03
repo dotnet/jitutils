@@ -12,6 +12,8 @@ Current tools include:
 3. [JIT source code formatting](doc/formatting.md): jit-format.
 4. [General tools](doc/tools.md): pmi
 5. [Experimental tools](src/performance-explorer/README.md): performance-explorer
+6. [BenchmarkDotNet Analysis](src/instructions-retired-explorer/README.md)
+
 
 ## Getting started
 
