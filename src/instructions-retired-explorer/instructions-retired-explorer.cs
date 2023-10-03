@@ -46,7 +46,7 @@ namespace CoreClrInstRetired
         public bool IsJittedCode;
         public bool IsBackupImage;
         public long AssemblyId;
-        public int Flags;
+        public OptimizationTier Tier;
 
         public ImageInfo(string name, ulong baseAddress, int size)
         {
@@ -198,6 +198,8 @@ namespace CoreClrInstRetired
         public static ulong JitTier0SampleCount = 0;
         public static ulong JitTier1SampleCount = 0;
         public static ulong JitTier1OSRSampleCount = 0;
+        public static ulong JitTier0InstrSampleCount = 0;
+        public static ulong JitTier1InstrSampleCount = 0;
         public static ulong JitMysterySampleCount = 0;
 
 
@@ -292,13 +294,15 @@ namespace CoreClrInstRetired
                     {
                         JittedCodeSampleCount += counts;
 
-                        switch ((image.Flags >> 7) & 0x7)
+                        switch (image.Tier)
                         {
-                            case 1: JitMinOptSampleCount += counts; break;
-                            case 2: JitFullOptSampleCount += counts; break;
-                            case 3: JitTier0SampleCount += counts; break;
-                            case 4: JitTier1SampleCount += counts; break;
-                            case 5: JitTier1OSRSampleCount += counts; break;
+                            case OptimizationTier.MinOptJitted: JitMinOptSampleCount += counts; break;
+                            case OptimizationTier.Optimized: JitFullOptSampleCount += counts; break;
+                            case OptimizationTier.QuickJitted: JitTier0SampleCount += counts; break;
+                            case OptimizationTier.OptimizedTier1: JitTier1SampleCount += counts; break;
+                            case OptimizationTier.OptimizedTier1OSR: JitTier1OSRSampleCount += counts; break;
+                            case OptimizationTier.QuickJittedInstrumented: JitTier0InstrSampleCount += counts; break;
+                            case OptimizationTier.OptimizedTier1Instrumented: JitTier1InstrSampleCount += counts; break;
                             default: JitMysterySampleCount += counts; break;
                         }
                     }
@@ -785,7 +789,7 @@ namespace CoreClrInstRetired
                                         
                                         methodInfo.IsJitGeneratedCode = true;
                                         methodInfo.IsJittedCode = loadUnloadData.IsJitted;
-                                        methodInfo.Flags = (int)loadUnloadData.PayloadByName("MethodFlags");
+                                        methodInfo.Tier = (OptimizationTier) loadUnloadData.PayloadByName("OptimizationTier");
                                         methodInfo.AssemblyId = assemblyId;
                                         
                                         ImageMap.Add(key, methodInfo);
@@ -827,7 +831,7 @@ namespace CoreClrInstRetired
 
                                         methodInfo.IsJitGeneratedCode = true;
                                         methodInfo.IsJittedCode = loadUnloadData.IsJitted;
-                                        methodInfo.Flags = (int)loadUnloadData.PayloadByName("MethodFlags");
+                                        methodInfo.Tier = (OptimizationTier) loadUnloadData.PayloadByName("OptimizationTier");
                                         methodInfo.AssemblyId = assemblyId;
 
                                         ImageMap.Add(key, methodInfo);
@@ -892,6 +896,10 @@ namespace CoreClrInstRetired
                     (double)JitTier0SampleCount / TotalSampleCount, JitTier0SampleCount * CountsPerEvent);
                 Console.WriteLine("  Tier-1 code     : {0:00.00%} {1,-8:G3} samples",
                     (double)JitTier1SampleCount / TotalSampleCount, JitTier1SampleCount * CountsPerEvent);
+                Console.WriteLine("  Tier-0 inst code: {0:00.00%} {1,-8:G3} samples",
+                    (double)JitTier0InstrSampleCount / TotalSampleCount, JitTier0InstrSampleCount * CountsPerEvent);
+                Console.WriteLine("  Tier-1 inst code: {0:00.00%} {1,-8:G3} samples",
+                    (double)JitTier1InstrSampleCount / TotalSampleCount, JitTier1InstrSampleCount * CountsPerEvent);
                 Console.WriteLine("  R2R code        : {0:00.00%} {1,-8:G3} samples",
                     (double)PreJittedCodeSampleCount / TotalSampleCount, PreJittedCodeSampleCount * CountsPerEvent);
 
@@ -934,14 +942,16 @@ namespace CoreClrInstRetired
                     {
                         if (i.IsJittedCode)
                         {
-                            switch ((i.Flags >> 7) & 0x7)
+                            switch (i.Tier)
                             {
-                                case 1: codeDesc = "MinOpt "; break;
-                                case 2: codeDesc = "FullOpt"; break;
-                                case 3: codeDesc = "Tier-0 "; break;
-                                case 4: codeDesc = "Tier-1 "; break;
-                                case 5: codeDesc = "OSR    "; break;
-                                default: codeDesc = "jit ???"; break;
+                                case OptimizationTier.MinOptJitted:               codeDesc = "MinOpt "; break;
+                                case OptimizationTier.Optimized:                  codeDesc = "FullOpt"; break;
+                                case OptimizationTier.QuickJitted:                codeDesc = "Tier-0 "; break;
+                                case OptimizationTier.OptimizedTier1:             codeDesc = "Tier-1 "; break;
+                                case OptimizationTier.OptimizedTier1OSR:          codeDesc = "OSR    "; break;
+                                case OptimizationTier.QuickJittedInstrumented:    codeDesc = "Tier-0i"; break;
+                                case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
+                                default: codeDesc = "???"; break;
                             }
                         }
                         else
