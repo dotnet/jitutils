@@ -11,4 +11,8 @@
     <Compile Include="..\util\util.cs" Link="util.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.0.1" />
+  </ItemGroup>
+
 </Project>
