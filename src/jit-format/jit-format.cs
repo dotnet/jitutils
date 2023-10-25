@@ -654,20 +654,19 @@ namespace ManagedCodeGen
         public static bool RunClangTidy(List<string> filenames, string compileCommands, bool ignoreErrors, bool fix, bool verbose)
         {
             bool formatOk = true;
-            string checks = "readability-braces*,modernize-use-nullptr";
 
             if (fix)
             {
                 foreach (string filename in filenames)
                 {
-                    formatOk &= DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose);
+                    formatOk &= DoClangTidyInnerLoop(fix, ignoreErrors, compileCommands, filename, verbose);
                 }
             }
             else
             {
                 Parallel.ForEach(filenames, (filename) =>
                     {
-                        if (!DoClangTidyInnerLoop(fix, ignoreErrors, checks, compileCommands, filename, verbose))
+                        if (!DoClangTidyInnerLoop(fix, ignoreErrors, compileCommands, filename, verbose))
                         {
                             formatOk = false;
                         }
@@ -677,7 +676,7 @@ namespace ManagedCodeGen
             return formatOk;
         }
 
-        public static bool DoClangTidyInnerLoop(bool fix, bool ignoreErrors, string checks, string compileCommands, string filename, bool verbose)
+        public static bool DoClangTidyInnerLoop(bool fix, bool ignoreErrors, string compileCommands, string filename, bool verbose)
         {
             string tidyFix = fix ? "-fix" : "";
             string fixErrors = ignoreErrors && fix ? "-fix-errors" : "";
@@ -686,7 +685,7 @@ namespace ManagedCodeGen
 
             if (filename.EndsWith(".cpp"))
             {
-                List<string> commandArgs = new List<string> { tidyFix, "-checks=-*," + checks, fixErrors, "-header-filter=jit/.*", "-p=" + compileCommands, filename };
+                List<string> commandArgs = new List<string> { tidyFix, fixErrors, "-p=" + compileCommands, filename };
 
                 if (verbose)
                 {
