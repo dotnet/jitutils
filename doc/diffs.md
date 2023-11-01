@@ -22,6 +22,8 @@ See the [CoreCLR](https://github.com/dotnet/coreclr) GitHub repo for directions 
 * jit-analyze - Compare and analyze `*.dasm` files from baseline/diff.
   Produces a report on diffs, total size regression/improvement, and
   size regression/improvement by file and method.
+* jit-tp-analyze - Compare trace files with per-function instruction
+  counts from baseline/diff. See [jit-tp-analyze.md](../src/jit-tp-analyze/README.md).
 
 ## Dependencies
 
