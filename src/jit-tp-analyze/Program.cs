@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace ManagedCodeGen;
 
-internal partial class Program
+internal class Program
 {
     private static readonly Regex _traceLineRegex = new("(\\d+) +: (.*)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
