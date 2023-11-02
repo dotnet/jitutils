@@ -56,7 +56,7 @@ internal partial class Program
             long diffInsCount = diffTrace.GetValueOrDefault(functionName);
             long baseInsCount = baseTrace.GetValueOrDefault(functionName);
             long insCountDiff = diffInsCount - baseInsCount;
-            if (insCountDiff is 0)
+            if (insCountDiff == 0)
             {
                 continue;
             }
