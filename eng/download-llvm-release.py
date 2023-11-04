@@ -28,7 +28,26 @@ def download_llvm_release(release_url, output_dir):
 
     with io.BytesIO(downloaded_bytes) as downloaded_fileobj:
         with tarfile.open(fileobj=downloaded_fileobj, mode='r:xz') as archive:
-            archive.extractall(path=output_dir)
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
+                
+            
+            safe_extract(archive, path=output_dir)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
