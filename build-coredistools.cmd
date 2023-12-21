@@ -52,6 +52,9 @@ if not exist "%BinariesDirectory%" (
 )
 
 pushd "%BinariesDirectory%"
+    
+@REM For Debug builds, use:
+@REM    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug
 
 cmake.exe ^
     -G "Visual Studio 17 2022" ^
@@ -65,8 +68,7 @@ cmake.exe ^
     -DLLVM_TABLEGEN="%LLVMTableGen%" ^
     -DLLVM_TARGETS_TO_BUILD=%LLVMTargetsToBuild% ^
     -DLLVM_TOOL_COREDISTOOLS_BUILD=ON ^
-    -DLLVM_USE_CRT_DEBUG=MTd ^
-    -DLLVM_USE_CRT_RELEASE=MT ^
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded ^
     "%SourcesDirectory%\llvm-project\llvm"
 
 popd

@@ -28,29 +28,23 @@ set "PATH=%cd%\bin;%PATH%"
 This puts the just built lldb-tblgen.exe on the `PATH`.
 
 5. Build `coredistools.dll` for a combination of target OS and architecture.
-
-For example, the following command will result in `coredistools.dll` binary that can be run on Windows x64:
+Build Windows x64, Windows x86, and Windows ARM64 binaries:
 ```
 build-coredistools.cmd win-x64
+build-coredistools.cmd win-x86
+build-coredistools.cmd win-arm64
 ```
 
-The file will be copied to subdirectory `artifacts` after the command finishes:
+The file will be copied to subdirectory `artifacts` after the command finishes. E.g., for win-x64:
 ```
 dir /A:-D /B /S artifacts\win-x64
 F:\echesako\git\jitutils\artifacts\win-x64\bin\coredistools.dll
 F:\echesako\git\jitutils\artifacts\win-x64\lib\coredistools.lib
 ```
 
-6. Build Windows x86, Windows ARM and Windows ARM64 binaries:
-```
-build-coredistools.cmd win-x86
-build-coredistools.cmd win-arm
-build-coredistools.cmd win-arm64
-```
-
 ### Building Debug binaries
 
-The `build-coredistools.cmd` script is set up to build a Release build. To create a Debug build with a PDB file,
+The `build-coredistools.cmd` script is set up to build a Release build. To create a Debug build with a PDB file
 for debugging, change the `--config Release` line to `--config Debug`.
 
 ## Building on Linux / Mac
