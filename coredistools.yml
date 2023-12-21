@@ -106,7 +106,13 @@ jobs:
   - template: /eng/download-checkout-llvm.yml
 
   # CBL-Mariner:
-  - script: ./build-tblgen.sh linux-x64 /crossrootfs/x64
+
+  - script: |
+      sudo tdnf install -y ncurses-compat
+    displayName: Install libtinfo.so.5 dependency of llvm-tblgen
+
+  - script: |
+      ./build-tblgen.sh linux-x64 /crossrootfs/x64
     displayName: Build llvm-tblgen
 
   # non-CBL-Mariner:
@@ -168,6 +174,9 @@ jobs:
 
   - script: |
       echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
+      echo "$PATH"
+      echo "$(Pipeline.Workspace)/tblgen-linux"
+      ls -l "$(Pipeline.Workspace)/tblgen-linux"
     displayName: Add llvm-tblgen to the PATH
 
   - script: |

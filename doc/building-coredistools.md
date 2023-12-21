@@ -61,8 +61,12 @@ git clone --depth 1 --branch llvmorg-17.0.6 https://github.com/llvm/llvm-project
 ```
 
 3. Build `llvm-tblgen` in Docker:
+You need to install the `ncurses-compat` package because the Mariner container we use doesn't have libtinfo.so.5, which the built
+llvm-tblgen needs to be able to run. (Note that we build in the Mariner container, but we also run some built binaries, namely llvm-tblgen,
+as part of the build process.)
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-amd64
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-amd64
+sudo tdnf install -y ncurses-compat
 ./build-tblgen.sh linux-x64 /crossrootfs/x64
 ```
 
@@ -70,12 +74,12 @@ This builds llvm-tblgen and puts it in the `bin` subdirectory.
 
 4. Add `llvm-tblgen` to the PATH:
 ```
-export PATH=$(pwd)/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH
+export PATH=$(pwd)/bin:$PATH
 ```
 
-5. Build `libcoredistools.so` for Linux x64:
+5. Build `libcoredistools.so` for Linux x64 (in the same Docker container):
 ```
-./build-coredistools.sh linux-x64
+./build-coredistools.sh linux-x64 /crossrootfs/x64
 ```
 
 The file will be copied to subdirectory `artifacts` after the command finishes:
@@ -88,14 +92,16 @@ find ./artifacts -name libcoredistools.so
 6. Build `libcoredistools.so` for Linux arm64 under Docker:
 
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm64
-export PATH=$(pwd)/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm64
+sudo tdnf install -y ncurses-compat
+export PATH=$(pwd)/bin:$PATH
 ./build-coredistools.sh linux-arm64 /crossrootfs/arm64
 ```
 
 7. Build `libcoredistools.so` for Linux arm under Docker:
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code -u $(id -u):$(id -g) mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm
-export PATH=$(pwd)/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm
+sudo tdnf install -y ncurses-compat
+export PATH=$(pwd)/bin:$PATH
 ./build-coredistools.sh linux-arm /crossrootfs/arm
 ```
