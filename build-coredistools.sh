@@ -140,7 +140,7 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
 elif [ $CrossBuildUsingMariner -eq 1 ]; then
-    BUILD_FLAGS="-v --sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
+    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
     # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
     cmake \
         -G "Unix Makefiles" \

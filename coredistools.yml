@@ -126,7 +126,7 @@ jobs:
 ################################ Cross-build coredistools for linux-arm, linux-arm64 (and linux-x64 on CBL-Mariner)
 
 - job: crossbuild_coredistools_linux
-  timeoutInMinutes: 120
+  timeoutInMinutes: 60
   dependsOn:
   - checkout_llvm
   - build_tblgen_linux
@@ -191,7 +191,7 @@ jobs:
 ################################ Cross-build coredistools for linux-x64: only non-CBL-Mariner
 
 # - job: build_coredistools_linux
-#   timeoutInMinutes: 120
+#   timeoutInMinutes: 60
 #   dependsOn:
 #   - checkout_llvm
 #   - build_tblgen_linux
@@ -254,7 +254,7 @@ jobs:
 ################################ Build coredistools for macos-x64, macos-arm64
 
 - job: build_coredistools_macos
-  timeoutInMinutes: 120
+  timeoutInMinutes: 60
   dependsOn:
   - checkout_llvm
   - build_tblgen_macos
@@ -323,7 +323,7 @@ jobs:
 ################################ Build coredistools for win-x64, win-x86, win-arm64
 
 - job: build_coredistools_windows
-  timeoutInMinutes: 120
+  timeoutInMinutes: 60
   dependsOn:
   - checkout_llvm
   - build_tblgen_windows
