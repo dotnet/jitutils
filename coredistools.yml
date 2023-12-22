@@ -381,6 +381,10 @@ jobs:
   - download: current
     displayName: Download artifacts
 
+  # Install nuget.exe if it's not already there.
+  - task: NuGetToolInstaller@1
+    displayName: Install nuget.exe
+
   - script: |
       for %%I in (linux-arm linux-arm64 linux-x64 osx-arm64 osx-x64 win-arm64 win-x64 win-x86) do (
         mkdir "$(Build.BinariesDirectory)\%%I"
