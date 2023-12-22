@@ -131,9 +131,9 @@ jobs:
   - checkout_llvm
   - build_tblgen_linux
   # CBL-Mariner:
-  displayName: Build coredistools Linux x64/arm/arm64
+  displayName: Build coredistools Linux
   # non-CBL-Mariner:
-  # displayName: Build coredistools Linux arm/arm64
+  # displayName: Build coredistools Linux
 
   container: $[ variables['ContainerImage'] ]
 
@@ -142,7 +142,7 @@ jobs:
 
   strategy:
     matrix:
-      # CBL-Mariner: (x64 section)
+      # CBL-Mariner (x64 section only):
       x64:
         ContainerImage: linux_x64
         CrossRootfsDirectory: /crossrootfs/x64
@@ -174,9 +174,6 @@ jobs:
 
   - script: |
       echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
-      echo "$PATH"
-      echo "$(Pipeline.Workspace)/tblgen-linux"
-      ls -l "$(Pipeline.Workspace)/tblgen-linux"
     displayName: Add llvm-tblgen to the PATH
 
   - script: |
