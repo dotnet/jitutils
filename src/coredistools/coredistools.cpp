@@ -200,6 +200,17 @@ private:
   unique_ptr<MCContext> Ctx;
   unique_ptr<MCDisassembler> Disassembler;
   unique_ptr<MCInstPrinter> IP;
+
+  // LLVM's MCInst does not expose Opcode enumerations by design.
+  // The following enumeration is a hack to use X86 opcode numbers,
+  // until bug 7709 is fixed.
+  struct OpcodeMap {
+    const char *Name;
+    uint8_t MachineOpcode;
+  };
+
+  static const int X86NumPrefixes = 19;
+  static const OpcodeMap X86Prefix[X86NumPrefixes];
 };
 
 struct CorAsmDiff : public CorDisasm {
@@ -220,6 +231,30 @@ private:
   OffsetComparator Comparator;
   OffsetMunger Munger;
 };
+
+// clang-format off
+CorDisasm::OpcodeMap const CorDisasm::X86Prefix[CorDisasm::X86NumPrefixes] = {
+  { "LOCK",           0xF0 },
+  { "REPNE/XACQUIRE", 0xF2 }, // Both the (TSX/normal) instrs 
+  { "REP/XRELEASE",   0xF3 }, // have the same byte encoding 
+  { "OP_OVR",         0x66 },
+  { "CS_OVR",         0x2E },
+  { "DS_OVR",         0x3E },
+  { "ES_OVR",         0x26 },
+  { "FS_OVR",         0x64 },
+  { "GS_OVR",         0x65 },
+  { "SS_OVR",         0x36 },
+  { "ADDR_OVR",       0x67 },
+  { "REX64W",         0x48 },
+  { "REX64WB",        0x49 },
+  { "REX64WX",        0x4A },
+  { "REX64WXB",       0x4B },
+  { "REX64WR",        0x4C },
+  { "REX64WRB",       0x4D },
+  { "REX64WRX",       0x4E },
+  { "REX64WRXB",      0x4F }
+};
+// clang-format on
 
 bool CorDisasm::setTarget() {
   // Figure out the target triple.
@@ -395,17 +430,46 @@ bool CorDisasm::decodeInstruction(BlockIterator &BIter, bool MayFail) const {
 
 uint64_t CorDisasm::disasmInstruction(BlockIterator &BIter,
                                       bool DumpAsm) const {
-  if (!decodeInstruction(BIter)) {
-    return 0;
-  }
+  uint64_t TotalSize = 0;
+  bool ContinueDisasm;
 
-  uint64_t Size = BIter.InstrSize;
+  // On X86, LLVM disassembler does not handle instruction prefixes
+  // correctly -- please see LLVM bug 7709.
+  // The disassembler reports instruction prefixes separate from the
+  // actual instruction. In order to work-around this problem, we
+  // continue decoding  past the prefix bytes.
 
-  if (DumpAsm) {
-    dumpInstruction(BIter);
-  }
+  do {
 
-  return Size;
+    if (!decodeInstruction(BIter)) {
+      return 0;
+    }
+
+    uint64_t Size = BIter.InstrSize;
+    TotalSize += Size;
+
+    if (DumpAsm) {
+      dumpInstruction(BIter);
+    }
+
+    ContinueDisasm = false;
+    if ((TheTargetArch == Target_X86) || (TheTargetArch == Target_X64)) {
+
+      // Check if the decoded instruction is a prefix byte, and if so,
+      // continue decoding.
+      if (Size == 1) {
+        for (uint8_t Pfx = 0; Pfx < X86NumPrefixes; Pfx++) {
+          if (BIter.Ptr[0] == X86Prefix[Pfx].MachineOpcode) {
+            ContinueDisasm = true;
+            BIter.advance();
+            break;
+          }
+        }
+      }
+    }
+  } while (ContinueDisasm);
+
+  return TotalSize;
 }
 
 void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
