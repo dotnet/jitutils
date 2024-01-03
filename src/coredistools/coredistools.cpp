@@ -256,6 +256,11 @@ CorDisasm::OpcodeMap const CorDisasm::X86Prefix[CorDisasm::X86NumPrefixes] = {
 };
 // clang-format on
 
+#if !defined(_MSC_VER)
+// Disable "warning: default label in switch which covers all enumeration values [-Wcovered-switch-default]"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
+
 bool CorDisasm::setTarget() {
   // Figure out the target triple.
 
