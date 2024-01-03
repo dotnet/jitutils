@@ -3,6 +3,9 @@
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
+# Set this to 1 to build using CBL-Mariner
+CrossBuildUsingMariner=1
+
 EnsureCrossRootfsDirectoryExists () {
     if [ ! -d "$CrossRootfsDirectory" ]; then
         echo "Invalid or unspecified CrossRootfsDirectory: $CrossRootfsDirectory"
@@ -13,12 +16,44 @@ EnsureCrossRootfsDirectoryExists () {
 CMakeOSXArchitectures=
 LLVMTargetsToBuild="AArch64;ARM;X86"
 
+# Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
+# `llvm-strip` is available in CBL-Mariner container; `strip` is available on macOS.
+StripTool=$(command -v llvm-strip)
+if [ -z "$StripTool" ]; then
+    StripTool=$(command -v strip)
+    if [ -z "$StripTool" ]; then
+        echo "Strip tool not found"
+        exit 1
+    fi
+fi
+
+TblGenTool=$(command -v llvm-tblgen)
+if [ -z "$TblGenTool" ]; then
+    echo "llvm-tblgen tool not found"
+    exit 1
+fi
+
+C_COMPILER=$(command -v clang)
+if [ -z "$C_COMPILER" ]; then
+    echo "C compiler not found"
+    # Keep going in case cmake can find one?
+fi
+
+CXX_COMPILER=$(command -v clang++)
+if [ -z "$CXX_COMPILER" ]; then
+    echo "C++ compiler not found"
+    # Keep going in case cmake can find one?
+fi
+
+echo "Using C compiler: $C_COMPILER"
+echo "Using C++ compiler: $CXX_COMPILER"
+
 case "$TargetOSArchitecture" in
     linux-arm)
         CMakeCrossCompiling=ON
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
-        LLVMTargetsToBuild=ARM
+        LLVMTargetsToBuild="ARM"
         EnsureCrossRootfsDirectoryExists
         ;;
 
@@ -29,8 +64,13 @@ case "$TargetOSArchitecture" in
         ;;
 
     linux-x64)
-        CMakeCrossCompiling=OFF
         LLVMHostTriple=x86_64-linux-gnu
+        if [ $CrossBuildUsingMariner -eq 1 ]; then
+            CMakeCrossCompiling=ON
+            EnsureCrossRootfsDirectoryExists
+        else
+            CMakeCrossCompiling=OFF
+        fi
         ;;
 
     linux-loongarch64)
@@ -63,7 +103,7 @@ SourcesDirectory=$RootDirectory/src
 BinariesDirectory=$RootDirectory/obj/$TargetOSArchitecture
 StagingDirectory=$RootDirectory/artifacts/$TargetOSArchitecture
 
-which cmake >/dev/null 2>&1
+command -v cmake >/dev/null 2>&1
 
 if [ "$?" -ne 0 ]; then
     echo "ERROR: cmake is not found in the PATH"
@@ -77,47 +117,76 @@ fi
 pushd "$BinariesDirectory"
 
 if [ -z "$CrossRootfsDirectory" ]; then
+    BUILD_FLAGS="-target $LLVMHostTriple"
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(which clang) \
-        -DCMAKE_C_FLAGS="-target $LLVMHostTriple" \
-        -DCMAKE_CXX_COMPILER=$(which clang++) \
-        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple" \
+        -DCMAKE_C_COMPILER=${C_COMPILER} \
+        -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
+        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
-        -DCMAKE_STRIP=$(which strip) \
+        -DCMAKE_STRIP=$StripTool \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_INCLUDE_TESTS=OFF \
-        -DLLVM_TABLEGEN=$(which llvm-tblgen) \
+        -DLLVM_TABLEGEN=$TblGenTool \
+        -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
+        -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
+        $SourcesDirectory/llvm-project/llvm
+elif [ $CrossBuildUsingMariner -eq 1 ]; then
+    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
+    # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+    cmake \
+        -G "Unix Makefiles" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
+        -DCMAKE_C_COMPILER=${C_COMPILER} \
+        -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
+        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
+        -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
+        -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
+        -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
+        -DCMAKE_STRIP=$StripTool \
+        -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
+        -DLLVM_ENABLE_TERMINFO=OFF \
+        -DLLVM_EXTERNAL_PROJECTS=coredistools \
+        -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
+        -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
+        -DLLVM_INCLUDE_TESTS=OFF \
+        -DLLVM_TABLEGEN=$TblGenTool \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
 else
+    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(which clang) \
-        -DCMAKE_C_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
-        -DCMAKE_CXX_COMPILER=$(which clang++) \
-        -DCMAKE_CXX_FLAGS="-target $LLVMHostTriple --sysroot=$CrossRootfsDirectory" \
+        -DCMAKE_C_COMPILER=${C_COMPILER} \
+        -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
+        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
-        -DCMAKE_STRIP=/usr/$LLVMHostTriple/bin/strip \
+        -DCMAKE_STRIP=$StripTool \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_INCLUDE_TESTS=OFF \
-        -DLLVM_TABLEGEN=$(which llvm-tblgen) \
+        -DLLVM_TABLEGEN=$TblGenTool \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm

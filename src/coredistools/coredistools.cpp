@@ -1,4 +1,4 @@
-//===-------- coredistools.cpp - Dissassembly tools for CoreClr -----------===//
+//===-------- coredistools.cpp - Disassembly tools for CoreClr ------------===//
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -11,8 +11,6 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
@@ -22,12 +20,12 @@
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/TargetParser/Host.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/DataTypes.h"
@@ -51,23 +49,26 @@ public:
 
   bool isEmpty() const { return BlockSize == 0; }
 
-  // A pointer to the code block to diassemble.
+  // A pointer to the code block to disassemble.
   const uint8_t *Ptr;
+
   // The size of the code block to compare.
   uint64_t BlockSize;
+
   // The original base address of the code block.
   uintptr_t Addr;
+
   // An identifying string, debug output only
   const char *Name;
 };
 
-// A block iterator reoresents a code-point within a code block.
+// A block iterator represents a code-point within a code block.
 // It represents an instruction within the block, and can move
 // forward to subsequent instructions via the advance() method.
 // The iterator can be in two modes:
 //  Not-Decoded: Before DecodeInstruction() is called at this
 //               code point
-//  Decoded: After the current instrction is Decoded. In this state,
+//  Decoded: After the current instruction is Decoded. In this state,
 //           Inst is a valid MCInst and InstrSize is an actual non-zero
 //           length of the current instruction.
 class BlockIterator : public BlockInfo {
@@ -184,8 +185,6 @@ public:
 protected:
   enum TargetArch TheTargetArch;
   const PrintControl *Print;
-  bool isThumb2MoveImmediateOpcode(unsigned int opcode) const;
-  bool isThumb2MoveTopOpcode(unsigned int opcode) const;
 
 private:
   bool setTarget();
@@ -212,19 +211,15 @@ private:
 
   static const int X86NumPrefixes = 19;
   static const OpcodeMap X86Prefix[X86NumPrefixes];
-
-  // The following constants is a workaround and the opcode numbers
-  // were copied from TableGen-erated ${LLVM_BINARY_DIR}/lib/Target/ARM/ARMGenInstrInfo.inc
-  static const unsigned int Thumb2MoveImmediateOpcode = 4069; // Corresponds to t2MOVi16
-  static const unsigned int Thumb2MoveTopOpcode = 4067; // Correspond to t2MOVTi16
 };
 
 struct CorAsmDiff : public CorDisasm {
 public:
   CorAsmDiff(enum TargetArch Target,
              const PrintControl *PControl = &DefaultPrintControl,
-             const OffsetComparator Comp = DefaultEqualityComparator)
-      : CorDisasm(Target, PControl), Comparator(Comp) {}
+             const OffsetComparator Comp = DefaultEqualityComparator,
+             const OffsetMunger Munge = nullptr)
+      : CorDisasm(Target, PControl), Comparator(Comp), Munger(Munge) {}
 
   bool nearDiff(const BlockInfo &LeftBlock, const BlockInfo &RightBlock,
                 const void *UserData) const;
@@ -233,9 +228,8 @@ private:
   bool fail(const char *Mesg, const BlockIterator &Left,
             const BlockIterator &Right) const;
 
-  bool tryDecodeThumb2MoveImm32(const BlockIterator& Iter, unsigned int& Reg, unsigned int& Imm32) const;
-
   OffsetComparator Comparator;
+  OffsetMunger Munger;
 };
 
 // clang-format off
@@ -261,6 +255,11 @@ CorDisasm::OpcodeMap const CorDisasm::X86Prefix[CorDisasm::X86NumPrefixes] = {
   { "REX64WRXB",      0x4F }
 };
 // clang-format on
+
+#if !defined(_MSC_VER)
+// Disable "warning: default label in switch which covers all enumeration values [-Wcovered-switch-default]"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
 
 bool CorDisasm::setTarget() {
   // Figure out the target triple.
@@ -365,7 +364,7 @@ bool CorDisasm::init() {
   string FeaturesStr; // No additional target specific attributes.
 
   if (TheTargetArch == Target_Arm64) {
-    Mcpu = "cortex-a76";
+    Mcpu = "neoverse-n2";
   }
 
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
@@ -531,57 +530,6 @@ void CorDisasm::dumpBlock(const BlockInfo &Block) const {
   Print->Dump("-----------------------------------------------");
 }
 
-bool CorDisasm::isThumb2MoveImmediateOpcode(unsigned int Opcode) const {
-  return (Opcode == Thumb2MoveImmediateOpcode);
-}
-
-bool CorDisasm::isThumb2MoveTopOpcode(unsigned int Opcode) const {
-  return (Opcode == Thumb2MoveTopOpcode);
-}
-
-bool CorAsmDiff::tryDecodeThumb2MoveImm32(const BlockIterator& Curr, unsigned int& Reg, unsigned int& Imm32) const {
-  assert(Curr.isDecoded());
-
-  if (!isThumb2MoveImmediateOpcode(Curr.Inst.getOpcode())) {
-    return false;
-  }
-
-  BlockIterator Next = Curr;
-
-  Next.advance();
-
-  if (Next.isEmpty()) {
-    return false;
-  }
-
-  decodeInstruction(Next);
-
-  if (!Next.isDecoded()) {
-    return false;
-  }
-
-  if (!isThumb2MoveTopOpcode(Next.Inst.getOpcode())) {
-    return false;
-  }
-
-  const MCInst& MovImm = Curr.Inst;
-  const MCInst& MovTop = Next.Inst;
-
-  if (MovImm.getOperand(0).getReg() != MovTop.getOperand(0).getReg()) {
-    return false;
-  }
-
-  Reg = MovImm.getOperand(0).getReg();
-
-  const unsigned Lo16 = (unsigned int)MovImm.getOperand(1).getImm();
-  const unsigned Hi16 = (unsigned int)MovTop.getOperand(2).getImm();
-
-  // Reconstruct 32-bit value that is loaded using movw/movt instruction pair.
-  Imm32 = Lo16 | (Hi16 << 16);
-
-  return true;
-}
-
 // Compares two code sections for syntactic equality. This is the core of the
 // asm diffing logic.
 //
@@ -633,31 +581,37 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
       return fail("Instruction Size Mismatch", Left, Right);
     }
 
-    if (TheTargetArch == Target_Thumb) {
-      unsigned int RegL = 0;
-      unsigned int RegR = 0;
+    if (Munger != nullptr)
+    {
+      // Need to call the munger first
 
-      unsigned int Imm32L = 0;
-      unsigned int Imm32R = 0;
+      uint64_t ImmL = 0;
+      uint64_t ImmR = 0;
+      uint32_t SkipL = 0;
+      uint32_t SkipR = 0;
 
-      // On Thumb2 movw/movt instruction pair can be used to load a 32-bit value to a register.
-      // If this is the case, we should treat such instruction pair as **one** pseudo-instruction and try decoding them together.
-      if (tryDecodeThumb2MoveImm32(Left, RegL, Imm32L) && tryDecodeThumb2MoveImm32(Right, RegR, Imm32R)) {
-        if ((RegL == RegR) && ((Imm32L == Imm32R) || Comparator(UserData, Left.BlockOffset(), Left.InstrSize, Imm32L, Imm32R))) {
-          // When movw/movt instructions pairs load the same or "equivalent" 32-bit values
-          // to the same register advance both iterators to the positions after movt.
+      if (Munger(UserData, Left.BlockOffset(), Left.InstrSize, &ImmL, &ImmR, &SkipL, &SkipR))
+      {
+        const bool constMatches = ((ImmL == ImmR) || Comparator(UserData, Left.BlockOffset(), Left.InstrSize, ImmL, ImmR));
+        if (!constMatches)
+        {
+          return fail("Munged Immediate Operand Value Mismatch", Left, Right);
+        }
 
-          Left.advance();
+        Left.advance();
+        Right.advance();
+
+        for (uint32_t i = 0; i < SkipL; i++) {
           decodeInstruction(Left);
           Left.advance();
+        }
 
-          Right.advance();
+        for (uint32_t i = 0; i < SkipR; i++) {
           decodeInstruction(Right);
           Right.advance();
-
-          continue;
         }
-        // Otherwise, do nothing and allow the comparison below to fail.
+
+        continue;
       }
     }
 
@@ -776,6 +730,8 @@ DllIface CorDisasm *NewDisasm(enum TargetArch Target,
   return nullptr;
 }
 
+DllIface void FinishDisasm(const CorDisasm *Disasm) { delete Disasm; }
+
 DllIface CorDisasm *InitBufferedDiffer(enum TargetArch Target,
                                const OffsetComparator Comparator) {
   return NewDiffer(Target, &BufferedPrintControl, Comparator);
@@ -784,7 +740,14 @@ DllIface CorDisasm *InitBufferedDiffer(enum TargetArch Target,
 DllIface CorAsmDiff *NewDiffer(enum TargetArch Target,
                                const PrintControl *PControl,
                                const OffsetComparator Comparator) {
-  CorAsmDiff *AsmDiff = new CorAsmDiff(Target, PControl, Comparator);
+  return NewDiffer2(Target, PControl, Comparator, nullptr);
+}
+
+DllIface CorAsmDiff *NewDiffer2(enum TargetArch Target,
+                                const PrintControl *PControl,
+                                const OffsetComparator Comparator,
+                                const OffsetMunger Munger) {
+  CorAsmDiff *AsmDiff = new CorAsmDiff(Target, PControl, Comparator, Munger);
 
   if (AsmDiff->init()) {
     return AsmDiff;
@@ -793,8 +756,6 @@ DllIface CorAsmDiff *NewDiffer(enum TargetArch Target,
   delete AsmDiff;
   return nullptr;
 }
-
-DllIface void FinishDisasm(const CorDisasm *Disasm) { delete Disasm; }
 
 DllIface void FinishDiff(const CorAsmDiff *AsmDiff) { delete AsmDiff; }
 

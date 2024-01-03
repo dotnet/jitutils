@@ -2,11 +2,12 @@ InitDisasm
 InitBufferedDisasm
 NewDisasm
 FinishDisasm
-DisasmInstruction
-DumpInstruction
 InitBufferedDiffer
 NewDiffer
+NewDiffer2
 FinishDiff
+DisasmInstruction
+DumpInstruction
 NearDiffCodeBlocks
 DumpCodeBlock
 DumpDiffBlocks

@@ -1,3 +1,5 @@
+# Changes to build with CBL-Mariner are marked "CBL-Mariner"
+
 pr:
   branches:
     include:
@@ -9,6 +11,7 @@ pr:
     - build-coredistools.cmd
     - build-coredistools.sh
     - build-tblgen.cmd
+    - build-tblgen.sh
     - coredistools.yml
     - pack-coredistools.cmd
 
@@ -26,19 +29,39 @@ trigger:
     - coredistools.yml
     - pack-coredistools.cmd
 
+# CBL-Mariner:
 resources:
+  # The base CBL-Mariner tags used to build .NET are:
+  #    mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-amd64
+  #    mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm
+  #    mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-arm64
+  # However, these are based on Ubuntu 16.04 libs and do not have libstdc++ 7.
+  # The following containers are based on a later set of libs.
   containers:
-  - container: ubuntu-18.04-arm
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-20220312201346-b9de666
-  - container: ubuntu-18.04-arm64
-    image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-arm64-20220312201346-b2c2436
+  - container: linux_x64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-amd64
+  - container: linux_arm
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm
+  - container: linux_arm64
+    image: mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm64
+
+# # Use the following for legacy Ubuntu 18.04 based Arm/Arm64 cross build (x64 build is not cross)
+# resources:
+#   containers:
+#   - container: linux_arm
+#     image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-20220312201346-b9de666
+#   - container: linux_arm64
+#     image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-arm64-20220312201346-b2c2436
 
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
   LLVMSourceBundle: llvm-project.bundle
-  LLVMSourceVersion: llvmorg-13.0.1
+  LLVMSourceVersion: llvmorg-17.0.6
 
 jobs:
+
+################################ Check out LLVM source tree; publish to artifacts for future jobs
+
 - job: checkout_llvm
   displayName: Checkout LLVM
 
@@ -61,9 +84,56 @@ jobs:
     artifact: $(LLVMSourceBundle)
     displayName: Publish LLVM bundle
 
-- job: crossbuild_coredistools_linux
+################################ Build llvm-tblgen on Linux (x64)
+
+- job: build_tblgen_linux
   dependsOn: checkout_llvm
+  displayName: Build llvm-tblgen linux
+
+  # CBL-Mariner:
+  container: linux_x64
+
+  pool:
+    # CBL-Mariner:
+    vmImage: ubuntu-latest
+    # non-CBL-Mariner:
+    # vmImage: ubuntu-20.04
+
+  workspace:
+    clean: all
+
+  steps:
+  - template: /eng/download-checkout-llvm.yml
+
+  # CBL-Mariner:
+
+  - script: |
+      sudo tdnf install -y ncurses-compat
+    displayName: Install libtinfo.so.5 dependency of llvm-tblgen
+
+  - script: |
+      ./build-tblgen.sh linux-x64 /crossrootfs/x64
+    displayName: Build llvm-tblgen
+
+  # non-CBL-Mariner:
+  #- script: ./build-tblgen.sh linux-x64
+  #  displayName: Build llvm-tblgen
+
+  - publish: $(Build.SourcesDirectory)/bin/llvm-tblgen
+    artifact: tblgen-linux
+    displayName: Publish llvm-tblgen
+
+################################ Cross-build coredistools for linux-arm, linux-arm64 (and linux-x64 on CBL-Mariner)
+
+- job: crossbuild_coredistools_linux
+  timeoutInMinutes: 60
+  dependsOn:
+  - checkout_llvm
+  - build_tblgen_linux
+  # CBL-Mariner:
   displayName: Build coredistools Linux
+  # non-CBL-Mariner:
+  # displayName: Build coredistools Linux
 
   container: $[ variables['ContainerImage'] ]
 
@@ -72,13 +142,19 @@ jobs:
 
   strategy:
     matrix:
+      # CBL-Mariner (x64 section only):
+      x64:
+        ContainerImage: linux_x64
+        CrossRootfsDirectory: /crossrootfs/x64
+        TargetOSArchitecture: linux-x64
+
       arm:
-        ContainerImage: ubuntu-18.04-arm
+        ContainerImage: linux_arm
         CrossRootfsDirectory: /crossrootfs/arm
         TargetOSArchitecture: linux-arm
 
       arm64:
-        ContainerImage: ubuntu-18.04-arm64
+        ContainerImage: linux_arm64
         CrossRootfsDirectory: /crossrootfs/arm64
         TargetOSArchitecture: linux-arm64
 
@@ -88,27 +164,79 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  - template: /eng/download-llvm-release.yml
-    parameters:
-      os: linux
-      release: $(LLVMSourceVersion)
+  - download: current
+    artifact: tblgen-linux
+    displayName: Download llvm-tblgen
 
-  - script: ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
+  - script: |
+      chmod +x $(Pipeline.Workspace)/tblgen-linux/llvm-tblgen
+    displayName: Make llvm-tblgen executable
+
+  - script: |
+      echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
+    displayName: Add llvm-tblgen to the PATH
+
+  - script: |
+      sudo tdnf install -y ncurses-compat
+    displayName: Install libtinfo.so.5 dependency of llvm-tblgen
+
+  - script: |
+      ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
     displayName: Build coredistools
 
   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
-- job: build_coredistools_linux_x64
+################################ Cross-build coredistools for linux-x64: only non-CBL-Mariner
+
+# - job: build_coredistools_linux
+#   timeoutInMinutes: 60
+#   dependsOn:
+#   - checkout_llvm
+#   - build_tblgen_linux
+#   displayName: Build coredistools Linux x64
+# 
+#   pool:
+#     vmImage: ubuntu-20.04
+# 
+#   variables:
+#     TargetOSArchitecture: linux-x64
+# 
+#   workspace:
+#     clean: all
+# 
+#   steps:
+#   - template: /eng/download-checkout-llvm.yml
+# 
+#   - download: current
+#     artifact: tblgen-linux
+#     displayName: Download llvm-tblgen
+# 
+#   - script: |
+#       chmod +x $(Pipeline.Workspace)/tblgen-linux/llvm-tblgen
+#     displayName: Make llvm-tblgen executable
+# 
+#   - script: |
+#       echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
+#     displayName: Add llvm-tblgen to the PATH
+# 
+#   - script: |
+#       ./build-coredistools.sh $(TargetOSArchitecture)
+#     displayName: Build coredistools
+# 
+#   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
+#     artifact: coredistools-$(TargetOSArchitecture)
+#     displayName: Publish coredistools
+
+################################ Build llvm-tblgen on Mac (x64)
+
+- job: build_tblgen_macos
   dependsOn: checkout_llvm
-  displayName: Build coredistools Linux x64
+  displayName: Build llvm-tblgen macOS
 
   pool:
-    vmImage: ubuntu-18.04
-
-  variables:
-    TargetOSArchitecture: linux-x64
+    vmImage: macOS-latest
 
   workspace:
     clean: all
@@ -116,20 +244,20 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  - template: /eng/download-llvm-release.yml
-    parameters:
-      os: linux
-      release: $(LLVMSourceVersion)
+  - script: ./build-tblgen.sh osx-x64
+    displayName: Build llvm-tblgen
 
-  - script: ./build-coredistools.sh $(TargetOSArchitecture)
-    displayName: Build coredistools
+  - publish: $(Build.SourcesDirectory)/bin/llvm-tblgen
+    artifact: tblgen-macos
+    displayName: Publish llvm-tblgen
 
-  - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
-    artifact: coredistools-$(TargetOSArchitecture)
-    displayName: Publish coredistools
+################################ Build coredistools for macos-x64, macos-arm64
 
 - job: build_coredistools_macos
-  dependsOn: checkout_llvm
+  timeoutInMinutes: 60
+  dependsOn:
+  - checkout_llvm
+  - build_tblgen_macos
   displayName: Build coredistools macOS
 
   pool:
@@ -139,10 +267,10 @@ jobs:
     matrix:
       x64:
         TargetOSArchitecture: osx-x64
-        VMImage: macOS-10.15
+        VMImage: macOS-latest
       arm64:
         TargetOSArchitecture: osx-arm64
-        VMImage: macOS-11
+        VMImage: macOS-latest
 
   workspace:
     clean: all
@@ -150,17 +278,27 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  - template: /eng/download-llvm-release.yml
-    parameters:
-      os: macos
-      release: $(LLVMSourceVersion)
+  - download: current
+    artifact: tblgen-macos
+    displayName: Download llvm-tblgen
 
-  - script: ./build-coredistools.sh $(TargetOSArchitecture)
+  - script: |
+      chmod +x $(Pipeline.Workspace)/tblgen-macos/llvm-tblgen
+    displayName: Make llvm-tblgen executable
+
+  - script: |
+      echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-macos"
+    displayName: Add llvm-tblgen to the PATH
+
+  - script: |
+      ./build-coredistools.sh $(TargetOSArchitecture)
     displayName: Build coredistools
 
   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.dylib
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
+
+################################ Build llvm-tblgen on Windows
 
 - job: build_tblgen_windows
   dependsOn: checkout_llvm
@@ -182,7 +320,10 @@ jobs:
     artifact: tblgen-windows
     displayName: Publish llvm-tblgen
 
+################################ Build coredistools for win-x64, win-x86, win-arm64
+
 - job: build_coredistools_windows
+  timeoutInMinutes: 60
   dependsOn:
   - checkout_llvm
   - build_tblgen_windows
@@ -220,10 +361,13 @@ jobs:
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
 
+################################ Build coredistools NuGet packages
+
 - job: build_coredistools_nuget_packages
   dependsOn:
   - crossbuild_coredistools_linux
-  - build_coredistools_linux_x64
+  # only non-CBL-Mariner:
+  # - build_coredistools_linux
   - build_coredistools_macos
   - build_coredistools_windows
   displayName: Build coredistools NuGet packages
@@ -237,6 +381,10 @@ jobs:
   steps:
   - download: current
     displayName: Download artifacts
+
+  # Install nuget.exe if it's not already there.
+  - task: NuGetToolInstaller@1
+    displayName: Install nuget.exe
 
   - script: |
       for %%I in (linux-arm linux-arm64 linux-x64 osx-arm64 osx-x64 win-arm64 win-x64 win-x86) do (
