@@ -26,10 +26,6 @@
 #define DllIface EXTERN_C __declspec(dllimport)
 #endif // defined(DllInterfaceExporter)
 #else
-
-// Disable "warning: default label in switch which covers all enumeration values [-Wcovered-switch-default]"
-#pragma clang diagnostic ignored "-Wcovered-switch-default"
-
 #if !defined(__cdecl)
 #if defined(__i386__)
 #define __cdecl __attribute__((cdecl))
