@@ -364,7 +364,10 @@ bool CorDisasm::init() {
   string FeaturesStr; // No additional target specific attributes.
 
   if (TheTargetArch == Target_Arm64) {
-    Mcpu = "neoverse-n2";
+    // Enable all features for disassembly. Setting a specific advanced CPU enables all the architecture
+    // features for that CPU (e.g., `Mcpu = "neoverse-n2"`), but we want to use the "meta" feature
+    // string "+all" to just enable all features, even those not implemented in any current CPU.
+    FeaturesStr = "+all";
   }
 
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
