@@ -17,14 +17,13 @@ CMakeOSXArchitectures=
 LLVMTargetsToBuild="AArch64;ARM;X86"
 
 # Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
-# `llvm-strip` is available in CBL-Mariner container; `strip` is available on macOS.
-StripTool=$(command -v llvm-strip)
+# `llvm-strip` is available in CBL-Mariner container,
+# `llvm-strip-<version>` is available on standard cross build Ubuntu container,
+# `strip` is available on macOS.
+StripTool=$(command -v llvm-strip{,-{20..15}} strip | head -n 1)
 if [ -z "$StripTool" ]; then
-    StripTool=$(command -v strip)
-    if [ -z "$StripTool" ]; then
-        echo "Strip tool not found"
-        exit 1
-    fi
+    echo "Strip tool not found"
+    exit 1
 fi
 
 TblGenTool=$(command -v llvm-tblgen)
@@ -33,13 +32,14 @@ if [ -z "$TblGenTool" ]; then
     exit 1
 fi
 
-C_COMPILER=$(command -v clang)
+# Take first match from: clang clang-20 clang-19 .. clang-15
+C_COMPILER=$(command -v clang{,-{20..15}} | head -n 1)
 if [ -z "$C_COMPILER" ]; then
     echo "C compiler not found"
     # Keep going in case cmake can find one?
 fi
 
-CXX_COMPILER=$(command -v clang++)
+CXX_COMPILER=$(command -v clang++{,-{20..15}} | head -n 1)
 if [ -z "$CXX_COMPILER" ]; then
     echo "C++ compiler not found"
     # Keep going in case cmake can find one?
@@ -83,6 +83,7 @@ case "$TargetOSArchitecture" in
         CMakeCrossCompiling=ON
         LLVMHostTriple=riscv64-linux-gnu
         LLVMTargetsToBuild="RISCV"
+        EnsureCrossRootfsDirectoryExists
         ;;
 
     osx-arm64)
