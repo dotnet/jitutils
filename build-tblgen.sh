@@ -70,14 +70,18 @@ fi
 
 pushd "$BinariesDirectory"
 
+# Take first match from: clang clang-20 clang-19 .. clang-15
+C_COMPILER=$(command -v clang{,-{20..15}} | head -n 1)
+CXX_COMPILER=$(command -v clang++{,-{20..15}} | head -n 1)
+
 if [ -z "$CrossRootfsDirectory" ]; then
     BUILD_FLAGS=""
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
+        -DCMAKE_C_COMPILER=$C_COMPILER \
+        -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
@@ -92,8 +96,8 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
+        -DCMAKE_C_COMPILER=$C_COMPILER \
+        -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
@@ -109,8 +113,8 @@ else
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
-        -DCMAKE_C_COMPILER=$(command -v clang) \
-        -DCMAKE_CXX_COMPILER=$(command -v clang++) \
+        -DCMAKE_C_COMPILER=$C_COMPILER \
+        -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
