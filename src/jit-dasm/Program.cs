@@ -320,7 +320,7 @@ namespace ManagedCodeGen
                 AddEnvironmentVariable("DOTNET_JitEHDump", "*");
                 if (!Get(_command.NoDiffable))
                 {
-                    AddEnvironmentVariable("DOTNET_JitDiffableDasm", "1");
+                    AddEnvironmentVariable("DOTNET_JitDisasmDiffable", "1");
                 }
                 AddEnvironmentVariable("DOTNET_JitEnableNoWayAssert", "1");    // Force noway_assert to generate assert (not fall back to MinOpts).
                 AddEnvironmentVariable("DOTNET_JitNoForceFallback", "1");      // Don't stress noway fallback path.

@@ -336,7 +336,7 @@ namespace ManagedCodeGen
                 AppendEnvironmentVariableToPmiEnv("DOTNET_JitEHDump", "*");
                 if (!Get(_command.NoDiffable))
                 {
-                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitDiffableDasm", "1");
+                    AppendEnvironmentVariableToPmiEnv("DOTNET_JitDisasmDiffable", "1");
                 }
                 AppendEnvironmentVariableToPmiEnv("DOTNET_ReadyToRun", "0");
                 AppendEnvironmentVariableToPmiEnv("DOTNET_ZapDisable", "1");
