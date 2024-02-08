@@ -86,7 +86,7 @@ public class MLCSECommands : CliRootCommand
     public CliOption<bool> ShowLikelihoods { get; } =
         new("--showLikelihoods") { Description = "show per method the likelihood for each sequence element" };
     public CliOption<bool> ShowBaselineLikelihoods { get; } =
-        new("--showLikelihoods") { Description = "show per method the initial likelihood for each CSE and stopping" };
+        new("--showBaselineLikelihoods") { Description = "show per method the initial likelihood for each CSE and stopping" };
     public CliOption<bool> ShowRewards { get; } =
         new("--showRewards") { Description = "show per method the reward sequence computations" };
     public CliOption<int> Salt { get; } =
@@ -147,6 +147,7 @@ public class MLCSECommands : CliRootCommand
         Options.Add(ShowSPMIRuns);
         Options.Add(NumberOfRounds);
         Options.Add(MinibatchSize);
+        Options.Add(ShowTabular);
         Options.Add(ShowRounds);
         Options.Add(ShowRoundsInterval);
         Options.Add(ShowPolicyEvaluations);

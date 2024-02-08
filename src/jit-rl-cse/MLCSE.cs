@@ -414,6 +414,12 @@ public class MLCSE
 
         int nMethods = methods.Count();
 
+        string? dumpMethod = Get(s_commands.SaveDumps);
+        if (dumpMethod != null)
+        {
+            Console.WriteLine($"Saving dumps for {dumpMethod}");
+        }
+
         if (showTabular)
         {
             Console.WriteLine($"\nPolicy Gradient: {nMethods} methods, {nRounds} rounds, {nIter} runs per minibatch, {salt} salt, {alpha} alpha");
@@ -603,49 +609,62 @@ public class MLCSE
 
                         // Optionally save dumps for certain sequences
                         // We do this as separate run to not mess up metrics parsing...
-                        // Todo: parameterize this
-                        if (i == 0 && method.spmiIndex == Get(s_commands.SaveDumps))
+                        //
+                        if (method.spmiIndex == dumpMethod)
                         {
-                            string cleanSequence = updateSequence.Replace(',', '_');
-                            string dumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.d");
-                            if (!File.Exists(dumpFile))
+                            lock (dumpMethod)
                             {
-                                List<string> dumpOptions = new List<string>(updateOptions);
-                                dumpOptions.Add($"JitDump=*");
-                                dumpOptions.Add($"JitStdOutFile={dumpFile}");
-                                string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
-                                sw.WriteLine($" ---> saved dump to {dumpFile}");
-                            }
+                                // Always dump updated "decision tree"
+                                //
+                                string dotFile = Path.Combine(dumpDir, $"qv-{method.spmiIndex}.dot");
+                                using (StreamWriter s = new StreamWriter(dotFile))
+                                {
+                                    QVDumpDot(method, s);
+                                }
 
-                            string dasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.dasm");
-                            if (!File.Exists(dasmFile))
-                            {
-                                List<string> dasmOptions = new List<string>(updateOptions);
-                                updateOptions.Add($"JitDisasm=*");
-                                updateOptions.Add($"JitStdOutFile={dasmFile}");
-                                string dasmRun = SPMI.Run(method.spmiIndex, updateOptions);
-                                sw.WriteLine($" ---> saved dasm to {dasmFile}");
-                            }
+                                // Dump dasm/dump if we don't have one already
+                                //
+                                string cleanSequence = updateSequence.Replace(',', '_');
+                                string dumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.d");
+                                if (!File.Exists(dumpFile))
+                                {
+                                    List<string> dumpOptions = new List<string>(updateOptions);
+                                    dumpOptions.Add($"JitDump=*");
+                                    dumpOptions.Add($"JitStdOutFile={dumpFile}");
+                                    string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
+                                    sw.WriteLine($" ---> saved dump to {dumpFile}");
+                                }
 
-                            string baseSequence = "baseline";
-                            string baseDumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.d");
-                            if (!File.Exists(baseDumpFile))
-                            {
-                                List<string> dumpOptions = new List<string>();
-                                dumpOptions.Add($"JitDump=*");
-                                dumpOptions.Add($"JitStdOutFile={baseDumpFile}");
-                                string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
-                                sw.WriteLine($" ---> saved baseline dump to {baseDumpFile}");
-                            }
+                                string dasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.dasm");
+                                if (!File.Exists(dasmFile))
+                                {
+                                    List<string> dasmOptions = new List<string>(updateOptions);
+                                    updateOptions.Add($"JitDisasm=*");
+                                    updateOptions.Add($"JitStdOutFile={dasmFile}");
+                                    string dasmRun = SPMI.Run(method.spmiIndex, updateOptions);
+                                    sw.WriteLine($" ---> saved dasm to {dasmFile}");
+                                }
 
-                            string baseDasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.dasm");
-                            if (!File.Exists(baseDasmFile))
-                            {
-                                List<string> dasmOptions = new List<string>();
-                                dasmOptions.Add($"JitDisasm=*");
-                                dasmOptions.Add($"JitStdOutFile={baseDasmFile}");
-                                string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
-                                sw.WriteLine($" ---> saved baseline dasm to {baseDasmFile}");
+                                string baseSequence = "baseline";
+                                string baseDumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.d");
+                                if (!File.Exists(baseDumpFile))
+                                {
+                                    List<string> dumpOptions = new List<string>();
+                                    dumpOptions.Add($"JitDump=*");
+                                    dumpOptions.Add($"JitStdOutFile={baseDumpFile}");
+                                    string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
+                                    sw.WriteLine($" ---> saved baseline dump to {baseDumpFile}");
+                                }
+
+                                string baseDasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.dasm");
+                                if (!File.Exists(baseDasmFile))
+                                {
+                                    List<string> dasmOptions = new List<string>();
+                                    dasmOptions.Add($"JitDisasm=*");
+                                    dasmOptions.Add($"JitStdOutFile={baseDasmFile}");
+                                    string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
+                                    sw.WriteLine($" ---> saved baseline dasm to {baseDasmFile}");
+                                }
                             }
                         }
 
