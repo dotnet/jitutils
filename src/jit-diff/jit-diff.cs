@@ -310,6 +310,24 @@ namespace ManagedCodeGen
                     Console.WriteLine("{0}", result.StdOut);
                     Console.WriteLine("stderr:");
                     Console.WriteLine("{0}", result.StdErr);
+
+                    if (OperatingSystem.IsWindows())
+                    {
+                        _platformName = "Windows";
+                    }
+                    else if (OperatingSystem.IsLinux())
+                    {
+                        _platformName = "Linux";
+                    }
+                    else if (OperatingSystem.IsMacOS())
+                    {
+                        _platformName = "Darwin";
+                    }
+
+                    if (_platformName != null)
+                    {
+                        Console.WriteLine($"Falling back to {_platformName} based on OS detection.");
+                    }
                 }
             }
 
