@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.CommandLine;
+using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -59,14 +61,30 @@ public class MLCSE
     //
     public static Dictionary<Method, State> Best = new Dictionary<Method, State>();
 
-    // Number of methods to consider
-    public static int numMethods = 20;
-
-    public static void Main(string[] args)
+    private static int Main(string[] args) =>
+    new CliConfiguration(new MLCSECommands(args).UseVersion())
     {
-        SPMI.spmiCollection = spmiCollection;
-        SPMI.checkedCoreRoot = checkedCoreRoot;
-        SPMI.showLaunch = false;
+        EnableParseErrorReporting = true
+    }.Invoke(args);
+
+    public static MLCSECommands s_commands = new MLCSECommands();
+
+    private static T? Get<T>(CliOption<T> option)
+    {
+        if (s_commands.Result == null)
+        {
+            throw new Exception("no parsed result?");
+        }
+        return s_commands.Result.GetValue(option);
+    }
+
+    public static void Run()
+    {
+        if (s_commands == null) return;
+
+        SPMI.spmiCollection = Get(s_commands.SPMICollection) ?? spmiCollection;
+        SPMI.checkedCoreRoot = Get(s_commands.CheckedCoreRoot) ?? checkedCoreRoot;
+        SPMI.showLaunch = Get(s_commands.ShowSPMIRuns);
 
         Console.WriteLine("RL CSE Experiment");
         Console.WriteLine($"CoreRoot {checkedCoreRoot}");
@@ -80,23 +98,26 @@ public class MLCSE
         // Select the methods to use in this experiment.
         //
         IEnumerable<Method> methodsToUse = new List<Method>();
+        List<string>? specificMethods = Get(s_commands.UseSpecificMethods);
 
-        // methodsToUse = ["61266"];
-
-        // methodsToUse = new List<Method>() { "31866", "35481", "31554" };
-
-        // SaveDump(methodsToUse.First());
-
-        if (methodsToUse.Count() == 0)
+        if (specificMethods == null || !specificMethods.Any())
         {
             methodsToUse = GetMethodSample();
         }
+        else
+        {
+            methodsToUse = specificMethods.Select(x => new Method(x));
+        }
 
-
+        List<string>? additionalMethods = Get(s_commands.UseAdditionalMethods);
+        if (additionalMethods != null && additionalMethods.Any())
+        {
+            methodsToUse = methodsToUse.Concat(additionalMethods.Select(x => new Method(x)));
+        }
 
         // Optionally build a data set that describes the features of the CSE candidates
         // (useful for normalizing things)
-        bool doGatherFeatures = false;
+        bool doGatherFeatures = Get(s_commands.GatherFeatures);
 
         if (doGatherFeatures)
         {
@@ -106,8 +127,8 @@ public class MLCSE
         // Optionally use an MCMC model to find the optimal
         // sets of CSEs for each method, and see how well
         // the (default) policy compares to optimal.
-        bool doMCMC = false;
-        bool forgetMCMC = true;
+        bool doMCMC = Get(s_commands.DoMCMC);
+        bool forgetMCMC = !Get(s_commands.RememberMCMC);
 
         if (doMCMC)
         {
@@ -122,7 +143,7 @@ public class MLCSE
         // Optionally use the PolicyGradient algorithm to
         // try and craft an optimal policy.
         //
-        bool doPolicyGradient = true;
+        bool doPolicyGradient = Get(s_commands.DoPolicyGradient);
 
         if (doPolicyGradient)
         {
@@ -232,15 +253,15 @@ public class MLCSE
     static IEnumerable<Method> GetMethodSample()
     {
         // smallest num cand to consider
-        uint minCandidatesToExplore = 1;
+        uint minCandidatesToExplore = Get(s_commands!.MinCandidates);
         // largest num cand to consider
-        uint maxCandidatesToExplore = 10;
+        uint maxCandidatesToExplore = Get(s_commands.MaxCandidates);
         // number of methods to choose
-        int maxMethodsToExplore = numMethods;
+        uint maxMethodsToExplore = Get(s_commands.NumMethods);
         // do we want a random sample of the first N
-        bool randomSample = true;
+        bool randomSample = Get(s_commands.UseRandomSample);
         // random seed
-        int randomSeed = 42;
+        int randomSeed = Get(s_commands.RandomSampleSeed);
 
         Random rnd = new Random(randomSeed);
 
@@ -254,7 +275,7 @@ public class MLCSE
                 return (numCse > 0) && (minCandidatesToExplore <= numCand) && (numCand <= maxCandidatesToExplore);
             }).Select(s => s.method);
 
-        Console.WriteLine($"{methods.Count()} methods with between {minCandidatesToExplore} and {maxCandidatesToExplore} cses, {(randomSample ? " randomly" : "")} choosing {maxMethodsToExplore}.");
+        Console.WriteLine($"{methods.Count()} methods with between {minCandidatesToExplore} and {maxCandidatesToExplore} cses, {(randomSample ? "randomly " : "")}choosing {maxMethodsToExplore}.");
 
         // optionally randomly shuffle
         if (randomSample)
@@ -262,7 +283,7 @@ public class MLCSE
             methods = methods.OrderBy(x => rnd.NextDouble());
         }
 
-        return methods.Take(maxMethodsToExplore).ToList();
+        return methods.Take((int)maxMethodsToExplore).ToList();
     }
 
     // Collect all method perf scores via greedy policy with indicated
@@ -353,41 +374,41 @@ public class MLCSE
     static void PolicyGradient(IEnumerable<Method> methods)
     {
         // number of times we cycle through the methods
-        int nRounds = 10_000;
+        int nRounds = Get(s_commands.NumberOfRounds);
         // how many trials per method each cycle (minibatch)
-        int nIter = 25;
+        int nIter =Get(s_commands.MinibatchSize);
         // how often to show results
-        bool showEvery = true;
-        uint showEveryInterval = 1;
+        bool showEvery = Get(s_commands.ShowRounds);
+        uint showEveryInterval = Get(s_commands.ShowRoundsInterval);
         // show jit internal evaluations (preferences, likelihoods, etc)
-        bool showPolicyEvaluations = false;
+        bool showPolicyEvaluations = Get(s_commands.ShowPolicyEvaluations);
         // show jit internal updates 
-        bool showPolicyUpdates = false;
+        bool showPolicyUpdates = Get(s_commands.ShowPolicyUpdates);
         // show sequences
-        bool showSequences = false;
+        bool showSequences = Get(s_commands.ShowSequences);
         // show parameters
-        bool showParameters = false;
+        bool showParameters = Get(s_commands.ShowParameters);
         // show likelihoods
-        bool showLikelihoods = false;
+        bool showLikelihoods = Get(s_commands.ShowLikelihoods);
         // show baseline likelihoods
-        bool showBaselineLikelihoods = false;
+        bool showBaselineLikelihoods = Get(s_commands.ShowBaselineLikelihoods);
         // show reward computation
-        bool showRewards = false;
+        bool showRewards = Get(s_commands.ShowRewards);
         // random salt
-        int salt = 6;
+        int salt = Get(s_commands.Salt);
         // learning rate
-        double alpha = 0.02;
+        double alpha = Get(s_commands.Alpha);
         // just show tabular results
-        bool showTabular = true;
+        bool showTabular = Get(s_commands.ShowTabular);
         // how often to recap baseline/best/greedy
-        int summaryInterval = 25;
+        int summaryInterval = Get(s_commands.SummaryInterval);
         // show greedy policy in summary intervals
-        bool showGreedy = true;
+        bool showGreedy = Get(s_commands.ShowGreedy);
         // save QV dot files each summary interval?
-        bool saveQVdot = false;
+        bool saveQVdot = Get(s_commands.SaveQVDot);
 
         // Initial parameter set. Must be non-empty. Jit will fill in 0 for any missing params.
-        string parameters = "0";
+        string parameters = Get(s_commands.InitialParameters) ?? "0.0";
         string prevParameters = parameters;
         int nSameParams = 0;
 
@@ -395,7 +416,7 @@ public class MLCSE
 
         if (showTabular)
         {
-            Console.WriteLine($"\nPolicy Gradient: {nMethods} methods, {nRounds} rounds, {nIter} iterations, {salt} salt, {alpha} alpha");
+            Console.WriteLine($"\nPolicy Gradient: {nMethods} methods, {nRounds} rounds, {nIter} runs per minibatch, {salt} salt, {alpha} alpha");
             Console.Write($"Rnd ");
             foreach (var method in methods)
             {
@@ -454,7 +475,7 @@ public class MLCSE
                 }
             }
 
-            if (showTabular)
+            if (showTabular && showEvery)
             {
                 // Introduce the next round 
                 //
@@ -583,7 +604,7 @@ public class MLCSE
                         // Optionally save dumps for certain sequences
                         // We do this as separate run to not mess up metrics parsing...
                         // Todo: parameterize this
-                        if (i == 0 && method.spmiIndex == "6276")
+                        if (i == 0 && method.spmiIndex == Get(s_commands.SaveDumps))
                         {
                             string cleanSequence = updateSequence.Replace(',', '_');
                             string dumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.d");
@@ -770,7 +791,10 @@ public class MLCSE
                 Console.Write($"  params: {String.Join(",", MetricsParser.ToDoubles(parameters).Select(x => $"{x,7:F4}"))}");
             }
 
-            Console.WriteLine();
+            if (showEvery)
+            {
+                Console.WriteLine();
+            }
 
             // If parameters stay same for 50 iterations, stop.
             //
@@ -956,7 +980,7 @@ public class MLCSE
         Console.WriteLine();
         Console.WriteLine($"Params    {String.Join(",", MetricsParser.ToDoubles(parameters).Select(x => $"{x,7:F4}"))}");
 
-        bool showFullGreedy = true;
+        bool showFullGreedy = Get(s_commands.ShowFullGreedy);
         if (showFullGreedy)
         {
             EvaluateGreedyPolicy(parameters, r);
@@ -977,21 +1001,21 @@ public class MLCSE
     static void MCMC(IEnumerable<Method> methods)
     {
         // Show each method's summary
-        bool showEachCase = true;
+        bool showEachCase = Get(s_commands.ShowEachMethod);
         // show each particular trial result
-        bool showEachRun = false;
+        bool showEachRun = Get(s_commands.ShowEachRun);
         // Show the Markov Chain
-        bool showMC = false;
+        bool showMC = Get(s_commands.ShowMarkovChain);
         // Draw the Markov Chain (tree)
-        bool showMCDot = false;
+        bool showMCDot = Get(s_commands.ShowMarkovChainDot);
 
         // Enable random MCMC mode
-        bool doRandomTrials = true;
+        bool doRandomTrials = Get(s_commands.DoRandomTrials);
         // We only do random sampling for cases where there are large numbers of CSEs
         // This is the threshold where we switch
-        uint minCasesForRandomTrial = 10;
+        uint minCasesForRandomTrial = Get(s_commands.MinCandidateCountForRandomTrials);
         // How many random trials to run
-        int numCasesRandom = 512;
+        int numCasesRandom = Get(s_commands.NumRandomTrials);
 
         Stopwatch s = new Stopwatch();
 
