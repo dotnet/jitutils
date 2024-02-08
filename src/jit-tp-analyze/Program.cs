@@ -94,12 +94,12 @@ internal class Program
         foreach (ref FunctionDiff diff in CollectionsMarshal.AsSpan(diffs))
         {
             output.WriteLine(
-                $"{{0,-{maxNameLength}}} : {{1,-{maxInsCountDiffLength}}} : {{2,-{maxInsPercentageDiffLength}}} : {{3,-6:P2}} : {{4}}",
-                diff.Name,
+                $"{{0,-{maxInsCountDiffLength}}} : {{1,-{maxInsPercentageDiffLength}}} : {{2,-6:P2}} : {{3}} : {{4,-{maxNameLength}}}",
                 diff.InsCountDiff,
                 double.IsInfinity(diff.InsPercentageDiff) ? "NA" : FormatPercentageDiff(diff.InsPercentageDiff),
                 diff.ContributionPercentage / 100,
-                FormatPercentageDiff(diff.TotalInsPercentageDiff, "0000"));
+                FormatPercentageDiff(diff.TotalInsPercentageDiff, "0000"),
+                diff.Name);
         }
     }
 
