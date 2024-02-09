@@ -237,7 +237,7 @@ namespace ManagedCodeGen
             }
         }
 
-        public static List<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
+        public List<FileInfo> ExtractFileInfo(string path, string filter, string fileExtension, bool recursive)
         {
             // if path is a directory, enumerate files and extract
             // otherwise just extract.
@@ -249,11 +249,24 @@ namespace ManagedCodeGen
             {
                 string fileNamePattern = filter ?? "*";
                 string searchPattern = fileNamePattern + fileExtension;
+                if (Get(_command.ConcatFiles))
+                {
+                    return new List<FileInfo>
+                    {
+                        new FileInfo
+                        {
+                            name = Path.GetFileName(path),
+                            methodList = ExtractMethodInfo(Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption).ToArray()),
+                            isExplicitOnlyFile = true,
+                        },
+                    };
+                }
+
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
                          .AsParallel().Select(p => new FileInfo
                          {
                              name = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
-                             methodList = ExtractMethodInfo(p)
+                             methodList = ExtractMethodInfo(new[] { p })
                          }).ToList();
             }
             else
@@ -264,19 +277,19 @@ namespace ManagedCodeGen
                 { new FileInfo
                     {
                         name = Path.GetFileName(path),
-                        methodList = ExtractMethodInfo(path),
+                        methodList = ExtractMethodInfo(new[] {path }),
                         isExplicitOnlyFile = true,
                     }
                 };
             }
         }
 
-        // Extract lines of the passed in file and create a method info object
+        // Extract lines of the passed in file(s) and create a method info object
         // for each method descript line containing metrics like total bytes, prolog bytes, 
         // and offset in the file.
         //
         // This is the method that knows how to parse jit output and recover the metrics.
-        public static IEnumerable<MethodInfo> ExtractMethodInfo(string filePath)
+        public static IEnumerable<MethodInfo> ExtractMethodInfo(string[] filePaths)
         {
             Regex namePattern = new Regex(@"for method (.*)$");
             Regex codeAndPrologSizePattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
@@ -289,7 +302,7 @@ namespace ManagedCodeGen
             Regex resolutionInfoPattern = new Regex(@"ResolutionMovs (\d+) ResolutionMovsWt (\d+\.\d+)");
 
             var result =
-             File.ReadLines(filePath)
+             filePaths.SelectMany(filePath => File.ReadLines(filePath))
                              .Select((x, i) => new { line = x, index = i })
                              .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
                                         || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal)
