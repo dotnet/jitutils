@@ -376,7 +376,7 @@ public class MLCSE
         // number of times we cycle through the methods
         int nRounds = Get(s_commands.NumberOfRounds);
         // how many trials per method each cycle (minibatch)
-        int nIter =Get(s_commands.MinibatchSize);
+        int nIter = Get(s_commands.MinibatchSize);
         // how often to show results
         bool showEvery = Get(s_commands.ShowRounds);
         uint showEveryInterval = Get(s_commands.ShowRoundsInterval);
@@ -622,10 +622,20 @@ public class MLCSE
                                     QVDumpDot(method, s);
                                 }
 
-                                // Dump dasm/dump if we don't have one already
+                                // Write out dasm/dump for method with this sequence, and baseline.
+                                // Overwrite method dumps every so often, so we see fresh likelihood computations.
+                                // Dasm and baselines should not change so initial ones are fine.
                                 //
+                                bool shouldOverwriteDump = (r > 0) && (summaryInterval > 0) && (r % (4 * summaryInterval) == summaryInterval);
+
                                 string cleanSequence = updateSequence.Replace(',', '_');
                                 string dumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.d");
+
+                                if (shouldOverwriteDump && File.Exists(dumpFile))
+                                {
+                                    File.Delete(dumpFile);
+                                }
+
                                 if (!File.Exists(dumpFile))
                                 {
                                     List<string> dumpOptions = new List<string>(updateOptions);
@@ -801,7 +811,6 @@ public class MLCSE
                             Console.Write($" B:{MetricsParser.GetBaseLikelihoods(batchRuns[lastValidRun]),-60}");
                         }
                     }
-                    Console.Write(batchDetails[lastValidRun]);
                     Console.ResetColor();
                 }
             }
@@ -1022,7 +1031,7 @@ public class MLCSE
         // Show each method's summary
         bool showEachCase = Get(s_commands.ShowEachMethod);
         // show each particular trial result
-        bool showEachRun = Get(s_commands.ShowEachRun);
+        bool showEachRun = Get(s_commands.ShowEachMCMCRun);
         // Show the Markov Chain
         bool showMC = Get(s_commands.ShowMarkovChain);
         // Draw the Markov Chain (tree)

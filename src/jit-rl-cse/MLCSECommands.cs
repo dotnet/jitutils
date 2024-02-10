@@ -133,6 +133,9 @@ public class MLCSECommands : CliRootCommand
         Options.Add(UseSpecificMethods);
         Options.Add(UseAdditionalMethods);
 
+        Options.Add(GatherFeatures);
+
+        Options.Add(DoMCMC);
         Options.Add(RememberMCMC);
         Options.Add(ShowEachMethod);
         Options.Add(ShowEachMCMCRun);
