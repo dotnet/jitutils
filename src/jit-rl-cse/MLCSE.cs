@@ -85,15 +85,16 @@ public class MLCSE
         SPMI.spmiCollection = Get(s_commands.SPMICollection) ?? spmiCollection;
         SPMI.checkedCoreRoot = Get(s_commands.CheckedCoreRoot) ?? checkedCoreRoot;
         SPMI.showLaunch = Get(s_commands.ShowSPMIRuns);
+        dumpDir = Get(s_commands.OutputDir) ?? dumpDir;
 
         Console.WriteLine("RL CSE Experiment");
-        Console.WriteLine($"CoreRoot {checkedCoreRoot}");
-        Console.WriteLine($"Collection {spmiCollection}");
+        Console.WriteLine($"CoreRoot {SPMI.checkedCoreRoot}");
+        Console.WriteLine($"Collection {SPMI.spmiCollection}");
 
         // Find methods in collections with CSE
         // This also fills in Q and BaselineSequence info for the default jit behavior.
         //
-        CollectionData.BuildMethodList(spmiCollection, checkedCoreRoot);
+        CollectionData.BuildMethodList(SPMI.spmiCollection, SPMI.checkedCoreRoot);
 
         // Select the methods to use in this experiment.
         //
@@ -646,6 +647,12 @@ public class MLCSE
                                 }
 
                                 string dasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.dasm");
+
+                                if (shouldOverwriteDump && File.Exists(dasmFile))
+                                {
+                                    File.Delete(dasmFile);
+                                }
+
                                 if (!File.Exists(dasmFile))
                                 {
                                     List<string> dasmOptions = new List<string>(updateOptions);
@@ -674,6 +681,43 @@ public class MLCSE
                                     dasmOptions.Add($"JitStdOutFile={baseDasmFile}");
                                     string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
                                     sw.WriteLine($" ---> saved baseline dasm to {baseDasmFile}");
+                                }
+
+                                string greedySequence = "greedy";
+                                string greedyDumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{greedySequence}-{r}.d");
+
+                                if (File.Exists(greedyDumpFile))
+                                {
+                                    File.Delete(greedyDumpFile);
+                                }
+
+                                if (!File.Exists(greedyDumpFile))
+                                {
+                                    List<string> dumpOptions = new List<string>();
+                                    dumpOptions.Add($"JitRLCSE={parameters}");
+                                    dumpOptions.Add($"JitRLCSEGreedy=1");
+                                    dumpOptions.Add($"JitDump=*");
+                                    dumpOptions.Add($"JitStdOutFile={greedyDumpFile}");
+                                    string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
+                                    sw.WriteLine($" ---> saved greedy dump to {greedyDumpFile}");
+                                }
+
+                                string greedyDasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{greedySequence}-{r}.dasm");
+
+                                if (File.Exists(greedyDasmFile))
+                                {
+                                    File.Delete(greedyDasmFile);
+                                }
+
+                                if (!File.Exists(greedyDasmFile))
+                                {
+                                    List<string> dasmOptions = new List<string>();
+                                    dasmOptions.Add($"JitRLCSE={parameters}");
+                                    dasmOptions.Add($"JitRLCSEGreedy=1");
+                                    dasmOptions.Add($"JitDisasm=*");
+                                    dasmOptions.Add($"JitStdOutFile={greedyDasmFile}");
+                                    string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
+                                    sw.WriteLine($" ---> saved greedy dasm to {greedyDasmFile}");
                                 }
                             }
                         }
@@ -1498,13 +1542,13 @@ public static class CollectionData
     {
         if (!File.Exists(spmiCollection))
         {
-            Console.WriteLine("Unable to find SPMI collection '{collection}'");
+            Console.WriteLine($"Unable to find SPMI collection '{spmiCollection}'");
             return new List<Method>();
         }
 
         if (!Directory.Exists(checkedCoreRoot))
         {
-            Console.WriteLine("Unable to find core root '{checkedCoreRoot}'");
+            Console.WriteLine($"Unable to find core root '{checkedCoreRoot}'");
             return new List<Method>();
         }
 
@@ -1791,9 +1835,17 @@ public static class SPMI
                 args.Add(option);
             }
         }
-        args.Add(@$"{checkedCoreRoot}\clrjit.dll");
+
+        string jitName = "clrjit.dll";
+        if (OperatingSystem.IsLinux()) jitName = "libclrjit.so";
+        else if (OperatingSystem.IsMacOS()) jitName = "libclrjit.dylib";
+        args.Add(Path.Combine(checkedCoreRoot!, jitName));
         args.Add($"{spmiCollection}");
-        return Invoke(@$"{checkedCoreRoot}\superpmi.exe", checkedCoreRoot, args.ToArray(), false, code => code == 0 || code == 3);
+
+        string spmiBinary = Path.Combine(checkedCoreRoot!, "superpmi");
+        if (OperatingSystem.IsWindows()) spmiBinary += ".exe";
+
+        return Invoke(@$"{spmiBinary}", checkedCoreRoot, args.ToArray(), false, code => code == 0 || code == 3);
     }
 
     static string Invoke(string fileName, string? workingDir, string[] args, bool printOutput, Func<int, bool>? checkExitCode = null)
@@ -1809,7 +1861,7 @@ public static class SPMI
         foreach (string a in args)
             psi.ArgumentList.Add(a);
 
-        string command = fileName + " " + string.Join(" ", args.Select(a => "\"" + a + "\""));
+        string command = fileName + " " + string.Join(" ", args.Select(a => OperatingSystem.IsWindows() ? "\"" + a + "\"" : a));
 
         if (showLaunch)
         {
