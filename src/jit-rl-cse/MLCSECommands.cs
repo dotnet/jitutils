@@ -113,7 +113,14 @@ public class MLCSECommands : CliRootCommand
     // Crosscutting
     //
     public CliOption<bool> ShowSPMIRuns { get; } =
-    new("--showSPMIRuns") { Description = "show each SPMI invocation" };
+        new("--showSPMIRuns") { Description = "show each SPMI invocation" };
+
+    public CliOption<bool> StreamSPMI { get; } =
+        new("--streamSPMI") { Description = "use streaming mode for per-method SPMI requests" };
+    public CliOption<bool> LogSPMI { get; } =
+        new("--logSPMI") { Description = "write log of spmi activity to output dir" };
+    public CliOption<bool> StatsSPMI { get; } =
+        new("--statsSPMI") { Description = "dump server stats each summary interval" };
 
     public ParseResult? Result;
 
@@ -170,6 +177,9 @@ public class MLCSECommands : CliRootCommand
         Options.Add(SaveDumps);
 
         Options.Add(ShowSPMIRuns);
+        Options.Add(StreamSPMI);
+        Options.Add(LogSPMI);
+        Options.Add(StatsSPMI);
 
         SetAction(result =>
         {

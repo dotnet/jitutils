@@ -1,9 +1,6 @@
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.CommandLine;
-using System.CommandLine.Parsing;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -23,7 +20,6 @@ using System.Text.RegularExpressions;
 //   Can work on a single method, set of methods, or randomly collected sample
 //
 // Todo: 
-//   Add better way of specifying all the various options
 //   Continue streamlining the various diagnostic bits so they don't obscure the computations
 //   Allow the Q/V to reflect recent behavior rather than all behavior
 //   Record best result from MCMC rather than just best found with stochastic policy exploration
@@ -34,14 +30,14 @@ using System.Text.RegularExpressions;
 // Longer Term:  
 //   Consider off-policy approaches where MCMC does exploration
 //   SPMI batch mode where we give it a set of runs (methods indices + config settings) and it handles the parallelism.
-//   (or SPMI server mode where we can just send requests to a long-running instance?)
+//
 public class MLCSE
 {
     public static string spmiCollection = @"d:\spmi\mch\b8a05f18-503e-47e4-9193-931c50b151d1.windows.x64\aspnet.run.windows.x64.checked.mch";
     public static string checkedCoreRoot = @"c:\repos\runtime0\artifacts\tests\coreclr\Windows.x64.Checked\Tests\Core_Root";
     public static string dumpDir = @"d:\bugs\cse-metrics";
-
     public static bool showEachRun = false;
+    public static string s_timestamp = DateTime.Now.ToString("yyyy-M-dd-HH-mm-ss");
 
     // As we do runs keep track of the sequences and rewards we've seen in this global table.
     // This is Q(s,a)
@@ -69,7 +65,7 @@ public class MLCSE
 
     public static MLCSECommands s_commands = new MLCSECommands();
 
-    private static T? Get<T>(CliOption<T> option)
+    public static T? Get<T>(CliOption<T> option)
     {
         if (s_commands.Result == null)
         {
@@ -407,11 +403,20 @@ public class MLCSE
         bool showGreedy = Get(s_commands.ShowGreedy);
         // save QV dot files each summary interval?
         bool saveQVdot = Get(s_commands.SaveQVDot);
+        // use streaming SPMI instance?
+        bool streaming = Get(s_commands.StreamSPMI);
+        // show each particular trial result
+        bool showEachRun = Get(s_commands.ShowEachRun);
 
         // Initial parameter set. Must be non-empty. Jit will fill in 0 for any missing params.
         string parameters = Get(s_commands.InitialParameters) ?? "0.0";
         string prevParameters = parameters;
         int nSameParams = 0;
+
+        // Running log of parameter values per run
+        //
+        string parameterLogFile = Path.Combine(dumpDir, $"{s_timestamp}-parameters.csv");
+        StreamWriter parameterLogWriter = new StreamWriter(parameterLogFile);
 
         int nMethods = methods.Count();
 
@@ -419,6 +424,11 @@ public class MLCSE
         if (dumpMethod != null)
         {
             Console.WriteLine($"Saving dumps for {dumpMethod}");
+        }
+
+        if (streaming)
+        {
+            SPMI.StartStreaming();
         }
 
         if (showTabular)
@@ -462,13 +472,25 @@ public class MLCSE
         //   Each round processes all methods
         //   Each method is evaluated nIter times as a "minibatch"
 
+        Stopwatch s = new Stopwatch();
+        s.Restart();
+        uint spmiCount = SPMI.count;
+
         for (int r = 0; r < nRounds; r++)
         {
             if ((r > 0) && (summaryInterval > 0) && (r % summaryInterval == 0))
             {
                 if (showTabular)
                 {
+                    s.Stop();
+                    Console.WriteLine($"[{SPMI.count - spmiCount} method evals in {s.ElapsedMilliseconds}ms]");
+                    if (streaming && Get(s_commands.StatsSPMI))
+                    {
+                        SPMI.DumpServerStatus();
+                    }
                     DumpPolicyGradientStatus(methods, showPolicyUpdates, showSequences, summaryInterval, showGreedy, parameters, r);
+                    s.Restart();
+                    spmiCount = SPMI.count;
                 }
 
                 if (saveQVdot)
@@ -504,7 +526,7 @@ public class MLCSE
                 string[] batchNewParams = new string[nIter];
                 string[] batchRuns = new string[nIter];
 
-                Parallel.For(0, nIter, i =>
+                var parallelResult = Parallel.For(0, nIter, i =>
                 {
                     {
                         using StringWriter sw = new StringWriter();
@@ -521,7 +543,7 @@ public class MLCSE
                             policyOptions.Add($"JitRLCSEVerbose=1");
                         }
 
-                        string policyRun = SPMI.Run(method.spmiIndex, policyOptions);
+                        string policyRun = SPMI.Run(method.spmiIndex, policyOptions, streaming, i);
                         double policyScore = MetricsParser.GetPerfScore(policyRun);
                         uint policyCSE = MetricsParser.GetNumCse(policyRun);
 
@@ -583,7 +605,7 @@ public class MLCSE
                         {
                             updateOptions.Add($"JitRLCSEVerbose=1");
                         }
-                        string updateRun = SPMI.Run(method.spmiIndex, updateOptions);
+                        string updateRun = SPMI.Run(method.spmiIndex, updateOptions, streaming, i);
                         double updateScore = MetricsParser.GetPerfScore(updateRun);
                         string updateSequence = MetricsParser.GetSequence(updateRun);
 
@@ -595,7 +617,7 @@ public class MLCSE
                             sw.WriteLine($"\n\nupdate replay diverged from policy {method.spmiIndex} :: {parameters} :: '{policySequence}' => '{updateSequence}' :: {policyScore} ==> {updateScore}");
                             sw.WriteLine(policyRun);
                             sw.WriteLine(updateRun);
-                            return;
+                            throw new Exception($"perf score diverged {method.spmiIndex} run {i}: " + batchRuns[i]);
                         }
 
                         if (showEachRun || showPolicyUpdates)
@@ -606,6 +628,11 @@ public class MLCSE
                         // Harvest the new parameters...
                         //
                         string newParams = MetricsParser.GetParams(updateRun);
+
+                        if (newParams == null)
+                        {
+                            throw new Exception("failed to parse params: " + updateRun);
+                        }
                         batchNewParams[i] = newParams;
 
                         // Optionally save dumps for certain sequences
@@ -613,254 +640,28 @@ public class MLCSE
                         //
                         if (method.spmiIndex == dumpMethod)
                         {
-                            lock (dumpMethod)
-                            {
-                                // Always dump updated "decision tree"
-                                //
-                                string dotFile = Path.Combine(dumpDir, $"qv-{method.spmiIndex}.dot");
-                                using (StreamWriter s = new StreamWriter(dotFile))
-                                {
-                                    QVDumpDot(method, s);
-                                }
-
-                                // Write out dasm/dump for method with this sequence, and baseline.
-                                // Overwrite method dumps every so often, so we see fresh likelihood computations.
-                                // Dasm and baselines should not change so initial ones are fine.
-                                //
-                                bool shouldOverwriteDump = (r > 0) && (summaryInterval > 0) && (r % (4 * summaryInterval) == summaryInterval);
-
-                                string cleanSequence = updateSequence.Replace(',', '_');
-                                string dumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.d");
-
-                                if (shouldOverwriteDump && File.Exists(dumpFile))
-                                {
-                                    File.Delete(dumpFile);
-                                }
-
-                                if (!File.Exists(dumpFile))
-                                {
-                                    List<string> dumpOptions = new List<string>(updateOptions);
-                                    dumpOptions.Add($"JitDump=*");
-                                    dumpOptions.Add($"JitStdOutFile={dumpFile}");
-                                    string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
-                                    sw.WriteLine($" ---> saved dump to {dumpFile}");
-                                }
-
-                                string dasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.dasm");
-
-                                if (shouldOverwriteDump && File.Exists(dasmFile))
-                                {
-                                    File.Delete(dasmFile);
-                                }
-
-                                if (!File.Exists(dasmFile))
-                                {
-                                    List<string> dasmOptions = new List<string>(updateOptions);
-                                    updateOptions.Add($"JitDisasm=*");
-                                    updateOptions.Add($"JitStdOutFile={dasmFile}");
-                                    string dasmRun = SPMI.Run(method.spmiIndex, updateOptions);
-                                    sw.WriteLine($" ---> saved dasm to {dasmFile}");
-                                }
-
-                                string baseSequence = "baseline";
-                                string baseDumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.d");
-                                if (!File.Exists(baseDumpFile))
-                                {
-                                    List<string> dumpOptions = new List<string>();
-                                    dumpOptions.Add($"JitDump=*");
-                                    dumpOptions.Add($"JitStdOutFile={baseDumpFile}");
-                                    string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
-                                    sw.WriteLine($" ---> saved baseline dump to {baseDumpFile}");
-                                }
-
-                                string baseDasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.dasm");
-                                if (!File.Exists(baseDasmFile))
-                                {
-                                    List<string> dasmOptions = new List<string>();
-                                    dasmOptions.Add($"JitDisasm=*");
-                                    dasmOptions.Add($"JitStdOutFile={baseDasmFile}");
-                                    string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
-                                    sw.WriteLine($" ---> saved baseline dasm to {baseDasmFile}");
-                                }
-
-                                string greedySequence = "greedy";
-                                string greedyDumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{greedySequence}-{r}.d");
-
-                                if (File.Exists(greedyDumpFile))
-                                {
-                                    File.Delete(greedyDumpFile);
-                                }
-
-                                if (!File.Exists(greedyDumpFile))
-                                {
-                                    List<string> dumpOptions = new List<string>();
-                                    dumpOptions.Add($"JitRLCSE={parameters}");
-                                    dumpOptions.Add($"JitRLCSEGreedy=1");
-                                    dumpOptions.Add($"JitDump=*");
-                                    dumpOptions.Add($"JitStdOutFile={greedyDumpFile}");
-                                    string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
-                                    sw.WriteLine($" ---> saved greedy dump to {greedyDumpFile}");
-                                }
-
-                                string greedyDasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{greedySequence}-{r}.dasm");
-
-                                if (File.Exists(greedyDasmFile))
-                                {
-                                    File.Delete(greedyDasmFile);
-                                }
-
-                                if (!File.Exists(greedyDasmFile))
-                                {
-                                    List<string> dasmOptions = new List<string>();
-                                    dasmOptions.Add($"JitRLCSE={parameters}");
-                                    dasmOptions.Add($"JitRLCSEGreedy=1");
-                                    dasmOptions.Add($"JitDisasm=*");
-                                    dasmOptions.Add($"JitStdOutFile={greedyDasmFile}");
-                                    string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
-                                    sw.WriteLine($" ---> saved greedy dasm to {greedyDasmFile}");
-                                }
-                            }
+                            SaveDumps(summaryInterval, parameters, dumpMethod, r, method, sw, updateOptions, updateSequence);
                         }
 
                         batchDetails[i] = sw.ToString();
                     }
                 });
 
-
-                // Post-process the batch
-                //
-                // Update the Q/V estimates
-                //  (todo: reset for this method Q/V first?)
-                // Compute the average param update
-                //
-                bool newBest = false;
-                double newBestScore = 0;
-                double[]? averageParams = null;
-                List<double> validPerfScores = new List<double>();
-                double averagePerfScore = 0;
-                int lastValidRun = 0;
-                for (int i = 0; i < nIter; i++)
+                if (!parallelResult.IsCompleted)
                 {
-                    // Console.WriteLine($"\n*** RUN {i} ***\n{batchRuns[i]}\n");
-                    if (batchPerfScores[i] < 0)
-                    {
-                        continue;
-                    }
-
-                    double[] batchParam = MetricsParser.ToDoubles(batchNewParams[i]).ToArray();
-                    if (averageParams == null)
-                    {
-                        averageParams = batchParam;
-                    }
-                    else
-                    {
-                        for (int j = 0; j < averageParams.Length; j++)
-                        {
-                            averageParams[j] += batchParam[j];
-                        }
-                    }
-                    validPerfScores.Add(batchPerfScores[i]);
-                    newBest = QVUpdate(Q, V, method, batchSeqs[i], batchPerfScores[i]);
-                    if (newBest)
-                    {
-                        newBestScore = batchPerfScores[i];
-                    }
-                    lastValidRun = i;
+                    throw new Exception("some tasks not done?");
                 }
 
-                int numValid = validPerfScores.Count();
-
-                if (averageParams != null)
-                {
-                    if (numValid > 1)
-                    {
-                        for (int j = 0; j < averageParams.Length; j++)
-                        {
-                            averageParams[j] /= numValid;
-                        }
-                    }
-
-                    parameters = String.Join(",", averageParams);
-                    averagePerfScore = validPerfScores.Average();
-                }
-
-                if (showEvery && (r % showEveryInterval == (showEveryInterval - 1)))
-                {
-                    if (numValid == 0)
-                    {
-                        // all SPMI replays failed (typically missing write barrier helper)
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.Write($"{"n/a",11}");
-                        if (showSequences)
-                        {
-                            Console.Write($" | {"",-20}");
-                        }
-                    }
-                    else
-                    {
-                        string blip = " ";
-                        if (averagePerfScore < baselineScore)
-                        {
-                            if (averagePerfScore == bestScore)
-                            {
-                                Console.ForegroundColor = ConsoleColor.Green;
-                            }
-                            else
-                            {
-                                Console.ForegroundColor = ConsoleColor.DarkGreen;
-                            }
-                        }
-                        else if (averagePerfScore == baselineScore)
-                        {
-                            if (averagePerfScore == bestScore)
-                            {
-                                Console.ForegroundColor = ConsoleColor.Blue;
-                            }
-                            else
-                            {
-                                Console.ForegroundColor = ConsoleColor.Cyan;
-                            }
-                        }
-                        else if (averagePerfScore == bestScore)
-                        {
-                            if (newBest)
-                            {
-                                Console.ForegroundColor = ConsoleColor.Yellow;
-                            }
-                            else
-                            {
-                                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                            }
-                        }
-                        if (newBest)
-                        {
-                            blip = "*";
-                        }
-                        string lhs = $"{blip} {averagePerfScore:F2}";
-                        Console.Write($"{lhs,11}");
-
-                        // For batching there are many such... sigh
-
-
-                        if (showSequences)
-                        {
-                            Console.Write($" | {MakePretty(batchSeqs[lastValidRun]),-20}");
-                        }
-                        if (showLikelihoods)
-                        {
-                            Console.Write($" L:{MetricsParser.GetLikelihoods(batchRuns[lastValidRun]),-60}");
-                        }
-                        if (showBaselineLikelihoods)
-                        {
-                            Console.Write($" B:{MetricsParser.GetBaseLikelihoods(batchRuns[lastValidRun]),-60}");
-                        }
-                    }
-                    Console.ResetColor();
-                }
+                parameters = ProcessMinibatchResults(nIter, showEvery, showEveryInterval, showSequences, showLikelihoods, showBaselineLikelihoods, parameters, r, method, baselineScore, bestScore, batchPerfScores, batchSeqs, batchDetails, batchNewParams, batchRuns);
             }
+
+            string paramString = String.Join(",", MetricsParser.ToDoubles(parameters).Select(x => $"{x,7:F4}"));
+            parameterLogWriter.WriteLine($"{r},{paramString}");
+            parameterLogWriter.Flush();
+
             if (showParameters)
             {
-                Console.Write($"  params: {String.Join(",", MetricsParser.ToDoubles(parameters).Select(x => $"{x,7:F4}"))}");
+                Console.Write($"  params: {paramString}");
             }
 
             if (showEvery)
@@ -886,6 +687,267 @@ public class MLCSE
             {
                 prevParameters = parameters;
                 nSameParams = 0;
+            }
+        }
+
+        DumpPolicyGradientStatus(methods, showPolicyUpdates, showSequences, summaryInterval, showGreedy, parameters, nRounds);
+    }
+
+    private static string ProcessMinibatchResults(int nIter, bool showEvery, uint showEveryInterval, bool showSequences, bool showLikelihoods, bool showBaselineLikelihoods, string parameters, int r, Method method, double baselineScore, double bestScore, double[] batchPerfScores, string[] batchSeqs, string[] batchDetails, string[] batchNewParams, string[] batchRuns)
+    {
+        {
+            // Post-process the batch
+            //
+            // Update the Q/V estimates
+            //  (todo: reset for this method Q/V first?)
+            // Compute the average param update
+            //
+            bool newBest = false;
+            double newBestScore = 0;
+            double[]? averageParams = null;
+            List<double> validPerfScores = new List<double>();
+            double averagePerfScore = 0;
+            int lastValidRun = 0;
+            for (int i = 0; i < nIter; i++)
+            {
+                // Console.WriteLine($"\n*** RUN {i} ***\n{batchRuns[i]}\n");
+                if (batchPerfScores[i] < 0)
+                {
+                    continue;
+                }
+
+                double[] batchParam = MetricsParser.ToDoubles(batchNewParams[i]).ToArray();
+
+                //if (batchParam.Length == 0)
+                //{
+                //    continue;
+                //}
+                if (averageParams == null)
+                {
+                    averageParams = batchParam;
+                }
+                else
+                {
+                    if (batchParam.Length != averageParams.Length)
+                    {
+                        Console.WriteLine($"Invalid params for minibatch {i}: result was {batchDetails[i]}");
+                        throw new Exception("grr");
+                    }
+                    for (int j = 0; j < averageParams.Length; j++)
+                    {
+                        averageParams[j] += batchParam[j];
+                    }
+                }
+                validPerfScores.Add(batchPerfScores[i]);
+                newBest = QVUpdate(Q, V, method, batchSeqs[i], batchPerfScores[i]);
+                if (newBest)
+                {
+                    newBestScore = batchPerfScores[i];
+                }
+                lastValidRun = i;
+            }
+
+            int numValid = validPerfScores.Count();
+
+            if (averageParams != null)
+            {
+                if (numValid > 1)
+                {
+                    for (int j = 0; j < averageParams.Length; j++)
+                    {
+                        averageParams[j] /= numValid;
+                    }
+                }
+
+                parameters = String.Join(",", averageParams);
+                averagePerfScore = validPerfScores.Average();
+            }
+
+            if (showEvery && (r % showEveryInterval == (showEveryInterval - 1)))
+            {
+                if (numValid == 0)
+                {
+                    // all SPMI replays failed (typically missing write barrier helper)
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.Write($"{"n/a",11}");
+                    if (showSequences)
+                    {
+                        Console.Write($" | {"",-20}");
+                    }
+                }
+                else
+                {
+                    string blip = " ";
+                    if (averagePerfScore < baselineScore)
+                    {
+                        if (averagePerfScore == bestScore)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.DarkGreen;
+                        }
+                    }
+                    else if (averagePerfScore == baselineScore)
+                    {
+                        if (averagePerfScore == bestScore)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Blue;
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Cyan;
+                        }
+                    }
+                    else if (averagePerfScore == bestScore)
+                    {
+                        if (newBest)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.DarkYellow;
+                        }
+                    }
+                    if (newBest)
+                    {
+                        blip = "*";
+                    }
+                    string lhs = $"{blip} {averagePerfScore:F2}";
+                    Console.Write($"{lhs,11}");
+
+                    // For batching there are many such... sigh
+
+
+                    if (showSequences)
+                    {
+                        Console.Write($" | {MakePretty(batchSeqs[lastValidRun]),-20}");
+                    }
+                    if (showLikelihoods)
+                    {
+                        Console.Write($" L:{MetricsParser.GetLikelihoods(batchRuns[lastValidRun]),-60}");
+                    }
+                    if (showBaselineLikelihoods)
+                    {
+                        Console.Write($" B:{MetricsParser.GetBaseLikelihoods(batchRuns[lastValidRun]),-60}");
+                    }
+                }
+                Console.ResetColor();
+            }
+        }
+
+        return parameters;
+    }
+
+    private static void SaveDumps(int summaryInterval, string parameters, string? dumpMethod, int r, Method method, StringWriter sw, List<string> updateOptions, string updateSequence)
+    {
+        lock (dumpMethod!)
+        {
+            // Always dump updated "decision tree"
+            //
+            string dotFile = Path.Combine(dumpDir, $"qv-{method.spmiIndex}.dot");
+            using (StreamWriter s = new StreamWriter(dotFile))
+            {
+                QVDumpDot(method, s);
+            }
+
+            // Write out dasm/dump for method with this sequence, and baseline.
+            // Overwrite method dumps every so often, so we see fresh likelihood computations.
+            // Dasm and baselines should not change so initial ones are fine.
+            //
+            bool shouldOverwriteDump = (r > 0) && (summaryInterval > 0) && (r % (4 * summaryInterval) == summaryInterval);
+
+            string cleanSequence = updateSequence.Replace(',', '_');
+            string dumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.d");
+
+            if (shouldOverwriteDump && File.Exists(dumpFile))
+            {
+                File.Delete(dumpFile);
+            }
+
+            if (!File.Exists(dumpFile))
+            {
+                List<string> dumpOptions = new List<string>(updateOptions);
+                dumpOptions.Add($"JitDump=*");
+                dumpOptions.Add($"JitStdOutFile={dumpFile}");
+                string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
+                sw.WriteLine($" ---> saved dump to {dumpFile}");
+            }
+
+            string dasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{cleanSequence}.dasm");
+
+            if (shouldOverwriteDump && File.Exists(dasmFile))
+            {
+                File.Delete(dasmFile);
+            }
+
+            if (!File.Exists(dasmFile))
+            {
+                List<string> dasmOptions = new List<string>(updateOptions);
+                updateOptions.Add($"JitDisasm=*");
+                updateOptions.Add($"JitStdOutFile={dasmFile}");
+                string dasmRun = SPMI.Run(method.spmiIndex, updateOptions);
+                sw.WriteLine($" ---> saved dasm to {dasmFile}");
+            }
+
+            string baseSequence = "baseline";
+            string baseDumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.d");
+            if (!File.Exists(baseDumpFile))
+            {
+                List<string> dumpOptions = new List<string>();
+                dumpOptions.Add($"JitDump=*");
+                dumpOptions.Add($"JitStdOutFile={baseDumpFile}");
+                string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
+                sw.WriteLine($" ---> saved baseline dump to {baseDumpFile}");
+            }
+
+            string baseDasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{baseSequence}.dasm");
+            if (!File.Exists(baseDasmFile))
+            {
+                List<string> dasmOptions = new List<string>();
+                dasmOptions.Add($"JitDisasm=*");
+                dasmOptions.Add($"JitStdOutFile={baseDasmFile}");
+                string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
+                sw.WriteLine($" ---> saved baseline dasm to {baseDasmFile}");
+            }
+
+            string greedySequence = "greedy";
+            string greedyDumpFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{greedySequence}-{r}.d");
+
+            if (File.Exists(greedyDumpFile))
+            {
+                File.Delete(greedyDumpFile);
+            }
+
+            if (!File.Exists(greedyDumpFile))
+            {
+                List<string> dumpOptions = new List<string>();
+                dumpOptions.Add($"JitRLCSE={parameters}");
+                dumpOptions.Add($"JitRLCSEGreedy=1");
+                dumpOptions.Add($"JitDump=*");
+                dumpOptions.Add($"JitStdOutFile={greedyDumpFile}");
+                string dumpRun = SPMI.Run(method.spmiIndex, dumpOptions);
+                sw.WriteLine($" ---> saved greedy dump to {greedyDumpFile}");
+            }
+
+            string greedyDasmFile = Path.Combine(dumpDir, $"dump-{method.spmiIndex}-{greedySequence}-{r}.dasm");
+
+            if (File.Exists(greedyDasmFile))
+            {
+                File.Delete(greedyDasmFile);
+            }
+
+            if (!File.Exists(greedyDasmFile))
+            {
+                List<string> dasmOptions = new List<string>();
+                dasmOptions.Add($"JitRLCSE={parameters}");
+                dasmOptions.Add($"JitRLCSEGreedy=1");
+                dasmOptions.Add($"JitDisasm=*");
+                dasmOptions.Add($"JitStdOutFile={greedyDasmFile}");
+                string dasmRun = SPMI.Run(method.spmiIndex, dasmOptions);
+                sw.WriteLine($" ---> saved greedy dasm to {greedyDasmFile}");
             }
         }
     }
@@ -990,7 +1052,7 @@ public class MLCSE
                 {
                     greedyOptions.Add($"JitRLCSEVerbose=1");
                 }
-                string greedyRun = SPMI.Run(method.spmiIndex, greedyOptions);
+                string greedyRun = SPMI.Run(method.spmiIndex, greedyOptions, streaming: true);
                 double greedyScore = MetricsParser.GetPerfScore(greedyRun);
                 string greedySequence = MetricsParser.GetSequence(greedyRun);
 
@@ -1801,6 +1863,241 @@ public class StateAndActionData
     public bool isBaseline;
 }
 
+// SPMI Server instance
+class SPMIServer
+{
+    static int s_instanceCount;
+    int instance;
+    static int s_requestNumber;
+    int requests;
+    private Process? streamingProcess;
+    private StringBuilder stdout;
+    private StringBuilder stderr;
+    private StreamWriter spmiLog;
+    bool active;
+    ManualResetEvent done;
+    static bool s_log;
+
+    public SPMIServer(string spmiCollection, string checkedCoreRoot)
+    {
+        done = new ManualResetEvent(false);
+        active = false;
+        instance = Interlocked.Increment(ref s_instanceCount);
+        stdout = new StringBuilder();
+        stderr = new StringBuilder();
+        spmiLog = StreamWriter.Null;
+
+        List<string> args = new();
+        args.Add($"-v");
+        args.Add($"q");
+        args.Add("-jitoption");
+        args.Add("JitMetrics=1");
+        args.Add("-streaming");
+        args.Add("stdin");
+
+        string jitName = "clrjit.dll";
+        if (OperatingSystem.IsLinux()) jitName = "libclrjit.so";
+        else if (OperatingSystem.IsMacOS()) jitName = "libclrjit.dylib";
+        args.Add(Path.Combine(checkedCoreRoot!, jitName));
+        args.Add($"{spmiCollection}");
+
+        string spmiBinary = Path.Combine(checkedCoreRoot!, "superpmi");
+        if (OperatingSystem.IsWindows()) spmiBinary += ".exe";
+
+        var psi = new ProcessStartInfo(spmiBinary)
+        {
+            FileName = spmiBinary,
+            WorkingDirectory = checkedCoreRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+        };
+        foreach (string a in args)
+            psi.ArgumentList.Add(a);
+
+        string command = spmiBinary + " " + string.Join(" ", args.Select(a => OperatingSystem.IsWindows() ? "\"" + a + "\"" : a));
+        s_log = MLCSE.Get(MLCSE.s_commands.LogSPMI);
+
+        if (s_log)
+        {
+            // todo: use spmilog for non-streaming too
+            string outDir = MLCSE.Get(MLCSE.s_commands!.OutputDir) ?? Environment.CurrentDirectory;
+            string spmiLogPath = Path.Combine(outDir, $"spmi-log-{MLCSE.s_timestamp}-instance-{instance}.txt");
+            Console.WriteLine($"SPMI: logging to {spmiLogPath}");
+            spmiLog = new StreamWriter(spmiLogPath, false);
+            // add "repro" command line
+            spmiLog.WriteLine($"# {command} -streaming {spmiLogPath}");
+        }
+
+        streamingProcess = Process.Start(psi);
+        if (streamingProcess == null)
+            throw new Exception("Could not start child process " + spmiBinary);
+
+        streamingProcess.OutputDataReceived += (sender, args) =>
+        {
+            if (args.Data == null) return;
+
+            // Console.WriteLine($"[{instance}] got {args.Data}");
+
+            // Ignore output from SPMI if we're not actively processing a request
+            // (todo, perhaps: don't use stdout, use separate file where we
+            // can control what gets written better
+            if (active)
+            {
+                stdout.AppendLine(args.Data);
+                if (args.Data!.StartsWith("[streaming] Done."))
+                {
+                    done.Set();
+                }
+            }
+        };
+        streamingProcess.ErrorDataReceived += (sender, args) =>
+        {
+            if (active)
+            {
+                stderr.AppendLine(args.Data);
+            }
+        };
+        streamingProcess.BeginOutputReadLine();
+        streamingProcess.BeginErrorReadLine();
+    }
+
+    public string ProcessRequest(string? spmiIndex, int runIndex, List<string>? options = null)
+    {
+        string result = "";
+        requests++;
+
+        if (active)
+        {
+            throw new Exception("server is busy");
+        }
+
+        active = true;
+
+        try
+        {
+            int requestNumber = Interlocked.Increment(ref s_requestNumber);
+            Interlocked.Increment(ref SPMI.count);
+            string optionsString = "";
+            done.Reset();
+            Stopwatch s = Stopwatch.StartNew();
+
+            if (options != null)
+            {
+                foreach (string option in options)
+                {
+                    optionsString += "!" + option;
+                }
+            }
+
+            stdout.Clear();
+            stderr.Clear();
+            string request = $"{spmiIndex}{optionsString}";
+            stdout.AppendLine($"[{instance}/{requestNumber}/{runIndex}]");
+
+            if (s_log)
+            {
+                spmiLog.WriteLine($"# [{instance}/{requestNumber}/{runIndex}] << {request}");
+                spmiLog.WriteLine(request);
+            }
+
+            streamingProcess!.StandardInput.WriteLine(request);
+            bool completed = done.WaitOne(10_000);
+
+            if (!completed)
+            {
+                Console.WriteLine($"[{instance}] server {streamingProcess.Id} {(streamingProcess.HasExited ? "is dead" : "is hung")}?" +
+                    $"\nstdout:{stdout.ToString()}\nstderr:{stderr.ToString()}");
+            }
+            s.Stop();
+
+            result = stdout.ToString();
+
+            if (s_log)
+            {
+                spmiLog.WriteLine($"# [{instance}/{requestNumber}/{runIndex}] >> {(completed ? "done" : "timed out")} in {s.ElapsedMilliseconds}ms");
+                spmiLog.WriteLine($"# [{instance}/{requestNumber}/{runIndex}] >> {result}");
+                spmiLog.Flush();
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Odd, server {instance} had an exception: {e.Message}");
+        }
+        finally
+        {
+
+            // stop paying attention to spmi process output
+            //
+            active = false;
+        }
+
+        return result;
+    }
+
+    public void DumpStatus()
+    {
+        double memInMB = (double)streamingProcess!.PrivateMemorySize64 / (1024 * 1024);
+        Console.WriteLine($"SPMI Server: {streamingProcess.Id,6} Requests: {requests,8} Time: {streamingProcess.TotalProcessorTime.TotalSeconds,7:F2} sec PvtMemory: {memInMB,7:F2} MB");
+    }
+}
+
+class SPMIServerPool
+{
+    private ConcurrentQueue<SPMIServer> availableServers;
+    private List<SPMIServer> allServers;
+    private static int maxWaits = 100;
+
+    public SPMIServerPool(int poolSize, string spmiCollection, string checkedCoreRoot)
+    {
+        Console.WriteLine($"Starting {poolSize} SPMI servers");
+        availableServers = new ConcurrentQueue<SPMIServer>();
+        allServers = new List<SPMIServer>();
+
+        for (int i = 0; i < poolSize; i++)
+        {
+            SPMIServer server = new SPMIServer(spmiCollection, checkedCoreRoot);
+            availableServers.Enqueue(server);
+            allServers.Add(server);
+            // just run something to warm it up
+            server.ProcessRequest("1", 0);
+        }
+    }
+
+    public string ProcessRequest(string? spmiIndex, int runIndex, List<string>? options = null)
+    {
+        SPMIServer? server = null;
+        int nWaits = 0;
+
+        // I guess this can be unfair and starve some instances?
+        //
+        while (!availableServers.TryDequeue(out server))
+        {
+            Thread.Sleep(20);
+            nWaits++;
+
+            if (nWaits >= maxWaits)
+            {
+                throw new Exception($"No available server after {nWaits} waits {nWaits * 20}ms?");
+            }
+        }
+
+        string result = server.ProcessRequest(spmiIndex, runIndex, options);
+
+        availableServers.Enqueue(server);
+
+        return result;
+    }
+
+    public void DumpServerStatus()
+    {
+        foreach (SPMIServer s in allServers)
+        {
+            s.DumpStatus();
+        }
+    }
+}
 
 // Run SPMI on a method or methods
 public static class SPMI
@@ -1809,8 +2106,14 @@ public static class SPMI
     public static string? checkedCoreRoot;
     public static bool showLaunch;
     public static string? lastLaunch;
-    public static string Run(string? spmiIndex, List<string>? options = null)
+    public static uint count;
+    public static string Run(string? spmiIndex, List<string>? options = null, bool streaming = false, int runIndex = -1)
     {
+        if (streaming)
+        {
+            return RunStreaming(spmiIndex, runIndex, options);
+        }
+
         List<string> args = new();
         args.Add($"-v");
         args.Add($"q");
@@ -1819,6 +2122,7 @@ public static class SPMI
         {
             args.Add($"-c");
             args.Add(spmiIndex);
+            Interlocked.Increment(ref count);
         }
         else
         {
@@ -1876,6 +2180,11 @@ public static class SPMI
         StringBuilder stderr = new();
         p.OutputDataReceived += (sender, args) =>
         {
+            if (args.Data == null)
+            {
+                return;
+            }
+
             if (printOutput)
             {
                 Console.WriteLine(args.Data);
@@ -1884,6 +2193,11 @@ public static class SPMI
         };
         p.ErrorDataReceived += (sender, args) =>
         {
+            if (args.Data == null)
+            {
+                return;
+            }
+
             if (printOutput)
             {
                 Console.Error.WriteLine(args.Data);
@@ -1903,17 +2217,48 @@ public static class SPMI
 
             throw new Exception(
                 $@"
-Child process '{fileName}' exited with error code {p.ExitCode}
-stdout:
-{stdout.ToString().Trim()}
+    Child process '{fileName}' exited with error code {p.ExitCode}
+    stdout:
+    {stdout.ToString().Trim()}
 
-stderr:
-{stderr}".Trim());
+    stderr:
+    {stderr}".Trim());
 
 
         }
 
         return stdout.ToString();
+    }
+
+    static SPMIServerPool? s_serverPool;
+
+    public static void StartStreaming()
+    {
+        if (s_serverPool == null)
+        {
+            // slightly over-subscribing seems to help?
+            //
+            int numServers = Environment.ProcessorCount;
+            s_serverPool = new SPMIServerPool(numServers, spmiCollection!, checkedCoreRoot!);
+        }
+    }
+
+    public static string RunStreaming(string? spmiIndex, int runIndex, List<string>? options = null)
+    {
+        StartStreaming();
+        return s_serverPool!.ProcessRequest(spmiIndex, runIndex, options);
+    }
+
+    public static void DumpServerStatus()
+    {
+        if (s_serverPool == null)
+        {
+            Console.WriteLine("No active SPMI servers");
+        }
+        else
+        {
+            s_serverPool.DumpServerStatus();
+        }
     }
 }
 
