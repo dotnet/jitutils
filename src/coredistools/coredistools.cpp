@@ -371,6 +371,8 @@ bool CorDisasm::init() {
 
   if (TheTargetArch == Target_Arm64) {
     Mcpu = "neoverse-n2";
+  } else if (TheTargetArch == Target_RiscV64) {
+    FeaturesStr = "+m,+a,+f,+d,+c,+zicsr,+zifencei";  // RV64GC
   }
 
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
