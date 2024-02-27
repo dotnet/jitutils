@@ -1621,7 +1621,7 @@ public static class CollectionData
         if (!File.Exists(cseIndexFile))
         {
             Console.Write("building CSE index for collection ... ");
-            // Sun SPMI (parallel) across entire collection
+            // Run SPMI (parallel) across entire collection
             // and gather the metrics
             string indexContents = SPMI.Run(null, null);
             Console.WriteLine("done");
@@ -1649,6 +1649,14 @@ public static class CollectionData
             totCand += baselineNumCand;
 
             uint numCse = MetricsParser.GetNumCse(l);
+
+            if (numCse > baselineNumCand)
+            {
+                // possibly an opt repeat method
+                // See https://github.com/dotnet/jitutils/issues/400
+                //
+                return false;
+            }
             maxCse = Math.Max(maxCse, numCse);
             stats[baselineNumCand][numCse]++;
             totCse += numCse;
@@ -2069,18 +2077,21 @@ class SPMIServerPool
     {
         SPMIServer? server = null;
         int nWaits = 0;
+        int sleepTime = 20;
 
         // I guess this can be unfair and starve some instances?
         //
         while (!availableServers.TryDequeue(out server))
         {
-            Thread.Sleep(20);
+            Thread.Sleep(sleepTime);
             nWaits++;
 
             if (nWaits >= maxWaits)
             {
-                throw new Exception($"No available server after {nWaits} waits {nWaits * 20}ms?");
+                throw new Exception($"No available server after {nWaits} waits");
             }
+
+            sleepTime += 10;
         }
 
         string result = server.ProcessRequest(spmiIndex, runIndex, options);
