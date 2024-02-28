@@ -336,8 +336,8 @@ public class MLCSE
         uint nBetterScore = 0;
         uint nWorseScore = 0;
         uint nSameScore = 0;
-        double worstScore = 1000;
-        double bestScore = 0;
+        double worstScore = 0;
+        double bestScore = 1000;
         Method worstScoreMethod = "-1";
         Method bestScoreMethod = "-1";
 
@@ -345,8 +345,8 @@ public class MLCSE
         uint nBetterSize = 0;
         uint nWorseSize = 0;
         uint nSameSize = 0;
-        double worstSize = 1000;
-        double bestSize = 0;
+        double worstSize = 0;
+        double bestSize = 1000;
         Method worstSizeMethod = "-1";
         Method bestSizeMethod = "-1";
 
