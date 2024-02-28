@@ -33,9 +33,9 @@ using System.Text.RegularExpressions;
 //
 public class MLCSE
 {
-    public static string spmiCollection = @"C:\repos\runtime0\artifacts\spmi\mch\86eab154-5d93-4fad-bc07-e94fd9268b70.windows.x64\aspnet.run.windows.x64.checked.mch";
+    public static string spmiCollection = @"d:\spmi\mch\b8a05f18-503e-47e4-9193-931c50b151d1.windows.x64\aspnet.run.windows.x64.checked.mch";
     public static string checkedCoreRoot = @"c:\repos\runtime0\artifacts\tests\coreclr\Windows.x64.Checked\Tests\Core_Root";
-    public static string dumpDir = @"c:\bugs\cse";
+    public static string dumpDir = @"d:\bugs\cse-metrics";
     public static bool showEachRun = false;
     public static string s_timestamp = DateTime.Now.ToString("yyyy-M-dd-HH-mm-ss");
 
