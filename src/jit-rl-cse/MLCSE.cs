@@ -33,9 +33,9 @@ using System.Text.RegularExpressions;
 //
 public class MLCSE
 {
-    public static string spmiCollection = @"d:\spmi\mch\0fb71692-0ee6-4914-88a8-6446e45f23e8.windows.x64\aspnet.run.windows.x64.checked.mch";
+    public static string spmiCollection = @"C:\repos\runtime0\artifacts\spmi\mch\86eab154-5d93-4fad-bc07-e94fd9268b70.windows.x64\aspnet.run.windows.x64.checked.mch";
     public static string checkedCoreRoot = @"c:\repos\runtime0\artifacts\tests\coreclr\Windows.x64.Checked\Tests\Core_Root";
-    public static string dumpDir = @"d:\bugs\cse-metrics";
+    public static string dumpDir = @"c:\bugs\cse";
     public static bool showEachRun = false;
     public static string s_timestamp = DateTime.Now.ToString("yyyy-M-dd-HH-mm-ss");
 
@@ -360,24 +360,27 @@ public class MLCSE
             double size = methodAndScoreAndSize.Item3;
             double baseScore = V[BaselineState(method)].basePerfScore;
             double baseSize = V[BaselineState(method)].baseCodeSize;
+
+            // For these ratios less than 1.0 is an improvement, greater than 1.0 is a regression.
+            //
             double scoreRatio = score / baseScore;
             double sizeRatio = size / baseSize;
 
             if (Double.IsNaN(scoreRatio)) continue;
             if (scoreRatio == 0) continue;
 
-            if (scoreRatio > 1 + eps)
+            if (scoreRatio < 1 - eps)
             {
-                if (scoreRatio > bestScore)
+                if (scoreRatio < bestScore)
                 {
                     bestScore = scoreRatio;
                     bestScoreMethod = method;
                 }
                 nBetterScore++;
             }
-            else if (scoreRatio < 1 - eps)
+            else if (scoreRatio > 1 + eps)
             {
-                if (scoreRatio < worstScore)
+                if (scoreRatio > worstScore)
                 {
                     worstScore = scoreRatio;
                     worstScoreMethod = method;
@@ -393,18 +396,18 @@ public class MLCSE
             if (Double.IsNaN(sizeRatio)) continue;
             if (sizeRatio == 0) continue;
 
-            if (sizeRatio > 1 + eps)
+            if (sizeRatio < 1 - eps)
             {
-                if (sizeRatio > bestSize)
+                if (sizeRatio < bestSize)
                 {
                     bestSize = sizeRatio;
                     bestSizeMethod = method;
                 }
                 nBetterSize++;
             }
-            else if (sizeRatio < 1 - eps)
+            else if (sizeRatio > 1 + eps)
             {
-                if (sizeRatio < worstSize)
+                if (sizeRatio > worstSize)
                 {
                     worstSize = sizeRatio;
                     worstSizeMethod = method;
@@ -1153,6 +1156,9 @@ public class MLCSE
                 double bestMetric = optimizeForSize ? V[BestCodeSizeState(method)].bestCodeSize : V[BestPerfScoreState(method)].bestPerfScore;
                 double baseMetric = optimizeForSize ? V[BaselineState(method)].baseCodeSize : V[BaselineState(method)].basePerfScore;
 
+                // Note for both size and speed lower is better, so dividing greedy/base a value less than 1 is an improvement.
+                // And likewise greater than 1 is a regression.
+
                 greedyBaseGeomean *= greedyMetric / baseMetric;
                 greedyBestGeomean *= greedyMetric / bestMetric;
                 bestBaseGeomean *= bestMetric / baseMetric;
@@ -1200,7 +1206,8 @@ public class MLCSE
             }
             Console.WriteLine();
 
-            Console.WriteLine($"Best/base: {Math.Pow(bestBaseGeomean, 1.0 / nMeth):F4}");
+            string goal = Get(s_commands.OptimizeSize) ? "size" : " score";
+            Console.WriteLine($"Best/base: {Math.Pow(bestBaseGeomean, 1.0 / nMeth):F4} [optimizing for {goal}]");
             Console.WriteLine($"vs Base    {Math.Pow(greedyBaseGeomean, 1.0 / nMeth):F4} Better {nBetterThanBase} Same {nSameAsBase} Worse {nWorseThanBase}");
             Console.WriteLine($"vs Best    {Math.Pow(greedyBestGeomean, 1.0 / nMeth):F4} Better {nBetterThanBest} Same {nSameAsBest} Worse {nWorseThanBest}");
 
@@ -2203,8 +2210,6 @@ class SPMIServer
         streamingProcess.OutputDataReceived += (sender, args) =>
         {
             if (args.Data == null) return;
-
-            // Console.WriteLine($"[{instance}] got {args.Data}");
 
             // Ignore output from SPMI if we're not actively processing a request
             // (todo, perhaps: don't use stdout, use separate file where we
