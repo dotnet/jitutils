@@ -22,6 +22,8 @@ public static class Helpers
         return command;
     }
 
-    public static string GetResolvedPath(ArgumentResult result) =>
+#nullable enable
+    public static string? GetResolvedPath(ArgumentResult result) =>
         result.Tokens.Count > 0 ? Path.GetFullPath(result.Tokens[0].Value) : null;
+#nullable disable
 }

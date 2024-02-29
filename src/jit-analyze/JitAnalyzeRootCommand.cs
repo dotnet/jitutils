@@ -65,6 +65,8 @@ namespace ManagedCodeGen
             new("--is-diffs-only") { Description = "Specify that the disassembly files are only produced for contexts with diffs, so avoid producing output making assumptions about the number of contexts" };
         public CliOption<bool> IsSubsetOfDiffs { get; } =
             new("--is-subset-of-diffs") { Description = "Specify that the disassembly files are only a subset of the contexts with diffs, so avoid producing output making assumptions about the remaining diffs" };
+        public CliOption<bool> ConcatFiles { get; } =
+            new("--concat-files") { Description = "Consider all files in the base and diff to be part of the same logical unit of functions" };
 
         public ParseResult Result;
 
@@ -89,6 +91,7 @@ namespace ManagedCodeGen
             Options.Add(OverrideTotalDiffMetric);
             Options.Add(IsDiffsOnly);
             Options.Add(IsSubsetOfDiffs);
+            Options.Add(ConcatFiles);
 
             SetAction(result =>
             {

@@ -71,7 +71,7 @@ following JIT environment variables to generate the output:
 * `DOTNET_JitDisasm`
 * `DOTNET_JitUnwindDump`
 * `DOTNET_JitEHDump`
-* `DOTNET_JitDiffableDasm`
+* `DOTNET_JitDisasmDiffable`
 * optionally, `DOTNET_JitGCDump`
 
 Generating "diffs" involves generating assembly code output for both a baseline
@@ -82,7 +82,7 @@ method in the assembly, setting these options:
 * `DOTNET_JitDisasm`
 * `DOTNET_JitUnwindDump`
 * `DOTNET_JitEHDump`
-* `DOTNET_JitDiffableDasm`
+* `DOTNET_JitDisasmDiffable`
 * `DOTNET_JitDisasmAssemblies`
 * optionally, `DOTNET_JitGCDump`
 

@@ -105,3 +105,17 @@ sudo tdnf install -y ncurses-compat
 export PATH=$(pwd)/bin:$PATH
 ./build-coredistools.sh linux-arm /crossrootfs/arm
 ```
+
+8. Build `libcoredistools.so` for Linux riscv64 under Docker:  
+There is no CBL Mariner container for RISC-V so use the standard Ubuntu cross build container used for e.g. dotnet/runtime.
+```
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-22.04-cross-riscv64
+apt install libtinfo5
+
+# If you haven't built llvm-tblgen in step 5, you can do so in the same docker (pass "/" as crossrootfs).
+./build-tblgen.sh linux-x64 /
+
+# Now, the main course
+export PATH=$(pwd)/bin:$PATH
+./build-coredistools.sh linux-riscv64 /crossrootfs/riscv64
+```

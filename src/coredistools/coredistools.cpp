@@ -286,6 +286,9 @@ bool CorDisasm::setTarget() {
     case Triple::loongarch64:
       TheTargetArch = Target_LoongArch64;
       break;
+    case Triple::riscv64:
+      TheTargetArch = Target_RiscV64;
+      break;
     default:
       Print->Error("Unsupported Architecture: %s\n",
                    Triple::getArchTypeName(TheTriple->getArch()));
@@ -308,6 +311,9 @@ bool CorDisasm::setTarget() {
     break;
   case Target_LoongArch64:
     TheTriple->setArch(Triple::loongarch64);
+    break;
+  case Target_RiscV64:
+    TheTriple->setArch(Triple::riscv64);
     break;
   default:
     Print->Error("Unsupported Architecture: %s\n",
@@ -368,6 +374,8 @@ bool CorDisasm::init() {
     // features for that CPU (e.g., `Mcpu = "neoverse-n2"`), but we want to use the "meta" feature
     // string "+all" to just enable all features, even those not implemented in any current CPU.
     FeaturesStr = "+all";
+  } else if (TheTargetArch == Target_RiscV64) {
+    FeaturesStr = "+m,+a,+f,+d,+c,+zicsr,+zifencei";  // RV64GC
   }
 
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
