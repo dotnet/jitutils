@@ -55,9 +55,11 @@ public class MLCSECommands : CliRootCommand
     public CliOption<bool> DoRandomTrials { get; } =
         new("--doRandomTrials") { Description = "explore randomly once candidate count threshold has reached", DefaultValueFactory = (ArgumentResult) => true };
     public CliOption<uint> MinCandidateCountForRandomTrials { get; } =
-        new("-minCandidateCountForRandomTrials") { Description = "threshold for random exploration", DefaultValueFactory = (ArgumentResult) => 10 };
+        new("--minCandidateCountForRandomTrials") { Description = "threshold for random exploration", DefaultValueFactory = (ArgumentResult) => 10 };
     public CliOption<int> NumRandomTrials { get; } =
-        new("-numRandomTrials") { Description = "number of random trials", DefaultValueFactory = (ArgumentResult) => 512 };
+        new("--numRandomTrials") { Description = "number of random trials", DefaultValueFactory = (ArgumentResult) => 512 };
+    public CliOption<bool> SaveParetoFrontier { get; } =
+        new("--saveParetoFrontier") { Description = "save Pareto Frontier showing perf score / code size tradeoffs" };
 
     // Policy Gradient
     //
@@ -109,6 +111,8 @@ public class MLCSECommands : CliRootCommand
             Description = "Initial model parameters (comma delimited string, padded with zeros if too few)",
             DefaultValueFactory = (ArgumentResult) => ""
         };
+    public CliOption<bool> OptimizeSize { get; } =
+        new("--optimizeSize") { Description = "try to minimize code size instead of perf score" };
 
     // Crosscutting
     //
@@ -151,6 +155,7 @@ public class MLCSECommands : CliRootCommand
         Options.Add(DoRandomTrials);
         Options.Add(MinCandidateCountForRandomTrials);
         Options.Add(NumRandomTrials);
+        Options.Add(SaveParetoFrontier);
         
         Options.Add(DoPolicyGradient);
         Options.Add(ShowEachRun);
@@ -173,6 +178,7 @@ public class MLCSECommands : CliRootCommand
         Options.Add(ShowGreedy);
         Options.Add(ShowFullGreedy);
         Options.Add(InitialParameters);
+        Options.Add(OptimizeSize);
         Options.Add(SaveQVDot);
         Options.Add(SaveDumps);
 

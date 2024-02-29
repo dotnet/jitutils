@@ -55,7 +55,11 @@ public class MLCSE
 
     // Also keep track of the (terminal) state with the best (lowest) perf score
     //
-    public static Dictionary<Method, State> Best = new Dictionary<Method, State>();
+    public static Dictionary<Method, State> BestPerfScore = new Dictionary<Method, State>();
+
+    // Also keep track of the (terminal) state with the best (lowest) code size
+    //
+    public static Dictionary<Method, State> BestCodeSize = new Dictionary<Method, State>();
 
     private static int Main(string[] args) =>
     new CliConfiguration(new MLCSECommands(args).UseVersion())
@@ -155,11 +159,24 @@ public class MLCSE
         string baselineSeq = MetricsParser.GetSequence(baseline);
         uint baselineCse = MetricsParser.GetNumCse(baseline);
         uint baselineCand = MetricsParser.GetNumCand(baseline);
+        uint baselineSize = MetricsParser.GetCodeSize(baseline);
 
         // Fill in V while we're here....
         //
         State baselineState = new State() { method = m, seq = baselineSeq, isBaseline = true };
-        StateData data = new StateData() { bestPerfScore = baselineScore, averagePerfScore = baselineScore, basePerfScore = baselineScore, numVisits = 0, numCses = baselineCse, numCand = baselineCand, howFound = "baseline" };
+        StateData data = new StateData()
+        {
+            bestPerfScore = baselineScore,
+            averagePerfScore = baselineScore,
+            basePerfScore = baselineScore,
+            bestCodeSize = baselineSize,
+            averageCodeSize = baselineSize,
+            baseCodeSize = baselineSize,
+            numVisits = 0,
+            numCses = baselineCse,
+            numCand = baselineCand,
+            howFound = "baseline"
+        };
 
         Baseline[m] = baselineState;
         V[baselineState] = data;
@@ -167,7 +184,8 @@ public class MLCSE
 
     static void Forget()
     {
-        Best.Clear();
+        BestPerfScore.Clear();
+        BestCodeSize.Clear();
         foreach (State s in V.Keys)
         {
             StateData sd = V[s]; sd.bestPerfScore = sd.basePerfScore; sd.averagePerfScore = 0; sd.numVisits = 0; V[s] = sd;
@@ -191,16 +209,27 @@ public class MLCSE
         return Baseline[m];
     }
 
-    static State BestState(Method m)
+    static State BestPerfScoreState(Method m)
     {
         // If we don't know this, use the baseline
-        if (!Best.ContainsKey(m))
+        if (!BestPerfScore.ContainsKey(m))
         {
             State baselineState = BaselineState(m);
-            Best[m] = baselineState;
+            BestPerfScore[m] = baselineState;
         }
 
-        return Best[m];
+        return BestPerfScore[m];
+    }
+    static State BestCodeSizeState(Method m)
+    {
+        // If we don't know this, use the baseline
+        if (!BestCodeSize.ContainsKey(m))
+        {
+            State baselineState = BaselineState(m);
+            BestCodeSize[m] = baselineState;
+        }
+
+        return BestCodeSize[m];
     }
     static uint BaselineNumCses(Method m)
     {
@@ -283,8 +312,9 @@ public class MLCSE
         return methods.Take((int)maxMethodsToExplore).ToList();
     }
 
-    // Collect all method perf scores via greedy policy with indicated
+    // Collect all method perf scores and code sizes via greedy policy with indicated
     // parameters, and compare to default jit behavior.
+    //
     static void EvaluateGreedyPolicy(string parameters, int runNumber = 0)
     {
         Stopwatch s = Stopwatch.StartNew();
@@ -299,77 +329,115 @@ public class MLCSE
 
         // Parse each of these. Ignore methods with 0 cse candidates.
         //
-        var methodsAndScores = metricLines.Where(l => MetricsParser.GetNumCand(l) > 0).Select(l => { return (MetricsParser.GetMethodIndex(l), MetricsParser.GetPerfScore(l)); });
-        // var methodsAndScoresAndBaselines = methodsAndScores.Select(x => { return (x.Item1, x.Item2, V[BaselineState(x.Item1)].basePerfScore); });
+        var methodsAndScoresAndSizes = metricLines.Where(l => MetricsParser.GetNumCand(l) > 0).Select(l => { return (MetricsParser.GetMethodIndex(l), MetricsParser.GetPerfScore(l), MetricsParser.GetCodeSize(l)); });
 
-        uint count = (uint)methodsAndScores.Count();
-        double logSum = 0;
-        uint nBetter = 0;
-        uint nWorse = 0;
-        uint nSame = 0;
+        uint count = (uint)methodsAndScoresAndSizes.Count();
+        double logSumScore = 0;
+        uint nBetterScore = 0;
+        uint nWorseScore = 0;
+        uint nSameScore = 0;
+        double worstScore = 0;
+        double bestScore = 1000;
+        Method worstScoreMethod = "-1";
+        Method bestScoreMethod = "-1";
+
+        double logSumSize = 0;
+        uint nBetterSize = 0;
+        uint nWorseSize = 0;
+        uint nSameSize = 0;
+        double worstSize = 0;
+        double bestSize = 1000;
+        Method worstSizeMethod = "-1";
+        Method bestSizeMethod = "-1";
+
+        uint nRatio = 0;
         double eps = 1e-4;
 
-        double worst = 1000;
-        double best = 0;
-        Method worstMethod = "-1";
-        Method bestMethod = "-1";
-        uint nRatio = 0;
-
-        foreach (var methodAndScore in methodsAndScores)
+        foreach (var methodAndScoreAndSize in methodsAndScoresAndSizes)
         {
-            Method method = methodAndScore.Item1;
-            double score = methodAndScore.Item2;
+            Method method = methodAndScoreAndSize.Item1;
+            double score = methodAndScoreAndSize.Item2;
+            double size = methodAndScoreAndSize.Item3;
             double baseScore = V[BaselineState(method)].basePerfScore;
-            double ratio = baseScore / score;
+            double baseSize = V[BaselineState(method)].baseCodeSize;
 
-            if (Double.IsNaN(ratio)) continue;
-            if (ratio == 0) continue;
+            // For these ratios less than 1.0 is an improvement, greater than 1.0 is a regression.
+            //
+            double scoreRatio = score / baseScore;
+            double sizeRatio = size / baseSize;
 
-            if (ratio > 1 + eps)
+            if (Double.IsNaN(scoreRatio)) continue;
+            if (scoreRatio == 0) continue;
+
+            if (scoreRatio < 1 - eps)
             {
-                if (ratio > best)
+                if (scoreRatio < bestScore)
                 {
-                    best = ratio;
-                    bestMethod = method;
+                    bestScore = scoreRatio;
+                    bestScoreMethod = method;
                 }
-                nBetter++;
+                nBetterScore++;
             }
-            else if (ratio < 1 - eps)
+            else if (scoreRatio > 1 + eps)
             {
-                if (ratio < worst)
+                if (scoreRatio > worstScore)
                 {
-                    worst = ratio;
-                    worstMethod = method;
+                    worstScore = scoreRatio;
+                    worstScoreMethod = method;
                 }
-                nWorse++;
+                nWorseScore++;
             }
             else
             {
-                nSame++;
+                nSameScore++;
+            }
+
+
+            if (Double.IsNaN(sizeRatio)) continue;
+            if (sizeRatio == 0) continue;
+
+            if (sizeRatio < 1 - eps)
+            {
+                if (sizeRatio < bestSize)
+                {
+                    bestSize = sizeRatio;
+                    bestSizeMethod = method;
+                }
+                nBetterSize++;
+            }
+            else if (sizeRatio > 1 + eps)
+            {
+                if (sizeRatio > worstSize)
+                {
+                    worstSize = sizeRatio;
+                    worstSizeMethod = method;
+                }
+                nWorseSize++;
+            }
+            else
+            {
+                nSameSize++;
             }
 
             nRatio++;
-            logSum += Math.Log(ratio);
+            logSumScore += Math.Log(scoreRatio);
+            logSumSize += Math.Log(sizeRatio);
         }
 
-        Console.WriteLine($"Greedy/Base: {count} methods, {nBetter} better, {nSame} same, {nWorse} worse, {Math.Exp(logSum / nRatio),7:F4} geomean");
-        Console.WriteLine($"Best:  {bestMethod.spmiIndex,6} @ {best,7:F4}");
-        Console.WriteLine($"Worst: {worstMethod.spmiIndex,6} @ {worst,7:F4}");
+        Console.WriteLine($"Greedy/Base (score): {count} methods, {nBetterScore} better, {nSameScore} same, {nWorseScore} worse, {Math.Exp(logSumScore / nRatio),7:F4} geomean");
+        Console.WriteLine($"Best:  {bestScoreMethod.spmiIndex,6} @ {bestScore,7:F4}");
+        Console.WriteLine($"Worst: {worstScoreMethod.spmiIndex,6} @ {worstScore,7:F4}");
         Console.WriteLine();
-
-
-        //Console.WriteLine(metricLines.Where(l => MetricsParser.GetMethodIndex(l) == bestMethod.spmiIndex).First());
-        //Console.WriteLine(metricLines.Where(l => MetricsParser.GetMethodIndex(l) == worstMethod.spmiIndex).First());
-
-        // dump jit behavior on best method (need to automate finding hash)
-        //
-        //string dumpFile = Path.Combine(dumpDir, $"dump-{bestMethod.spmiIndex}-run-{runNumber}-greedy.d");
-        //SPMI.Run(bestMethod.spmiIndex, new List<string> { $"JitRLCSE={parameters}", $"JitRLCSEGreedy=1", $"JitDump=*", $"JitStdOutFile={dumpFile}" });
-        //Console.WriteLine($" ---> saved dump to {dumpFile}");
+        Console.WriteLine($"Greedy/Base (size): {count} methods, {nBetterSize} better, {nSameSize} same, {nWorseSize} worse, {Math.Exp(logSumSize / nRatio),7:F4} geomean");
+        Console.WriteLine($"Best:  {bestSizeMethod.spmiIndex,6} @ {bestSize,7:F4}");
+        Console.WriteLine($"Worst: {worstSizeMethod.spmiIndex,6} @ {worstSize,7:F4}");
+        Console.WriteLine();
     }
 
     static void PolicyGradient(IEnumerable<Method> methods)
     {
+        // Optimize for size
+        bool optimizeForSize = Get(s_commands.OptimizeSize);
         // number of times we cycle through the methods
         int nRounds = Get(s_commands.NumberOfRounds);
         // how many trials per method each cycle (minibatch)
@@ -433,7 +501,7 @@ public class MLCSE
 
         if (showTabular)
         {
-            Console.WriteLine($"\nPolicy Gradient: {nMethods} methods, {nRounds} rounds, {nIter} runs per minibatch, {salt} salt, {alpha} alpha");
+            Console.WriteLine($"\nPolicy Gradient: {nMethods} methods, {nRounds} rounds, {nIter} runs per minibatch, {salt} salt, {alpha} alpha, optimizing {(optimizeForSize ? "size" : "speed")}");
             Console.Write($"Rnd ");
             foreach (var method in methods)
             {
@@ -455,13 +523,14 @@ public class MLCSE
             {
                 State baselineState = BaselineState(method);
                 StateData baselineData = V[baselineState];
+                double baselineMetric = optimizeForSize ? baselineData.baseCodeSize : baselineData.basePerfScore;
                 if (showSequences)
                 {
-                    Console.Write($" {baselineData.basePerfScore,10:F2} | {baselineState.PrettySeq,-20}");
+                    Console.Write($" {baselineMetric,10:F2} | {baselineState.PrettySeq,-20}");
                 }
                 else
                 {
-                    Console.Write($" {baselineData.basePerfScore,10:F2}");
+                    Console.Write($" {baselineMetric,10:F2}");
                 }
             }
             Console.WriteLine();
@@ -488,7 +557,7 @@ public class MLCSE
                     {
                         SPMI.DumpServerStatus();
                     }
-                    DumpPolicyGradientStatus(methods, showPolicyUpdates, showSequences, summaryInterval, showGreedy, parameters, r);
+                    DumpPolicyGradientStatus(methods, showPolicyUpdates, showSequences, summaryInterval, showGreedy, parameters, r, optimizeForSize);
                     s.Restart();
                     spmiCount = SPMI.count;
                 }
@@ -515,12 +584,17 @@ public class MLCSE
             {
                 State baselineState = BaselineState(method);
                 double baselineScore = V[baselineState].basePerfScore;
+                double baselineSize = V[baselineState].baseCodeSize;
                 uint baselineCses = V[baselineState].numCses;
 
-                State bestState = BestState(method);
-                double bestScore = V[bestState].bestPerfScore;
+                State bestScoreState = BestPerfScoreState(method);
+                double bestScore = V[bestScoreState].bestPerfScore;
+
+                State bestSizeState = BestCodeSizeState(method);
+                double bestSize = V[bestSizeState].bestCodeSize;
 
                 double[] batchPerfScores = new double[nIter];
+                double[] batchCodeSizes = new double[nIter];
                 string[] batchSeqs = new string[nIter];
                 string[] batchDetails = new string[nIter];
                 string[] batchNewParams = new string[nIter];
@@ -546,8 +620,10 @@ public class MLCSE
                         string policyRun = SPMI.Run(method.spmiIndex, policyOptions, streaming, i);
                         double policyScore = MetricsParser.GetPerfScore(policyRun);
                         uint policyCSE = MetricsParser.GetNumCse(policyRun);
+                        uint policySize = MetricsParser.GetCodeSize(policyRun);
 
                         batchPerfScores[i] = policyScore;
+                        batchCodeSizes[i] = policySize;
                         batchRuns[i] = "POLICY\n" + policyRun;
 
                         if (policyScore == -1)
@@ -563,7 +639,7 @@ public class MLCSE
                         // Run this result through our modelling for V.
                         // It will return a sequence of perf average scores for each sub sequence.
                         //
-                        List<double> subScores = SequenceToValues(V, method, policySequence);
+                        List<double> subScores = SequenceToValues(V, method, policySequence, optimizeForSize);
                         if (showEachRun || showPolicyEvaluations)
                         {
                             sw.WriteLine($"\nPolicy: {policyRun}");
@@ -585,10 +661,11 @@ public class MLCSE
                         // This is the "Policy Gradient with Baseline" algorithm.
                         //
                         List<double> rewards = new List<double>();
+                        double baselineMetric = optimizeForSize ? baselineSize : baselineScore;
 
                         for (int s = 0; s < subScores.Count() - 1; s++)
                         {
-                            rewards.Add((subScores[s] - subScores[s + 1]) / baselineScore);
+                            rewards.Add((subScores[s] - subScores[s + 1]) / baselineMetric);
                         }
 
                         string rewardString = String.Join(",", rewards);
@@ -607,17 +684,18 @@ public class MLCSE
                         }
                         string updateRun = SPMI.Run(method.spmiIndex, updateOptions, streaming, i);
                         double updateScore = MetricsParser.GetPerfScore(updateRun);
+                        double updateSize = MetricsParser.GetCodeSize(updateRun);
                         string updateSequence = MetricsParser.GetSequence(updateRun);
 
                         batchRuns[i] += "UPDATE\n" + updateRun;
 
                         // We expect the update run to behave the same as the policy run. Verify.
-                        if (updateScore != policyScore)
+                        if (updateScore != policyScore || updateSize != policySize)
                         {
-                            sw.WriteLine($"\n\nupdate replay diverged from policy {method.spmiIndex} :: {parameters} :: '{policySequence}' => '{updateSequence}' :: {policyScore} ==> {updateScore}");
+                            sw.WriteLine($"\n\nupdate replay diverged from policy {method.spmiIndex} :: {parameters} :: '{policySequence}' => '{updateSequence}' :: score {policyScore} ==> {updateScore} :: size {policySize} ==> {updateSize}");
                             sw.WriteLine(policyRun);
                             sw.WriteLine(updateRun);
-                            throw new Exception($"perf score diverged {method.spmiIndex} run {i}: " + batchRuns[i]);
+                            throw new Exception($"perf score or code size diverged {method.spmiIndex} run {i}: " + batchRuns[i]);
                         }
 
                         if (showEachRun || showPolicyUpdates)
@@ -652,7 +730,8 @@ public class MLCSE
                     throw new Exception("some tasks not done?");
                 }
 
-                parameters = ProcessMinibatchResults(nIter, showEvery, showEveryInterval, showSequences, showLikelihoods, showBaselineLikelihoods, parameters, r, method, baselineScore, bestScore, batchPerfScores, batchSeqs, batchDetails, batchNewParams, batchRuns);
+                parameters = ProcessMinibatchResults(nIter, optimizeForSize, showEvery, showEveryInterval, showSequences, showLikelihoods, showBaselineLikelihoods, parameters, r,
+                    method, baselineScore, bestScore, baselineSize, bestSize, batchPerfScores, batchCodeSizes, batchSeqs, batchDetails, batchNewParams, batchRuns);
             }
 
             string paramString = String.Join(",", MetricsParser.ToDoubles(parameters).Select(x => $"{x,7:F4}"));
@@ -690,10 +769,12 @@ public class MLCSE
             }
         }
 
-        DumpPolicyGradientStatus(methods, showPolicyUpdates, showSequences, summaryInterval, showGreedy, parameters, nRounds);
+        DumpPolicyGradientStatus(methods, showPolicyUpdates, showSequences, summaryInterval, showGreedy, parameters, nRounds, optimizeForSize);
     }
 
-    private static string ProcessMinibatchResults(int nIter, bool showEvery, uint showEveryInterval, bool showSequences, bool showLikelihoods, bool showBaselineLikelihoods, string parameters, int r, Method method, double baselineScore, double bestScore, double[] batchPerfScores, string[] batchSeqs, string[] batchDetails, string[] batchNewParams, string[] batchRuns)
+    private static string ProcessMinibatchResults(int nIter, bool optimizeForSize, bool showEvery, uint showEveryInterval, bool showSequences, bool showLikelihoods, bool showBaselineLikelihoods, string parameters,
+        int r, Method method, double baselineScore, double bestScore, double baselineSize, double bestSize,
+        double[] batchPerfScores, double[] batchCodeSizes, string[] batchSeqs, string[] batchDetails, string[] batchNewParams, string[] batchRuns)
     {
         {
             // Post-process the batch
@@ -702,11 +783,15 @@ public class MLCSE
             //  (todo: reset for this method Q/V first?)
             // Compute the average param update
             //
-            bool newBest = false;
+            bool isNewBestScore = false;
+            bool isNewBestSize = false;
             double newBestScore = 0;
+            double newBestSize = 0;
             double[]? averageParams = null;
             List<double> validPerfScores = new List<double>();
+            List<double> validCodeSizes = new List<double>();
             double averagePerfScore = 0;
+            double averageCodeSize = 0;
             int lastValidRun = 0;
             for (int i = 0; i < nIter; i++)
             {
@@ -739,10 +824,15 @@ public class MLCSE
                     }
                 }
                 validPerfScores.Add(batchPerfScores[i]);
-                newBest = QVUpdate(Q, V, method, batchSeqs[i], batchPerfScores[i]);
-                if (newBest)
+                validCodeSizes.Add(batchCodeSizes[i]);
+                (isNewBestScore, isNewBestSize) = QVUpdate(Q, V, method, batchSeqs[i], batchPerfScores[i], batchCodeSizes[i]);
+                if (isNewBestScore)
                 {
                     newBestScore = batchPerfScores[i];
+                }
+                if (isNewBestSize)
+                {
+                    newBestSize = batchCodeSizes[i];
                 }
                 lastValidRun = i;
             }
@@ -761,6 +851,7 @@ public class MLCSE
 
                 parameters = String.Join(",", averageParams);
                 averagePerfScore = validPerfScores.Average();
+                averageCodeSize = validCodeSizes.Average();
             }
 
             if (showEvery && (r % showEveryInterval == (showEveryInterval - 1)))
@@ -778,9 +869,14 @@ public class MLCSE
                 else
                 {
                     string blip = " ";
-                    if (averagePerfScore < baselineScore)
+
+                    double batchMetric = optimizeForSize ? averageCodeSize : averagePerfScore;
+                    double baselineMetric = optimizeForSize ? baselineSize : baselineScore;
+                    double bestMetric = optimizeForSize ? bestSize : bestScore;
+
+                    if (batchMetric < baselineMetric)
                     {
-                        if (averagePerfScore == bestScore)
+                        if (batchMetric == bestMetric)
                         {
                             Console.ForegroundColor = ConsoleColor.Green;
                         }
@@ -789,9 +885,9 @@ public class MLCSE
                             Console.ForegroundColor = ConsoleColor.DarkGreen;
                         }
                     }
-                    else if (averagePerfScore == baselineScore)
+                    else if (batchMetric == baselineMetric)
                     {
-                        if (averagePerfScore == bestScore)
+                        if (batchMetric == bestMetric)
                         {
                             Console.ForegroundColor = ConsoleColor.Blue;
                         }
@@ -800,9 +896,9 @@ public class MLCSE
                             Console.ForegroundColor = ConsoleColor.Cyan;
                         }
                     }
-                    else if (averagePerfScore == bestScore)
+                    else if (batchMetric == bestMetric)
                     {
-                        if (newBest)
+                        if (isNewBestScore)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
                         }
@@ -811,15 +907,14 @@ public class MLCSE
                             Console.ForegroundColor = ConsoleColor.DarkYellow;
                         }
                     }
-                    if (newBest)
+                    if (isNewBestScore)
                     {
                         blip = "*";
                     }
-                    string lhs = $"{blip} {averagePerfScore:F2}";
+                    string lhs = $"{blip} {batchMetric:F2}";
                     Console.Write($"{lhs,11}");
 
                     // For batching there are many such... sigh
-
 
                     if (showSequences)
                     {
@@ -952,7 +1047,7 @@ public class MLCSE
         }
     }
 
-    static void DumpPolicyGradientStatus(IEnumerable<Method> methods, bool showPolicyUpdates, bool showSequences, int summaryInterval, bool showGreedy, string parameters, int r)
+    static void DumpPolicyGradientStatus(IEnumerable<Method> methods, bool showPolicyUpdates, bool showSequences, int summaryInterval, bool showGreedy, string parameters, int r, bool optimizeForSize)
     {
         Console.WriteLine();
         Console.ForegroundColor = ConsoleColor.Cyan;
@@ -977,16 +1072,16 @@ public class MLCSE
         Console.Write("Base");
         foreach (var m in methods)
         {
-            double baseScore = V[BaselineState(m)].basePerfScore;
+            double baseMetric = optimizeForSize ? V[BaselineState(m)].baseCodeSize : V[BaselineState(m)].basePerfScore;
             string baseSeq = BaselineState(m).PrettySeq;
             if (showSequences)
             {
-                Console.Write($" {baseScore,10:F2} | {baseSeq,-20}", " ");
+                Console.Write($" {baseMetric,10:F2} | {baseSeq,-20}", " ");
             }
             else
             {
 
-                Console.Write($" {baseScore,10:F2}");
+                Console.Write($" {baseMetric,10:F2}");
             }
 
         }
@@ -996,16 +1091,16 @@ public class MLCSE
         Console.Write("Best");
         foreach (var m in methods)
         {
-            double bestScore = V[BestState(m)].bestPerfScore;
-            double baseScore = V[BaselineState(m)].basePerfScore;
-            string bestSeq = BestState(m).PrettySeq;
+            double bestMetric = optimizeForSize ? V[BestCodeSizeState(m)].bestCodeSize : V[BestPerfScoreState(m)].bestPerfScore;
+            double baseMetric = optimizeForSize ? V[BaselineState(m)].baseCodeSize : V[BaselineState(m)].basePerfScore;
+            string bestSeq = BestPerfScoreState(m).PrettySeq;
 
-            if (bestScore < baseScore)
+            if (bestMetric < baseMetric)
             {
                 Console.ForegroundColor = ConsoleColor.Green;
 
             }
-            else if (bestScore == baseScore)
+            else if (bestMetric == baseMetric)
             {
                 Console.ForegroundColor = ConsoleColor.Blue;
             }
@@ -1016,12 +1111,12 @@ public class MLCSE
 
             if (showSequences)
             {
-                Console.Write($" {bestScore,10:F2} | {bestSeq,-20}", " ");
+                Console.Write($" {bestMetric,10:F2} | {bestSeq,-20}", " ");
             }
             else
             {
 
-                Console.Write($" {bestScore,10:F2}");
+                Console.Write($" {bestMetric,10:F2}");
             }
             Console.ResetColor();
         }
@@ -1042,6 +1137,8 @@ public class MLCSE
             uint nSameAsBest = 0;
             uint nWorseThanBest = 0;
 
+            bool doStreaming = Get(s_commands.StreamSPMI);
+
             foreach (var method in methods)
             {
                 // Todo: record these as they may be unique...
@@ -1052,24 +1149,27 @@ public class MLCSE
                 {
                     greedyOptions.Add($"JitRLCSEVerbose=1");
                 }
-                string greedyRun = SPMI.Run(method.spmiIndex, greedyOptions, streaming: true);
-                double greedyScore = MetricsParser.GetPerfScore(greedyRun);
+                string greedyRun = SPMI.Run(method.spmiIndex, greedyOptions, streaming: doStreaming);
+                double greedyMetric = optimizeForSize ? MetricsParser.GetCodeSize(greedyRun) : MetricsParser.GetPerfScore(greedyRun);
                 string greedySequence = MetricsParser.GetSequence(greedyRun);
 
-                double bestScore = V[BestState(method)].bestPerfScore;
-                double baseScore = V[BaselineState(method)].basePerfScore;
+                double bestMetric = optimizeForSize ? V[BestCodeSizeState(method)].bestCodeSize : V[BestPerfScoreState(method)].bestPerfScore;
+                double baseMetric = optimizeForSize ? V[BaselineState(method)].baseCodeSize : V[BaselineState(method)].basePerfScore;
 
-                greedyBaseGeomean *= baseScore / greedyScore;
-                greedyBestGeomean *= bestScore / greedyScore;
-                bestBaseGeomean *= baseScore / bestScore;
+                // Note for both size and speed lower is better, so dividing greedy/base a value less than 1 is an improvement.
+                // And likewise greater than 1 is a regression.
+
+                greedyBaseGeomean *= greedyMetric / baseMetric;
+                greedyBestGeomean *= greedyMetric / bestMetric;
+                bestBaseGeomean *= bestMetric / baseMetric;
                 nMeth++;
 
-                if (greedyScore < baseScore)
+                if (greedyMetric < baseMetric)
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
                     nBetterThanBase++;
                 }
-                else if (greedyScore == baseScore)
+                else if (greedyMetric == baseMetric)
                 {
                     Console.ForegroundColor = ConsoleColor.Blue;
                     nSameAsBase++;
@@ -1080,11 +1180,11 @@ public class MLCSE
                     nWorseThanBase++;
                 }
 
-                if (greedyScore < bestScore)
+                if (greedyMetric < bestMetric)
                 {
                     nBetterThanBest++;
                 }
-                else if (greedyScore == bestScore)
+                else if (greedyMetric == bestMetric)
                 {
                     nSameAsBest++;
                 }
@@ -1095,18 +1195,19 @@ public class MLCSE
 
                 if (showSequences)
                 {
-                    Console.Write($" {greedyScore,10:F2} | {MakePretty(greedySequence),-20}", " ");
+                    Console.Write($" {greedyMetric,10:F2} | {MakePretty(greedySequence),-20}", " ");
                 }
                 else
                 {
 
-                    Console.Write($" {greedyScore,10:F2}");
+                    Console.Write($" {greedyMetric,10:F2}");
                 }
                 Console.ResetColor();
             }
             Console.WriteLine();
 
-            Console.WriteLine($"Best/base: {Math.Pow(bestBaseGeomean, 1.0 / nMeth):F4}");
+            string goal = Get(s_commands.OptimizeSize) ? "size" : " score";
+            Console.WriteLine($"Best/base: {Math.Pow(bestBaseGeomean, 1.0 / nMeth):F4} [optimizing for {goal}]");
             Console.WriteLine($"vs Base    {Math.Pow(greedyBaseGeomean, 1.0 / nMeth):F4} Better {nBetterThanBase} Same {nSameAsBase} Worse {nWorseThanBase}");
             Console.WriteLine($"vs Best    {Math.Pow(greedyBestGeomean, 1.0 / nMeth):F4} Better {nBetterThanBest} Same {nSameAsBest} Worse {nWorseThanBest}");
 
@@ -1151,17 +1252,36 @@ public class MLCSE
         // How many random trials to run
         int numCasesRandom = Get(s_commands.NumRandomTrials);
 
+        // use streaming SPMI instance?
+        bool doStreaming = Get(s_commands.StreamSPMI);
+
+        if (doStreaming)
+        {
+            SPMI.StartStreaming();
+        }
+
         Stopwatch s = new Stopwatch();
 
         if (showEachCase)
         {
-            Console.WriteLine($"INDEX   N      BEST       BASE      WORST      NOCSE     RATIO    RANK ");
+            Console.WriteLine($"INDEX   N      ================== PERF SCORES =========================    || ==================== CODE SIZE =========================");
+            Console.WriteLine($"INDEX   N      BEST       BASE      WORST      NOCSE     RATIO    RANK        BEST       BASE      WORST      NOCSE     RATIO    RANK ");
         }
 
-        uint nOptimal = 0;
-        double nRatio = 1.0;
-        double bRatio = 1.0;
-        double mRatio = 1.0;
+        uint nOptimalScores = 0;
+        double bestVsBaseScoreRatio = 1.0;
+        double baseVsNoneScoreRatio = 1.0;
+        double bestVsNoneScoreRatio = 1.0;
+        // Size impact if we optimize for score
+        double bestSizeScoreVsBaseScoreRatio = 1.0;
+
+        uint nOptimalSizes = 0;
+        double bestVsBaseSizeRatio = 1.0;
+        double baseVsNoneSizeRatio = 1.0;
+        double bestVsNoneSizeRatio = 1.0;
+        // Score impact if we optimize for size
+        double bestScoreSizeVsBaseSizeRatio = 1.0;
+
         int methodsToExplore = methods.Count();
         int nRuns = 0;
 
@@ -1175,12 +1295,13 @@ public class MLCSE
             string baselineSeq = baselineState.seq;
             StateData baselineData = V[baselineState];
             double baselineScore = baselineData.basePerfScore;
+            double baselineSize = baselineData.baseCodeSize;
             uint baselineNumCses = baselineData.numCses;
-            QVUpdate(Q, V, method, baselineSeq, baselineScore, isBaseline: true);
+            QVUpdate(Q, V, method, baselineSeq, baselineScore, baselineSize, isBaseline: true);
 
             if (showEachRun)
             {
-                Console.WriteLine($"Method {methodIndex} base score {baselineScore}");
+                Console.WriteLine($"Method {methodIndex} base score {baselineScore} base size {baselineSize}");
             }
 
             // Determine if we'll try exhaustive exploration or random exploration.
@@ -1188,8 +1309,9 @@ public class MLCSE
             //
             uint numCandidates = V[baselineState].numCand;
 
-            // We will fill this in later
+            // We will fill these in later
             double nocseScore = 0;
+            double nocseSize = 0;
 
             // Todo: Find right criteria for random
             bool doRandom = doRandomTrials && numCandidates >= minCasesForRandomTrial;
@@ -1199,7 +1321,7 @@ public class MLCSE
             uint nGacked = 0;
             nRuns += maxCase;
 
-            //for (int i = 0; i < maxCase; i++)
+            // for (int i = 0; i < maxCase; i++)
             Parallel.For(0, maxCase, i =>
             {
                 List<string> policyOptions = new List<string>() { $"JitCSEHash=0" };
@@ -1214,9 +1336,10 @@ public class MLCSE
                     policyOptions.Add($"JitCSEMask={i:x}");
                 }
 
-                string run = SPMI.Run(method.spmiIndex, policyOptions);
+                string run = SPMI.Run(method.spmiIndex, policyOptions, streaming: doStreaming);
                 experiments[i].run = run;
                 double runScore = MetricsParser.GetPerfScore(run);
+                double runSize = MetricsParser.GetCodeSize(run);
                 string seq = MetricsParser.GetSequence(run);
                 uint numActualCses = MetricsParser.GetNumCse(run);
 
@@ -1224,11 +1347,11 @@ public class MLCSE
                 {
                     if (doRandom && (i != 0))
                     {
-                        Console.WriteLine($"Method {methodIndex} salt 0x{i + 1:x} score {runScore} seq {seq} [{numActualCses}]");
+                        Console.WriteLine($"Method {methodIndex} salt 0x{i + 1:x} score {runScore} size {runSize} seq {seq} [{numActualCses}]");
                     }
                     else
                     {
-                        Console.WriteLine($"Method {methodIndex} mask 0x{i:x} score {runScore} seq {seq}");
+                        Console.WriteLine($"Method {methodIndex} mask 0x{i:x} score {runScore} size {runSize} seq {seq}");
                     }
                 }
 
@@ -1236,6 +1359,7 @@ public class MLCSE
                 {
                     // put in something plausible
                     runScore = baselineScore;
+                    runSize = baselineSize;
                     experiments[i].seq = "gacked";
                     experiments[i].numCse = 100;
                     nGacked++;
@@ -1243,10 +1367,11 @@ public class MLCSE
                 else
                 {
                     // Monte carlo update
-                    QVUpdate(Q, V, method, seq, runScore);
+                    QVUpdate(Q, V, method, seq, runScore, runSize);
                 }
 
                 experiments[i].perfScore = runScore;
+                experiments[i].codeSize = runSize;
                 experiments[i].seq = seq;
                 experiments[i].numCse = numActualCses;
 
@@ -1255,37 +1380,76 @@ public class MLCSE
                 if (i == 0)
                 {
                     nocseScore = runScore;
+                    nocseSize = runSize;
                 }
-            });
+            }
+            );
 
+            // Add in baseline data
+            //
             experiments[maxCase].perfScore = baselineScore;
             experiments[maxCase].seq = baselineSeq;
             experiments[maxCase].numCse = baselineNumCses;
+            experiments[maxCase].codeSize = baselineSize;
 
             // Determine best/worst/etc
             // 
+
             double bestScore = experiments.Min(x => x.perfScore);
             double worstScore = experiments.Max(x => x.perfScore);
 
+            double bestSize = experiments.Min(x => x.codeSize);
+            double worstSize = experiments.Max(x => x.codeSize);
+
             // Secondary criteria
+            //
             var bestScores = experiments.Where(x => (x.perfScore - bestScore) < 100 * Double.Epsilon);
-            int nBestScore = bestScores.Count();
+            int nBestScores = bestScores.Count();
 
             uint minCsesForBestScore = bestScores.Min(x => x.numCse);
-            var bestOverall = bestScores.Where(x => x.numCse == minCsesForBestScore);
+            var bestOverallScore = bestScores.Where(x => x.numCse == minCsesForBestScore);
 
-            int nBetterThanBase = experiments.Where(x => x.perfScore < baselineScore).Count();
+            int nBetterThanBaseScore = experiments.Where(x => x.perfScore < baselineScore).Count();
+
+            var bestSizes = experiments.Where(x => (x.codeSize - bestSize) < 100 * Double.Epsilon);
+            int nBestSizes = bestSizes.Count();
+
+            uint minCsesForBestSize = bestSizes.Min(x => x.numCse);
+            var bestOverallSize = bestSizes.Where(x => x.numCse == minCsesForBestSize);
+
+            int nBetterThanBaseSize = experiments.Where(x => x.codeSize < baselineSize).Count();
+
+            // "Cross" metrics
+            // We'll use MIN here to give the best of all possible worlds view
+            // That is, behave optimally wrt perf score, and within that, optimally wrt code size
+            //
+            // Todo: evolve this into a Paredo Frontier so we can see the range
+            // of available tradeoffs.
+            //
+            double codeSizeAtBestPerfScore = bestScores.Min(x => x.codeSize);
+            double perfScoreAtBestCodeSize = bestSizes.Min(x => x.perfScore);
 
             // flatten based on identical seqs?
 
-            if (nBetterThanBase == 0)
+            if (nBetterThanBaseScore == 0)
             {
-                nOptimal++;
+                nOptimalScores++;
             }
 
-            nRatio *= baselineScore / bestScore;
-            bRatio *= baselineScore / nocseScore;
-            mRatio *= bestScore / nocseScore;
+            if (nBetterThanBaseSize == 0)
+            {
+                nOptimalSizes++;
+            }
+
+            bestVsBaseScoreRatio *= bestScore / baselineScore;
+            baseVsNoneScoreRatio *= baselineScore / nocseScore;
+            bestVsNoneScoreRatio *= bestScore / nocseScore;
+            bestSizeScoreVsBaseScoreRatio *= perfScoreAtBestCodeSize / baselineScore;
+
+            bestVsBaseSizeRatio *= bestSize / baselineSize;
+            baseVsNoneSizeRatio *= baselineSize / nocseSize;
+            bestVsNoneSizeRatio *= bestSize / nocseSize;
+            bestScoreSizeVsBaseSizeRatio *= codeSizeAtBestPerfScore / baselineSize;
 
             if (!showEachCase) continue;
 
@@ -1299,8 +1463,11 @@ public class MLCSE
             }
 
             Console.Write($"{methodIndex,6} {numCandidates,2}{bestScore,10:F2} {baselineScore,10:F2} {worstScore,10:F2} {nocseScore,10:F2} ");
-            Console.Write($"    {baselineScore / bestScore:F3}  {1 + nBetterThanBase,3}/{maxCase - nGacked,-3} {(doRandom ? "r" : " ")}");
-            Console.Write($" best [{bestOverall.First().seq.Replace(",0", "")}]/{nBestScore}");
+            Console.Write($"    {baselineScore / bestScore:F3}  {1 + nBetterThanBaseScore,3}/{maxCase - nGacked,-3} {(doRandom ? "r" : " ")}");
+            Console.Write($" {bestSize,10:F2} {baselineSize,10:F2} {worstSize,10:F2} {nocseSize,10:F2} ");
+            Console.Write($"    {baselineSize / bestSize:F3}  {1 + nBetterThanBaseSize,3}/{maxCase - nGacked,-3} {(doRandom ? "r" : " ")}");
+            Console.Write($" best score [{bestOverallScore.First().seq.Replace(",0", "")}]/{nBestScores}");
+            Console.Write($" best size [{bestOverallSize.First().seq.Replace(",0", "")}]/{nBestSizes}");
             Console.Write($" base [{experiments[maxCase].seq.Replace(",0", "")}]");
 
             if (nGacked > 0)
@@ -1308,9 +1475,9 @@ public class MLCSE
                 Console.Write($" [{nGacked} gacked]");
             }
 
-            if (bestOverall.First().seq == "unknown")
+            if (bestOverallScore.First().seq == "unknown")
             {
-                Console.Write($" -- best run was {bestOverall.First().run}");
+                Console.Write($" -- best run was {bestOverallScore.First().run}");
             }
 
             Console.ResetColor();
@@ -1324,27 +1491,86 @@ public class MLCSE
             {
                 QVDumpDot(method);
             }
+            if (Get(s_commands.SaveQVDot))
+            {
+                string dotPath = Path.Combine(dumpDir, $"MCMC-QV-{method.spmiIndex}.dot");
+                using StreamWriter sw = new(dotPath);
+                QVDumpDot(method, sw);
+            }
+            if (Get(s_commands.SaveParetoFrontier))
+            {
+                string paretoPath = Path.Combine(dumpDir, $"PARETO-{method.spmiIndex}.csv");
+                using StreamWriter sw = new(paretoPath);
+                string paretoAllPath = Path.Combine(dumpDir, $"PARETO.csv");
+                using StreamWriter swAll = new(paretoAllPath, append: true);
+                sw.WriteLine($"Method,PerfScore,CodeSize,rPerfScore,rCodeSize");
+
+                if (swAll.BaseStream.Position == 0)
+                {
+                    swAll.WriteLine($"Method,PerfScore,CodeSize,rPerfScore,rCodeSize");
+                }
+
+                double bestParetoSize = 1e9;
+
+                foreach (double score in experiments.DistinctBy(x => x.perfScore).Select(x => x.perfScore).OrderBy(x => x))
+                {
+                    double bestSizeForScore = experiments.Where(x => x.perfScore == score).Min(x => x.codeSize);
+
+                    if (bestSizeForScore < bestParetoSize)
+                    {
+                        sw.WriteLine($"{method.spmiIndex},{score},{bestSizeForScore},{score / baselineScore},{bestSizeForScore / baselineSize}");
+                        swAll.WriteLine($"{method.spmiIndex},{score},{bestSizeForScore},{score / baselineScore},{bestSizeForScore / baselineSize}");
+                        bestParetoSize = bestSizeForScore;
+                    }
+
+                    var allSizeForScore = experiments.Where(x => x.perfScore == score).DistinctBy(x => x.codeSize).Select(x => x.codeSize);
+
+                    foreach (double allSize in allSizeForScore)
+                    {
+                        if (allSize != bestSizeForScore)
+                        {
+                            sw.WriteLine($"{method.spmiIndex}x,{score},{bestSizeForScore},{score / baselineScore},{bestSizeForScore / baselineSize}");
+                        }
+                    }
+                }
+            }
         }
 
         s.Stop();
 
-        double geomean = Math.Pow(nRatio, 1.0 / methodsToExplore);
-        double basegeomean = Math.Pow(bRatio, 1.0 / methodsToExplore);
-        double bestgeomean = Math.Pow(mRatio, 1.0 / methodsToExplore);
+        double geomeanBestVsBaseScore = Math.Pow(bestVsBaseScoreRatio, 1.0 / methodsToExplore);
+        double geomeanBaseVsNoneScore = Math.Pow(baseVsNoneScoreRatio, 1.0 / methodsToExplore);
+        double geomeanBestVsNoneScore = Math.Pow(bestVsNoneScoreRatio, 1.0 / methodsToExplore);
+        double geomeanScoreAtBestSizeVsBaseScore = Math.Pow(bestSizeScoreVsBaseScoreRatio, 1.0 / methodsToExplore);
 
         // Todo: restore grading by number of CSEs?
 
-        Console.WriteLine($"\n  ---baseline heuristic was optimal in {nOptimal} of {methodsToExplore} cases {nOptimal / (double)methodsToExplore:P}; "
-            + $"geomean {geomean:F3} baseline win from CSE {basegeomean:F3} max win {bestgeomean:F3} ({nRuns} runs in {s.ElapsedMilliseconds}ms)\n");
+        Console.WriteLine($"\n  ---baseline heuristic had optimal perf score in {nOptimalScores} of {methodsToExplore} methods {nOptimalScores / (double)methodsToExplore:P}; "
+            + $"best/base {geomeanBestVsBaseScore:F3} base/none {geomeanBaseVsNoneScore:F3} best/none {geomeanBestVsNoneScore:F3} best(size)/base {geomeanScoreAtBestSizeVsBaseScore:F3} ({nRuns} runs in {s.ElapsedMilliseconds}ms)\n");
+
+        double geomeanBestVsBaseSize = Math.Pow(bestVsBaseSizeRatio, 1.0 / methodsToExplore);
+        double geomeanBaseVsNoneSize = Math.Pow(baseVsNoneSizeRatio, 1.0 / methodsToExplore);
+        double geomeanBestVsNoneSize = Math.Pow(bestVsNoneSizeRatio, 1.0 / methodsToExplore);
+        double geomeanSizeAtBestScoreVsBaseSize = Math.Pow(bestScoreSizeVsBaseSizeRatio, 1.0 / methodsToExplore);
+
+        Console.WriteLine($"\n  ---baseline heuristic had optimal code size  in {nOptimalSizes} of {methodsToExplore} methods {nOptimalSizes / (double)methodsToExplore:P}; "
+            + $"best/base {geomeanBestVsBaseSize:F3} base/none {geomeanBaseVsNoneSize:F3} best/none {geomeanBestVsNoneSize:F3} best(score)/base {geomeanSizeAtBestScoreVsBaseSize:F3} \n");
     }
 
     // Get the "current" value of a state for a method.
     //
-    static double GetValue(Dictionary<State, StateData> V, Method method, State state)
+    static double GetValue(Dictionary<State, StateData> V, Method method, State state, bool optimizeForSize)
     {
         if (!V.ContainsKey(state))
         {
-            return V[BaselineState(method)].basePerfScore;
+            if (optimizeForSize)
+            {
+                return V[BaselineState(method)].baseCodeSize;
+            }
+            else
+            {
+                return V[BaselineState(method)].basePerfScore;
+            }
         }
         else
         {
@@ -1356,23 +1582,30 @@ public class MLCSE
 
             // This might be too aggressive as it may not reflect on-policy behavior
             //
-            return V[state].bestPerfScore;
+            if (optimizeForSize)
+            {
+                return V[state].bestCodeSize;
+            }
+            else
+            {
+                return V[state].bestPerfScore;
+            }
         }
     }
 
     // Get the current value of each state in a sequence
     //
     [MethodImpl(MethodImplOptions.Synchronized)]
-    static List<double> SequenceToValues(Dictionary<State, StateData> V, Method method, string sequence)
+    static List<double> SequenceToValues(Dictionary<State, StateData> V, Method method, string sequence, bool optimizeForSize)
     {
         List<double> result = new List<double>();
         string[] subSeqs = sequence.Split(new char[] { ',' });
         State state = new State() { method = method, seq = "" };
-        result.Add(GetValue(V, method, state));
+        result.Add(GetValue(V, method, state, optimizeForSize));
         foreach (string subSeq in subSeqs)
         {
             state = state.TakeAction(subSeq).NextState();
-            result.Add(GetValue(V, method, state));
+            result.Add(GetValue(V, method, state, optimizeForSize));
         }
         return result;
     }
@@ -1380,7 +1613,7 @@ public class MLCSE
     // Update the Q,V model based on this "rollout"
     //
     [MethodImpl(MethodImplOptions.Synchronized)]
-    static bool QVUpdate(Dictionary<StateAndAction, StateAndActionData> Q, Dictionary<State, StateData> V, Method method, string seq, double perfScore, bool isBaseline = false, List<double>? subSequenceScores = null)
+    static (bool, bool) QVUpdate(Dictionary<StateAndAction, StateAndActionData> Q, Dictionary<State, StateData> V, Method method, string seq, double perfScore, double codeSize, bool isBaseline = false, List<double>? subSequenceScores = null)
     {
         // This is an undiscounted return model, so each sub-sequence gets "credit" for
         // the overall perf score (lower is better)
@@ -1389,7 +1622,7 @@ public class MLCSE
         foreach (string subSeq in subSeqs)
         {
             StateAndAction sa = state.TakeAction(subSeq);
-            State nextState = QVUpdateStep(Q, V, sa, perfScore, isBaseline);
+            State nextState = QVUpdateStep(Q, V, sa, perfScore, codeSize, isBaseline);
             subSequenceScores?.Add(V[state].averagePerfScore);
             state = nextState;
         }
@@ -1407,26 +1640,37 @@ public class MLCSE
         {
             sd.bestPerfScore = perfScore;
             sd.averagePerfScore = perfScore;
+            sd.bestCodeSize = codeSize;
+            sd.averageCodeSize = codeSize;
         }
 
         sd.numVisits++;
 
         // See if this is a new best state.
         //
-        State best = BestState(method);
+        bool bestPerfScore = false;
+        State bestPerfScoreState = BestPerfScoreState(method);
 
-        if (perfScore < V[best].bestPerfScore)
+        if (perfScore < V[bestPerfScoreState].bestPerfScore)
         {
-            Best[method] = state;
-            return true;
+            BestPerfScore[method] = state;
+            bestPerfScore = true;
         }
 
-        return false;
+        bool bestCodeSize = false;
+        State bestCodeSizeState = BestCodeSizeState(method);
+        if (perfScore < V[bestCodeSizeState].bestCodeSize)
+        {
+            BestCodeSize[method] = state;
+            bestCodeSize = true;
+        }
+
+        return (bestPerfScore, bestCodeSize);
     }
 
     // Update Q,V for one step in a rollout
     //
-    static State QVUpdateStep(Dictionary<StateAndAction, StateAndActionData> Q, Dictionary<State, StateData> V, StateAndAction sa, double perfScore, bool isBaseline)
+    static State QVUpdateStep(Dictionary<StateAndAction, StateAndActionData> Q, Dictionary<State, StateData> V, StateAndAction sa, double perfScore, double codeSize, bool isBaseline)
     {
         StateAndActionData? d = null;
         if (!Q.TryGetValue(sa, out d))
@@ -1444,10 +1688,12 @@ public class MLCSE
         if (d.count == 1)
         {
             d.perfScore = perfScore;
+            d.codeSize = codeSize;
         }
         else
         {
             d.perfScore = Math.Min(d.perfScore, perfScore);
+            d.codeSize = Math.Min(d.codeSize, codeSize);
         }
         d.isBaseline |= isBaseline;
 
@@ -1478,9 +1724,15 @@ public class MLCSE
         double bestChildScore = sd.children.Keys.Min(x => Q[new StateAndAction() { state = s, action = x }].perfScore);
         sd.bestPerfScore = bestChildScore;
 
-        // update the average
+        // Walk all child Q looking for lowest code size
+        //
+        double bestChildSize = sd.children.Keys.Min(x => Q[new StateAndAction() { state = s, action = x }].codeSize);
+        sd.bestCodeSize = bestChildSize;
+
+        // update the averages
         sd.numVisits++;
         sd.averagePerfScore = (sd.averagePerfScore * (sd.numVisits - 1) + perfScore) / sd.numVisits;
+        sd.averageCodeSize = (sd.averageCodeSize * (sd.numVisits - 1) + codeSize) / sd.numVisits;
 
         return sa.NextState();
     }
@@ -1667,9 +1919,22 @@ public static class CollectionData
             double baselineScore = MetricsParser.GetPerfScore(l);
             string baselineSeq = MetricsParser.GetSequence(l);
             uint baselineCse = MetricsParser.GetNumCse(l);
+            double baselineSize = MetricsParser.GetCodeSize(l);
             Method method = new Method(methodIndex);
             State baselineState = new State() { method = method, seq = baselineSeq, isBaseline = true };
-            StateData data = new StateData() { bestPerfScore = baselineScore, averagePerfScore = baselineScore, basePerfScore = baselineScore, numVisits = 0, numCses = baselineCse, numCand = baselineNumCand, howFound = "baseline" };
+            StateData data = new StateData()
+            {
+                bestPerfScore = baselineScore,
+                averagePerfScore = baselineScore,
+                basePerfScore = baselineScore,
+                bestCodeSize = baselineSize,
+                averageCodeSize = baselineSize,
+                baseCodeSize = baselineSize,
+                numVisits = 0,
+                numCses = baselineCse,
+                numCand = baselineNumCand,
+                howFound = "baseline"
+            };
             MLCSE.V[baselineState] = data;
             MLCSE.Baseline[method] = baselineState;
 
@@ -1719,6 +1984,7 @@ public struct Experiment
     // List<string> options;
     public string run;
     public double perfScore;
+    public double codeSize;
     public uint numCse;
     public string seq;
     // uint codeSize;
@@ -1825,6 +2091,11 @@ public class StateData
     public string? howFound;
     public uint numCses;
     public uint numCand;
+    // Min over all children
+    public double bestCodeSize;
+    // Average over all children (numVisits)
+    public double averageCodeSize;
+    public double baseCodeSize;
     // Number of times we've seen this state in a sequence
     public uint numVisits;
 
@@ -1865,8 +2136,10 @@ public struct StateAndAction
 
 public class StateAndActionData
 {
-    public double PerfScore => perfScore; //  / (double)count;
+    public double PerfScore => perfScore;
     public double perfScore;
+    public double CodeSize => codeSize;
+    public double codeSize;
     public uint count;
     public bool isBaseline;
 }
@@ -1945,8 +2218,6 @@ class SPMIServer
         streamingProcess.OutputDataReceived += (sender, args) =>
         {
             if (args.Data == null) return;
-
-            // Console.WriteLine($"[{instance}] got {args.Data}");
 
             // Ignore output from SPMI if we're not actively processing a request
             // (todo, perhaps: don't use stdout, use separate file where we
@@ -2286,6 +2557,7 @@ public static class MetricsParser
     static Regex likelihoodPattern = new Regex(@"likelihoods ([0-9\.,-e]{1,})");
     static Regex baseLikelihoodPattern = new Regex(@"baseLikelihoods ([0-9\.,-e]{1,})");
     static Regex featurePattern = new Regex(@"features,([0-9]*,CSE #[0-9][0-9],[0-9\.,-e]{1,})");
+    static Regex codeSizePattern = new Regex(@"Total bytes of code ([0-9]{1,})");
 
     public static string GetMethodIndex(string data)
     {
@@ -2305,6 +2577,16 @@ public static class MetricsParser
             return double.Parse(perfScorePatternMatch.Groups[2].Value);
         }
         return -1.0;
+    }
+
+    public static uint GetCodeSize(string data)
+    {
+        var codeSizePatternMatch = codeSizePattern.Match(data);
+        if (codeSizePatternMatch.Success)
+        {
+            return uint.Parse(codeSizePatternMatch.Groups[1].Value);
+        }
+        return 0;
     }
 
     public static string GetSequence(string data)
