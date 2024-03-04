@@ -90,6 +90,40 @@ public class MLCSE
         Console.WriteLine("RL CSE Experiment");
         Console.WriteLine($"CoreRoot {SPMI.checkedCoreRoot}");
         Console.WriteLine($"Collection {SPMI.spmiCollection}");
+        Console.WriteLine($"Output saved to {dumpDir}");
+
+        // Sanity check the collection
+        //
+        string guid = SPMI.Guid();
+        if (!SPMI.spmiCollection.Contains(guid))
+        {
+            // Todo: is there some way to extract the guid from the MCH rather than rely on file name?
+            //
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.WriteLine($"Warning: possible SPMI collection and SPMI tool version mismatch, tool guid is '{guid}'");
+            Console.ResetColor();
+        }
+
+        // Sanity check the arch/os?
+        //
+        if (!Directory.Exists(dumpDir))
+        {
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.Write($"Output directory {dumpDir} does not exist; attempting to create...");
+            try
+            {
+                Directory.CreateDirectory(dumpDir);
+                Console.WriteLine($" done");
+            }
+            catch (IOException e)
+            {
+                Console.WriteLine($" failed: {e.Message}");
+            }
+            finally
+            {
+                Console.ResetColor();
+            }
+        }
 
         // Find methods in collections with CSE
         // This also fills in Q and BaselineSequence info for the default jit behavior.
@@ -1301,7 +1335,7 @@ public class MLCSE
 
             if (showEachRun)
             {
-                Console.WriteLine($"Method {methodIndex} base score {baselineScore} base size {baselineSize}");
+                Console.WriteLine($"Method {methodIndex} base score {baselineScore} base size {baselineSize} base seq {baselineSeq}");
             }
 
             // Determine if we'll try exhaustive exploration or random exploration.
@@ -1394,7 +1428,6 @@ public class MLCSE
 
             // Determine best/worst/etc
             // 
-
             double bestScore = experiments.Min(x => x.perfScore);
             double worstScore = experiments.Max(x => x.perfScore);
 
@@ -1463,9 +1496,9 @@ public class MLCSE
             }
 
             Console.Write($"{methodIndex,6} {numCandidates,2}{bestScore,10:F2} {baselineScore,10:F2} {worstScore,10:F2} {nocseScore,10:F2} ");
-            Console.Write($"    {baselineScore / bestScore:F3}  {1 + nBetterThanBaseScore,3}/{maxCase - nGacked,-3} {(doRandom ? "r" : " ")}");
+            Console.Write($"    {bestScore / baselineScore:F3}  {1 + nBetterThanBaseScore,3}/{maxCase - nGacked,-3} {(doRandom ? "r" : " ")}");
             Console.Write($" {bestSize,10:F2} {baselineSize,10:F2} {worstSize,10:F2} {nocseSize,10:F2} ");
-            Console.Write($"    {baselineSize / bestSize:F3}  {1 + nBetterThanBaseSize,3}/{maxCase - nGacked,-3} {(doRandom ? "r" : " ")}");
+            Console.Write($"    {bestSize / baselineSize:F3}  {1 + nBetterThanBaseSize,3}/{maxCase - nGacked,-3} {(doRandom ? "r" : " ")}");
             Console.Write($" best score [{bestOverallScore.First().seq.Replace(",0", "")}]/{nBestScores}");
             Console.Write($" best size [{bestOverallSize.First().seq.Replace(",0", "")}]/{nBestSizes}");
             Console.Write($" base [{experiments[maxCase].seq.Replace(",0", "")}]");
@@ -2432,6 +2465,16 @@ public static class SPMI
         if (OperatingSystem.IsWindows()) spmiBinary += ".exe";
 
         return Invoke(@$"{spmiBinary}", checkedCoreRoot, args.ToArray(), false, code => code == 0 || code == 3);
+    }
+
+    public static string Guid()
+    {
+        string mcsBinary = Path.Combine(checkedCoreRoot!, "mcs");
+        if (OperatingSystem.IsWindows()) mcsBinary += ".exe";
+        List<string> args = new();
+        args.Add("-printJITEEVersion");
+        string spmiGuid = Invoke($"{mcsBinary}", checkedCoreRoot, args.ToArray(), false, code => code == 0);
+        return spmiGuid.Trim();
     }
 
     static string Invoke(string fileName, string? workingDir, string[] args, bool printOutput, Func<int, bool>? checkExitCode = null)
