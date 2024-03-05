@@ -585,7 +585,7 @@ $$ \nabla ln(\pi(a|s, \theta_i)) = \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta
 
 where $k$ runs over all the possible CSEs (and stopping) we could do. So the full update for one step in the sequence is
 
-$$ - \alpha (P_i / P_{BASE}) \left \{ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \right \} $$
+$$ - \alpha (P_i / P_{BASE}) \left\{ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \right\} $$
 
 Roughly speaking this says for good outcomes we want to alter the parameters to encourage the policy to make these choices, and for bad outcomes, we want to discourage it from making these choices.
 
@@ -597,7 +597,7 @@ Recall the advantage $A_\pi(s,a) = Q_\pi(s, a) - V_\pi(s)$ is the benefit of cho
 
 Instead of giving each step in the rollout the same reward factor, we can use the above to reward good steps and punish bad ones. And the $V_i$ are perf scores $P_i$. So the current formulation is actually:
 
-$$ \alpha \frac{P_\pi(S_i) -P_\pi(S_{i+1})}{P_{BASE}} \left \{ \boldsymbol{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \boldsymbol{x}(s, k) } \right \} $$
+$$ \alpha \frac{P_\pi(S_i) -P_\pi(S_{i+1})}{P_{BASE}} \left\{ \boldsymbol{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \boldsymbol{x}(s, k) } \right\} $$
 
 (where again the order of the $P_i$ is reversed to handle the fact that lower scores or sizes are better.)
 
