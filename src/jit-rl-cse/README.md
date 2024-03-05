@@ -7,9 +7,9 @@ Reinforcement Learning, and to help with related tasks.
 
 ### Reinforcement Learning
 
-Reinforcement Learning is a branch of Machine Learning that learns how to optimize an objective without the aid of an external oracle or expert. RL can handle problems where the end result is the consequence of a sequence of actions, and where each action potentially provides a reward, modifies the state of the environment and potentially alters the set of possible future actions. It seems like a natural choice for developing compiler optimiation heuristics as there are often many decisions to be made on imperfect knowledge with difficult to ancitipate consequences.
+Reinforcement Learning is a branch of Machine Learning that learns how to optimize an objective without the aid of an external oracle or expert. RL can handle problems where the end result is the consequence of a sequence of actions, and where each action potentially provides a reward, modifies the state of the environment and potentially alters the set of possible future actions. It seems like a natural choice for developing compiler optimization heuristics as there are often many decisions to be made on imperfect knowledge with difficult to anticipate consequences.
 
-RL is currently an active and thriving area of research, innovation, and practice. Sutton &amp; Barto's text *Reinforcment Learning* is a good introduction; see the references section at the end of this document for other suggested readings.
+RL is currently an active and thriving area of research, innovation, and practice. Sutton &amp; Barto's text *Reinforcement Learning* is a good introduction; see the references section at the end of this document for other suggested readings.
 
 ### Common Subexpression Elimination (CSE)
 
@@ -40,9 +40,9 @@ int i = j * 3;
 foo();
 int k = j * 3;
 ```
-Here to cheaply preseve the value of `j * 3` the temp must occupy a "callee-save" register and these are a scarce resource (But note in the original program `j` itself was live across the call, so if it turns out that there are no more uses of `j` then the demand on callee saves remains the same).
+Here to cheaply preserve the value of `j * 3` the temp must occupy a "callee-save" register and these are a scarce resource (But note in the original program `j` itself was live across the call, so if it turns out that there are no more uses of `j` then the demand on callee saves remains the same).
 
-In the JIT there is a related optimization called Hoisting (aka Loop Invariant Code Motion) that will deliberately create CSE opportuntites in order to remove redundant computation from a loop. For example
+In the JIT there is a related optimization called Hoisting (aka Loop Invariant Code Motion) that will deliberately create CSE opportunities in order to remove redundant computation from a loop. For example
 ```C#
 // Before Hoisting
 for (int i = 0; i < 100; i++)
@@ -64,19 +64,19 @@ for (int i = 0; i < 100; i++)
     int k = temp;
 }
 ```
-Hoisting is especially benficial as it can optimize away repeatedly redundant computations: here instead of performing 100 multiplies, the code will only do one.
+Hoisting is especially beneficial as it can optimize away repeatedly redundant computations: here instead of performing 100 multiplies, the code will only do one.
 
-The upshot of all this is that the benefit of a CSE is highly context dependent. For a given method the best choice may be to do no, some, or all of the possible CSEs. The JIT relies on a *heuristic* to make this determination, and the aim of this work is to develop better techiniques for crafting heuristics.
+The upshot of all this is that the benefit of a CSE is highly context dependent. For a given method the best choice may be to do no, some, or all of the possible CSEs. The JIT relies on a *heuristic* to make this determination, and the aim of this work is to develop better techniques for crafting heuristics.
 
 The current heuristic in the JIT is fairly complicated. I am not going to attempt to describe it here except in broad terms. It was carefully hand crafted. It makes observations about each CSE candidate, ranks them, and then performs them in rank order, until some threshold is reached. That threshold steadily increases as CSEs are performed. For more details you are welcome to examine [the code]( https://github.com/dotnet/runtime/blob/6fa046837910fcc7a7dbd64be4b1ad98f9ea5db3/src/coreclr/jit/optcse.cpp#L4035-L4450). You may also find the most recent [tuning PR](https://github.com/dotnet/runtime/pull/1463) enlightening.
 
-There are also other aspects of the CSE problem worth consideration. My feeling is that these should await the succesful development of an RL based heuristic since they represent hard to evaluate or more dynamic options:
+There are also other aspects of the CSE problem worth consideration. My feeling is that these should await the successful development of an RL based heuristic since they represent hard to evaluate or more dynamic options:
 * The set of expressions that can form CSE candidates can potentially be enlarged, if we can develop successful heuristics to properly handle candidates with very marginal benefits ("cheap cses").
 * The grouping of expressions into candidates can be modified, and it may be beneficial to split or merge candidates as the algorithm proceeds (see e.g. [reconsider multi def cses](https://github.com/dotnet/runtime/issues/97243])).
 
 ## Applying RL to CSEs
 
-Our immediate ambition is to use RL to craft a better heuristic for CSEs. More broadly we hope to establish a set of techniques we can apply on other heuristics throughout the jit.
+Our immediate ambition is to use RL to craft a better heuristic for CSEs. More broadly we hope to establish a set of techniques we can apply on other heuristics throughout the JIT.
 
 ### What To Optimize For
 
@@ -85,16 +85,16 @@ In general an RL algorithm is ultimately motivated by **rewards** obtained durin
 In our case the main objective is improved or at least on-par performance of every bit of code the compiler is asked to optimize in realistic applications (in our case these bits of code are parts of methods, so from here on out we will just say **methods**).
 
 The obvious thing to is to try and directly measure performance, say by running a suite of benchmarks with various methods in them. But this leads to complications:
-* Performance of a benchmark may only be influenced by a small number of methods, and those methods might not have interesting CSE opportunties (not every method does). Or, the prominent methods in a benchmark may have CSEs  that are "easy" to build a heuristic for, since benchmark methods tend to have long-running loops (see repeated measurement, below), so flaws or shortcomings in the policy might not be highligted by benchmarking.
+* Performance of a benchmark may only be influenced by a small number of methods, and those methods might not have interesting CSE opportunities (not every method does). Or, the prominent methods in a benchmark may have CSEs  that are "easy" to build a heuristic for, since benchmark methods tend to have long-running loops (see repeated measurement, below), so flaws or shortcomings in the policy might not be highlighted by benchmarking.
 * Performance impacts of CSEs may be fairly small, and benchmark measurements are potentially noisy. To try and keep noise level down benchmarking systems usually rely on repeated measurement; this makes obtaining data slow. So benchmark data is both noisy and costly to obtain.
 * Performance numbers can vary over a wide dynamic range, so assessing aggregate performance of a heuristic over multiple benchmarks requires some care.
-* Benchmarks are not generally realistic programs. Benchmarking realistic programs is also hard, they are demainding to run, slow, noisy, and rarely contain methods with prominent performance.
+* Benchmarks are not generally realistic programs. Benchmarking realistic programs is also hard, they are demanding to run, slow, noisy, and rarely contain methods with prominent performance.
 
 ### Enter the Perf Score
 
 To mitigate some of these problems, we'll instead optimize something that is cheap to produce and (less) noisy: the **Perf Score** for the method. This is a synthetic measurement of the expected exclusive execution time for a single call to the method (*exclusive* meaning it does not compute the time spent in methods called by the method), computed at the very end of jitting once the final instructions are known.
 
-These insstructions are typically grouped into *basic blocks* representing sequential executions of instructions, broken up by control flow instructions (branches). We use a simple machine model to estimate the execution time of each block, given the instructions it contains. The perf score is a weighted sum of block costs, where each block's score is the relative execution frequency of the block times the block's time estimate.
+These instructions are typically grouped into *basic blocks* representing sequential executions of instructions, broken up by control flow instructions (branches). We use a simple machine model to estimate the execution time of each block, given the instructions it contains. The perf score is a weighted sum of block costs, where each block's score is the relative execution frequency of the block times the block's time estimate.
 
 For example, in a simple method like:
 ```C#
@@ -112,7 +112,7 @@ THere there are 3 blocks, one for the instructions before the loop (A), one for 
 ```
 perf score = time(A) + 100 * time(B) +  time(C)
 ```
-The belief is that this core is generally well correlated with the actual time required to execut the method, so that optimizing a method for perf score also optimizes it for performance.
+The belief is that this core is generally well correlated with the actual time required to execute the method, so that optimizing a method for perf score also optimizes it for performance.
 
 There is ample reason to be skeptical about the quality of this correlation; for details feel free to look at [this analysis](https://github.com/dotnet/runtime/issues/92915#issuecomment-1744042491). However the benefits of relying on perf scores are large, and we can always try confirming ore refuting the results with benchmarks.
 
@@ -120,27 +120,27 @@ Also note that for perf score, *lower is better*. So the goal is to minimize the
 
 ### Super PMI (aka SPMI) and MCH files
 
-In normal operation the JIT runs on-demand as the methods of an application are first encountered (JIT means just-in-time, after all). This is unwieldy for our purposes because there is a lot of other overhead involved in running an application. A typical JIT invocation takes perhaps 1ms, and just launching a do-nothing process and returning may take 30ms or more,and with innovations like tiered compilation and dynamic PGO it may take consierably longer to generate an optimized version. So it's fairly inefficient to actually run applications to exercise the JIT and study the impact of CSEs.
+In normal operation the JIT runs on-demand as the methods of an application are first encountered (JIT means just-in-time, after all). This is unwieldy for our purposes because there is a lot of other overhead involved in running an application. A typical JIT invocation takes perhaps 1ms, and just launching a do-nothing process and returning may take 30ms or more,and with innovations like tiered compilation and dynamic PGO it may take considerably longer to generate an optimized version. So it's fairly inefficient to actually run applications to exercise the JIT and study the impact of CSEs.
 
-In the RL setting we'll need to run the JIT over hundreds or thousands of different methods, and for each method, run the JIT hundeds or thousands of times. Thus any inefficiency here gets amplified a millionfold and becomes really costly.
+In the RL setting we'll need to run the JIT over hundreds or thousands of different methods, and for each method, run the JIT hundreds or thousands of times. Thus any inefficiency here gets amplified a millionfold and becomes really costly.
 
-Luckly we have a very tightly crafted interface between the JIT and the rest of the .NET runtime, and we can interpose on that interface to observe and record all the traffic, then replay that traffic later on. From the JIT's standpoint it can't readily tell the difference (with a few exceptions) and almost all of the overhead associated with running the application is removed. This technology is called SPMI, and with it we can rerun the JIT on a method at a very high rate of speed (aka SPMI replay).
+Luckily we have a very tightly crafted interface between the JIT and the rest of the .NET runtime, and we can interpose on that interface to observe and record all the traffic, then replay that traffic later on. From the JIT's standpoint it can't readily tell the difference (with a few exceptions) and almost all of the overhead associated with running the application is removed. This technology is called SPMI, and with it we can rerun the JIT on a method at a very high rate of speed (aka SPMI replay).
 
 With SPMI we can also (within certain limits) vary the JIT behavior, so long as any query the JIT makes has pre-recorded answer. Luckily for us, for CSEs this is almost always the case.
 
-The files containing the recorded interface traffic are known as MCH files (method context hives). We perform SPMI collections on a regular basis and save off the files in a download cache. The collections are somewhat fragile, depending both on the interface version (which changes with some frequency) and the behavior of the jit during collection.
+The files containing the recorded interface traffic are known as MCH files (method context hives). We perform SPMI collections on a regular basis and save off the files in a download cache. The collections are somewhat fragile, depending both on the interface version (which changes with some frequency) and the behavior of the JIT during collection.
 
 ### Architecture and OS
 
-The JIT typically runs on the same machine architecture and OS that it itself was compiled for&mdash;that is there is a Windows x64 compiled jit that produces code to run on Windows x64.
+The JIT typically runs on the same machine architecture and OS that it itself was compiled for&mdash;that is there is a Windows x64 compiled JIT that produces code to run on Windows x64.
 
-But we also create "cross-targeting" jits where the code the jit produces is for a different Architecture or OS (or both). These can be hosted in SPMI and used to replay JIT behavior too. So one can run SPMI replay on Windows x64 and generate code for Linux arm64.
+But we also create "cross-targeting" JITs where the code the JIT produces is for a different Architecture or OS (or both). These can be hosted in SPMI and used to replay JIT behavior too. So one can run SPMI replay on Windows x64 and generate code for Linux arm64.
 
-### Other Optimiation Goals
+### Other Optimization Goals
 
 Before moving on to examine how to leverage perf scores as part of developing an RL based heuristic, I want to mention in passing that it is not the only metric under consideration. We also care quite a bit about the time it takes for the JIT to compile the method, and the size of the generated code.
 
-To first order these should be somewhat well corrleated; that is larger code will take longer to produce. Both can be measured directly; code size is noise free. So as a secondary objective we'd like to minimize the code size as well.
+To first order these should be somewhat well correlated; that is larger code will take longer to produce. Both can be measured directly; code size is noise free. So as a secondary objective we'd like to minimize the code size as well.
 
 ## Mapping RL and JIT/CSE Concepts
 
@@ -150,10 +150,10 @@ This section assumes a familiarity with at least one of the two.
 |--- | --- |--- |
 | State $s$ | Method + CSEs Performed | see below |
 | Action $a$ | A CSE not yet performed, or the decision to stop and leave some CSEs undone | Each CSE candidate can be done at most once. We use non-negative numbers to describe candidates, eg `1` or in jit diagnostics, `CSE #01`. By convention action `0` is the stop action. |
-| Rollout | The sequence of CSEs performed by the heuristic | Sequence: eg 3,1,0
+| Rollout | The sequence of CSEs performed by the heuristic | Sequence: e.g. 3,1,0
 | Reward $r$ | Perf Score | Lower is better. The only action providing a reward is the stop action |
 | Discount $\lambda$| n/a | We use an "undiscounted" approach. Discount allows RL algorithm to value immediate rewards more than future rewards; we have no immediate rewards (alternatively, $\lambda = 1$) |
-| Terminal State | Result of the stop action | Once the JIT decides to stop doing CSEs, it can run the rest of its phases and obtain the perf acore|
+| Terminal State | Result of the stop action | Once the JIT decides to stop doing CSEs, it can run the rest of its phases and obtain the perf score|
 | Policy $\pi$ | CSE heuristic | At each step, decides which CSE to do next, or decides to stop |
 | Parameterized Policy $\pi_\theta$ | CSE heuristic with tuning knobs | $\theta$ will typically be a vector
 | True value of a state $s$ under policy $\pi$: $v_\pi(s)$ | Perf score obtained by performing CSEs following $\pi$ from this state forward |
@@ -161,7 +161,7 @@ This section assumes a familiarity with at least one of the two.
 | Estimated value $V_\pi(s)$ | Current best guess at true value of this state for policy $\pi$ | Best perf score known for this method, given the CSEs performed so far |
 | Estimated value $Q_\pi(a,s)$ | Current best guess at true value of this action in this state for policy $\pi$ | Best perf score known for this method, given the CSEs performed so far and this one extra CSE |
 | Greedy Policy | Greedy Heuristic | Heuristic that always chooses the best CSE (by its own estimation) to do next |
-| Stochastic Policy | Exploratory Heuristic | Heuristic that somtimes chooses the best CSE (by its own estimation) to do next, and sometimes makes other choices |
+| Stochastic Policy | Exploratory Heuristic | Heuristic that sometimes chooses the best CSE (by its own estimation) to do next, and sometimes makes other choices |
 | Stochastic Distribution $\pi(a \| s, \theta)$ | Softmax Likelihood | Likelihood of doing CSE $a$ under a stochastic policy|
 | Monte Carlo Policy | Random Heuristic | Performs CSEs or stops randomly |
 | Current Policy | Baseline Heuristic | The current hand-crafted CSE heuristic in the JIT |
@@ -179,7 +179,7 @@ MLCSE has 3 main modes of operation:
 * Feature Analysis: extract the features for the initial set of actions. This data can be used to plot feature value distributions to better normalize or whiten the feature space.
 * Policy Gradient: try and craft a linear policy that minimizes the aggregate perf score or code size of a set of methods.
 
-### Preqequisites to Running MLCSE
+### Prerequisites to Running MLCSE
 
 In order to run MLCSE you must:
 * Clone and build the runtime repo (https://github.com/dotnet/runtime) and install all the necessary prerequisites for building (see https://github.com/dotnet/runtime/tree/main/docs/workflow/building/coreclr)
@@ -341,7 +341,7 @@ INDEX   N      BEST       BASE      WORST      NOCSE     RATIO    RANK
 This shows results for 5 methods:
 * `N` indicates the number of candidates
 * `BEST` is the best score found
-* `BASE` is the score for the current jit heuristic
+* `BASE` is the score for the current JIT heuristic
 * `WORST` is the worst score found
 * `NOCSE` is the score if no CSEs are done
 * `RATIO` is best/base
@@ -389,7 +389,7 @@ You can also get graphic or test data representing the Markov Chain $v_*$ and $q
 96689 |              1 |  2| 72.65999999999999659  [1] **best**
 96689 |            1,2 |  0| 72.65999999999999659  [1] **best**
 ```
-The second colum shows the state, the third the action. So from initial state there are 3 actions: 0, 1, or 2. 
+The second column shows the state, the third the action. So from initial state there are 3 actions: 0, 1, or 2. 
 
 To see this graphically, pass `--showMarkovChainDot` or `--saveQVDot` which will produce output in the graphviz `dot` markup format. 
 ```
@@ -416,7 +416,7 @@ digraph G
 ```
 Run this through a tool or paste into an online viewer like sketchviz.com:
 
-![markof chain showing v* and q*](MarkovChain96689.png)
+![Markov chain showing v* and q*](MarkovChain96689.png)
 
 Here colors highlight the best possible perf scores. Each node has 4 lines of text
 * the state
@@ -447,7 +447,7 @@ When starting Policy Gradient, MLCSE first simply runs the JIT over the entire c
 
 This baseline data is fed into the method selection process to obtain the set of methods to train on. By default 5 methods are chosen. I have run experiments with up to 500 methods.
 
-The inital model parameter vector is taken to all be zero (`--initialParameters` to specify something different). The optimzation goal is lower perf score (`--optimizeSize` to change to lower code size).
+The initial model parameter vector is taken to all be zero (`--initialParameters` to specify something different). The optimization goal is lower perf score (`--optimizeSize` to change to lower code size).
 
 Training then proceeds in a series of *rounds*, where, on each round
 * For each method in the training set
@@ -478,7 +478,7 @@ Base      72.91      27.50     276.65      24.12      24.12
    1      72.84      29.06     276.14      24.67      24.58
 ```
 
-After 25 rounds (or whatever is specified in `--summaryInterval`) MLCSE use the current parmeter vector to run a greedy policy, and compare its performance on the training set versus the baseline and best known (from stochastic exploration) results:
+After 25 rounds (or whatever is specified in `--summaryInterval`) MLCSE use the current parameter vector to run a greedy policy, and compare its performance on the training set versus the baseline and best known (from stochastic exploration) results:
 ```
 [6250 method evals in 42458ms]
 
@@ -491,7 +491,7 @@ Best/base: 0.9818 [optimizing for  score]
 vs Base    0.9989 Better 2 Same 3 Worse 0
 vs Best    1.0174 Better 0 Same 3 Worse 2
 ```
-The `Best/base` is the geometric mean of the ratio of the best perf score to the basline perf score across the training set, and similarly for the ratio values of greedy/base and greedy/best. So here after 25 rounds the greedy policy is doing as good or better than the baseline on all 5 methods, though the improvement (0.9989) is modest, but there is the potential for much larger improvement.
+The `Best/base` is the geometric mean of the ratio of the best perf score to the baseline perf score across the training set, and similarly for the ratio values of greedy/base and greedy/best. So here after 25 rounds the greedy policy is doing as good or better than the baseline on all 5 methods, though the improvement (0.9989) is modest, but there is the potential for much larger improvement.
 
 MLCSE then runs the greedy policy against the entire collection, showing the geomean aggregate perf score and code size impact You can think of this as validating the training.
 ```
@@ -508,15 +508,15 @@ The best/worst score and size are also shown here; they might be good candidates
 
 Currently MLCSE with a large enough training set (200ish) and enough rounds (1000ish) can obtain geomean improvements in perf score on the order of 0.996. MCMC studies suggest that the best possible improvement is around 0.99.
 
-You can augment the tabular display above to see sequence, parameters, the initial softmax preference values, the candidate feaures, and so on.
+You can augment the tabular display above to see sequence, parameters, the initial softmax preference values, the candidate features, and so on.
 
 You can also suppress more of the details (though I haven't widely tested this yet) and just show the summary results. The columnar display becomes unwieldy once there are more than 20 or so candidates.
 
-Parameter values are writen to a file in the output directory after each round, in case you want to plot how the parameters evolve over time.
+Parameter values are written to a file in the output directory after each round, in case you want to plot how the parameters evolve over time.
 
 ### The Stochastic Policy
 
-The stochastic policy works by assiging a preference score $h$ to each candidate (using the linear model, see below). The preference scores are turned into likelihoods (in [0,1]) via softmax, so that candidates with larger preferences have higher likelihoods. The candidates are ordered (arbitrarily). A random number is then generated in [0,1] and this determines which candidate is chosen.
+The stochastic policy works by assigning a preference score $h$ to each candidate (using the linear model, see below). The preference scores are turned into likelihoods (in [0,1]) via softmax, so that candidates with larger preferences have higher likelihoods. The candidates are ordered (arbitrarily). A random number is then generated in [0,1] and this determines which candidate is chosen.
 
 The preference to softmax conversion is done via
 
@@ -536,11 +536,11 @@ The softmax preserves ordering of preferences; that is, the candidate with the l
 
 ### The Greedy Policy
 
-The greedy polich is deterministic, and always choses the best candidate. So in the example above, it would always choose A.
+The greedy policy is deterministic, and always choses the best candidate. So in the example above, it would always choose A.
 
 ### The Replay Policy
 
-The replay policy is determinisic. It is given a sequence of CSEs to perform by the orchestrator and simply does the CSEs in that order.
+The replay policy is deterministic. It is given a sequence of CSEs to perform by the orchestrator and simply does the CSEs in that order.
 
 ### The Linear Model 
 
@@ -548,7 +548,7 @@ The stochastic and greedy policies use a linear model to compute the candidate p
 
 $$ h(a,s,\theta) = \boldsymbol{x}(s,a) \cdot \theta $$
 
-### Policy Graident Algorithm
+### Policy Gradient Algorithm
 
 The Policy Gradient algorithm (as the name implies) estimates the gradient of the objective with respect to $\theta$ via stochastic rollouts, using stochastic gradient ascent to maximize the objective. The gradient is determined by the reward for that rollout, or in our terminology, the perf score for a given CSE sequence. The full algorithm is:
 
@@ -578,7 +578,7 @@ Given: parameters $\theta_0$, parameterized stochastic policy $\pi(a|s,\theta)$,
     * $\phi = \phi - \alpha (P_i / P_B) \nabla ln(\pi(CSE_t|S_t, \theta_i))$
   * $\theta_{i + 1} = \phi$
 
-Because we have a linear model, the "eligibiliy vector" $ \nabla ln(\pi(a|s, \theta_i)) $ is simply expressible via the features $\boldsymbol{x}$ of each candidate and their likelihoods:
+Because we have a linear model, the "eligibility vector" $\nabla ln(\pi(a|s, \theta_i))$ is simply expressible via the features $\boldsymbol{x}$ of each candidate and their likelihoods:
 
 $$ \nabla ln(\pi(a|s, \theta_i)) = \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k)}$$
 
@@ -586,7 +586,7 @@ where $k$ runs over all the possible CSEs (and stopping) we could do. So the ful
 
 $$ - \alpha (P_i / P_B) \{ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \} $$
 
-Roughly speaking this says for good outcomes we want to alter the parameters to encourage the policy to make thse choices, and for bad outcomes, we want to discourage it from making thsee choices.
+Roughly speaking this says for good outcomes we want to alter the parameters to encourage the policy to make these choices, and for bad outcomes, we want to discourage it from making these choices.
 
 ### Actor-Critic Formulation
 
@@ -600,7 +600,7 @@ $$ \alpha (P_\pi(S_i) -P_\pi(S_{i+1})) / P_B \{ \boldsymbol{x}(s,a) - \sum_k{\pi
 
 (where again the order of the $V$s is reversed to handle the fact that lower scores or sizes are better.)
 
-Where do these $P_i$ values come from? Initially we just use the baseline jit's perf scores but as the stochastic policy explores more of the space of possible options (and related scores) we keep track of the best possible score from each state.
+Where do these $P_i$ values come from? Initially we just use the baseline JIT's perf scores but as the stochastic policy explores more of the space of possible options (and related scores) we keep track of the best possible score from each state.
 
 ### Details
 
@@ -622,7 +622,7 @@ Base      72.91 | 1
    3      72.66 | 1,2
    4      73.15 |
    ```
-The `*` here indicates a new best result. So the stochastic policy has already found the optimial sequence in rounds 2 and 3. 
+The `*` here indicates a new best result. So the stochastic policy has already found the optimal sequence in rounds 2 and 3. 
 
 Let's look at what happens in round 4. We first run the stochastic policy to generate a rollout.
 
@@ -645,7 +645,7 @@ Next we compute the $P_i$ values (called "rewards" in MLCSE):
     V scores 72.66,73.15
     Update: Updating parameters with sequence 0 alpha 0.02 and rewards -0.0067
 ```
-Here 72.66 is the value of the start state; this will always the best score that the algorithm has uncovered. Taking action 0 increases the best known score to 73.15. So we want to discourage this. The reward computation is thus (recall we divde by the baseline)
+Here 72.66 is the value of the start state; this will always the best score that the algorithm has uncovered. Taking action 0 increases the best known score to 73.15. So we want to discourage this. The reward computation is thus (recall we divide by the baseline)
 
 $$  (72.66 - 73.15)/72.91 = -0.0067 $$
 
@@ -687,7 +687,7 @@ Feat   OldDelta     Feature  Adjustment    Gradient   StepDelta   NewDelta
 ```
 Here:
 * `OldDelta` column is the initial $\phi$
-* `Feature` is the feature vector $\boldsymbol{x}$ for this CSE. Since this is a stopping CSE it only has one feature, which represents "register pressure" (for more on features, see belop)
+* `Feature` is the feature vector $\boldsymbol{x}$ for this CSE. Since this is a stopping CSE it only has one feature, which represents "register pressure" (for more on features, see below)
 * `Adjustment` is the sum on the RHS of the eligibility vector.
 * `Gradient` is the full eligibility vector
 * `StepDelta` is the complete change to $\phi$ for this step
@@ -742,24 +742,24 @@ I have tried to be careful to keep the numeric ranges of the features similar ("
 
 It's possible for the SPMI replay of a method to fail just by changing CSEs. Some of these problems can be fixed by updating the collection process to capture more information. MLCSE doesn't handle these failures all that well yet; if you run into one please let me know.
 
-If you need to debug the jit, you can use `--showSPMIRuns` to see the actual command lines passed to SPMI; from these you can replay the interaction with the jit in a debugger or similar.
+If you need to debug the JIT, you can use `--showSPMIRuns` to see the actual command lines passed to SPMI; from these you can replay the interaction with the JIT in a debugger or similar.
 
 ## Open Questions
 
 * Are there methods where changing the order of CSEs leads to different perf scores? MCMC should be able to uncover them, if they're relatively frequent; if not, perhaps we don't care. If order doesn't matter, we might be able to simplify the problem space.
 * Is the round-robin visitation done by Policy Gradient sensible? Should we just instead select methods from the candidate set randomly?
-* Along those lines, should we update the candidate set based on results from running across all methods? For instance we could remove "easy" candidates (typically those with just one candidate, or those that already get the optimial result) and replace them with more poorly performing methods, in the hopes that the latter offer something new to learn.
-* Hyperparameter studies: how do the learning rate, random seeds, training subset, minibatch size, etc affect the results?
+* Along those lines, should we update the candidate set based on results from running across all methods? For instance we could remove "easy" candidates (typically those with just one candidate, or those that already get the optimal result) and replace them with more poorly performing methods, in the hopes that the latter offer something new to learn.
+* Hyperparameter studies: how do the learning rate, random seeds, training subset, minibatch size, and so on affect the results?
 * Is it better to update parameters with each step of the rollout, or accumulate them like we do with $\phi$? My thinking here is that by updating we're changing the policy likelihoods and so the rollout and policy diverge (~ would this make things "off policy"?).
 
 ## Things to Improve
 
-* The number of candiates $N$ often over-states how many possible CSEs there are, because some of the identified candidates are not "viable". This leads to some inefficiencies because we may choose methods for learning based on $N$ that have no viable candidates, and hence offer nothing to learn.
+* The number of candidates $N$ often over-states how many possible CSEs there are, because some of the identified candidates are not "viable". This leads to some inefficiencies because we may choose methods for learning based on $N$ that have no viable candidates, and hence offer nothing to learn.
 * It might be useful to be able to actually initiate benchmark runs from within MLCSE, to try validating that perf score improvements result in perf improvements. These runs could be done on the local machine. I have notes on how to send individual benchmark request to the perf lab, but haven't tried coding this up yet. One big challenge here is that because we're using SPMI collections for training, we have no idea which benchmarks might critically rely on a particular method, so we wouldn't know which benchmarks to run.
 * SPMI streaming still has some mysterious pauses which limit the total speed at which training can happen. Investigate and fix.
 * SPMI streaming servers cache a number of methods for faster streaming processing. Make this cache adaptive (both in capacity and perhaps in policy).
 * Automated analysis of poorly performing methods: It would be very useful to be able to categorize methods that are not well handled by the greedy heuristic. The typical reason for poor perf scores is excess register pressure causing more code in the prolog and epilog, more register spills, or both. Ideally this technique would gather features associated with good performance and bad and look for cases where very similar feature sets lead to different outcomes -- this would be a clear signal that important features are not available to the learning process.
-* Modelling in general: are the feature values whitened properly? Should we look at the variance? Would a more capable model give better results? The current model is linear but even a linear model can have non-linear feature interactions (and there are some already). A neural network model supposedly excells at finding non-linear interactions.
+* Modelling in general: are the feature values whitened properly? Should we look at the variance? Would a more capable model give better results? The current model is linear but even a linear model can have non-linear feature interactions (and there are some already). A neural network model supposedly excels at finding non-linear interactions.
 
 ## Other Approaches
 
@@ -771,6 +771,6 @@ The approach taken here puts some of the machine learning logic in MLCSE and som
 
 [Compiler Gym](https://github.com/facebookresearch/CompilerGym): Facebook project using AI "gym" approach.
 
-[MLGO](https://arxiv.org/pdf/2101.04808.pdf) also [github](https://github.com/google/ml-compiler-opt): Google project. Seens quite relevant, using REINFORCE/PPO to tune LLVM inliner to optimize for size.
+[MLGO](https://arxiv.org/pdf/2101.04808.pdf) also [github](https://github.com/google/ml-compiler-opt): Google project. Seems quite relevant, using REINFORCE/PPO to tune LLVM inliner to optimize for size.
 
 [Muchnick](https://www.amazon.com/Advanced-Compiler-Design-Implementation-Muchnick/dp/1558603204): *Advanced Compiler Design and Implementation*
