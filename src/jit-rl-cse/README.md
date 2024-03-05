@@ -544,9 +544,9 @@ The replay policy is determinisic. It is given a sequence of CSEs to perform by 
 
 ### The Linear Model 
 
-The stochastic and greedy policies use a linear model to compute the candidate preferences. Policies using this mode analyze each candidate to produce a feature vector $\bold{x}(s,a)$, and then form the numeric preference via a dot product:
+The stochastic and greedy policies use a linear model to compute the candidate preferences. Policies using this mode analyze each candidate to produce a feature vector $\boldsymbol{x}(s,a)$, and then form the numeric preference via a dot product:
 
-$$ h(a,s,\theta) = \bold{x}(s,a) \cdot \theta $$
+$$ h(a,s,\theta) = \boldsymbol{x}(s,a) \cdot \theta $$
 
 ### Policy Graident Algorithm
 
@@ -578,13 +578,13 @@ Given: parameters $\theta_0$, parameterized stochastic policy $\pi(a|s,\theta)$,
     * $\phi = \phi - \alpha (P_i / P_B) \nabla ln(\pi(CSE_t|S_t, \theta_i))$
   * $\theta_{i + 1} = \phi$
 
-Because we have a linear model, the "eligibiliy vector" $ \nabla ln(\pi(a|s, \theta_i)) $ is simply expressible via the features $\bold{x}$ of each candidate and their likelihoods:
+Because we have a linear model, the "eligibiliy vector" $ \nabla ln(\pi(a|s, \theta_i)) $ is simply expressible via the features $\boldsymbol{x}$ of each candidate and their likelihoods:
 
-$$ \nabla ln(\pi(a|s, \theta_i)) = \bold{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \bold{x}(s, k)}$$
+$$ \nabla ln(\pi(a|s, \theta_i)) = \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k)}$$
 
 where $k$ runs over all the possible CSEs (and stopping) we could do. So the full update for one step in the sequence is
 
-$$ - \alpha (P_i / P_B) \{ \bold{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \bold{x}(s, k) } \} $$
+$$ - \alpha (P_i / P_B) \{ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \} $$
 
 Roughly speaking this says for good outcomes we want to alter the parameters to encourage the policy to make thse choices, and for bad outcomes, we want to discourage it from making thsee choices.
 
@@ -596,7 +596,7 @@ Recall the advantage $A_\pi(s,a) = Q_\pi(s, a) - V_\pi(s)$ is the benefit of cho
 
 Instead of giving each step in the rollout the same reward factor, we can use the above to reward good steps and punish bad ones. And the $V$ are perf scores. So the current formulation is actually:
 
-$$ \alpha (P_\pi(S_i) -P_\pi(S_{i+1})) / P_B \{ \bold{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \bold{x}(s, k) } \} $$
+$$ \alpha (P_\pi(S_i) -P_\pi(S_{i+1})) / P_B \{ \boldsymbol{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \boldsymbol{x}(s, k) } \} $$
 
 (where again the order of the $V$s is reversed to handle the fact that lower scores or sizes are better.)
 
@@ -687,7 +687,7 @@ Feat   OldDelta     Feature  Adjustment    Gradient   StepDelta   NewDelta
 ```
 Here:
 * `OldDelta` column is the initial $\phi$
-* `Feature` is the feature vector $\bold{x}$ for this CSE. Since this is a stopping CSE it only has one feature, which represents "register pressure" (for more on features, see belop)
+* `Feature` is the feature vector $\boldsymbol{x}$ for this CSE. Since this is a stopping CSE it only has one feature, which represents "register pressure" (for more on features, see belop)
 * `Adjustment` is the sum on the RHS of the eligibility vector.
 * `Gradient` is the full eligibility vector
 * `StepDelta` is the complete change to $\phi$ for this step
