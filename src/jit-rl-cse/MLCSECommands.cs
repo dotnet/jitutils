@@ -72,7 +72,7 @@ public class MLCSECommands : CliRootCommand
     public CliOption<int> MinibatchSize { get; } =
         new("--minibatchSize") { Description = "minibatch size -- number of trials per method per round", DefaultValueFactory = (ArgumentResult x) => 25 };
     public CliOption<bool> ShowTabular { get; } =
-      new("--showTabular") { Description = "show results in a table", DefaultValueFactory = (ArgumentResult) => true };
+        new("--showTabular") { Description = "show results in a table", DefaultValueFactory = (ArgumentResult) => true };
     public CliOption<bool> ShowRounds { get; } =
         new("--showRounds") { Description = "show per-method per-round policy average perf scores", DefaultValueFactory = (ArgumentResult) => true };
     public CliOption<uint> ShowRoundsInterval { get; } =
