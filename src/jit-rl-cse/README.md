@@ -168,7 +168,8 @@ This section assumes a familiarity with at least one of the two.
 | Optimal policy $\pi_*$ | Oracle | Heuristic that always makes the best choice for what to do next |
 | Optimal value $v_*(s)$ | Best possible outcome | Perf score obtainable by following the optimal policy from this state |
 | Optimal action value $q_*(s,a)$ | Best possible outcome given this action | Perf score obtainable by doing a particular CSE an then behaving optimally |
-| Preference for action $h(a, s, \theta)$ | candidate preference | preference for doing CSE $a$ given method and CSEs done already $s$ and model parameters $\theta$ |
+| Preference for action $h(a, s, \theta)$ | Candidate preference | preference for doing CSE $a$ given method and CSEs done already $s$ and model parameters $\theta$ |
+| $\boldsymbol{x}(a,s)$ | Candidate features | observations about a candidate |
 
 ## MLCSE Overview
 
@@ -575,7 +576,7 @@ Given: parameters $\theta_0$, parameterized stochastic policy $\pi(a|s,\theta)$,
   * Use stochastic policy to obtain CSE sequence and perf score P_i
   * $\phi = 0$
   * Loop for each CSE in the CSE sequence $t = 0, 1, ... T-1$:
-    * $\phi = \phi - \alpha (P_i / P_B) \nabla ln(\pi(CSE_t|S_t, \theta_i))$
+    * $\phi = \phi - \alpha (P_i / P_{BASE}) \nabla ln(\pi(CSE_t|S_t, \theta_i))$
   * $\theta_{i + 1} = \phi$
 
 Because we have a linear model, the "eligibility vector" $\nabla ln(\pi(a|s, \theta_i))$ is simply expressible via the features $\boldsymbol{x}$ of each candidate and their likelihoods:
@@ -584,21 +585,21 @@ $$ \nabla ln(\pi(a|s, \theta_i)) = \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta
 
 where $k$ runs over all the possible CSEs (and stopping) we could do. So the full update for one step in the sequence is
 
-$$ - \alpha (P_i / P_B) \{ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \} $$
+$$ - \alpha (P_i / P_{BASE}) \left \{ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \right \} $$
 
 Roughly speaking this says for good outcomes we want to alter the parameters to encourage the policy to make these choices, and for bad outcomes, we want to discourage it from making these choices.
 
 ### Actor-Critic Formulation
 
-The above was our initial formulation, but it was too critical of CSEs sequences that had mostly good choices and one or two bad ones: each choice was "rewarded" or "punished" by the same factor $\alpha(P_i/P_b)$
+The above was our initial formulation, but it was too critical of CSEs sequences that had mostly good choices and one or two bad ones: each choice was "rewarded" or "punished" by the same factor $\alpha(P_i/P_{BASE})$
 
 Recall the advantage $A_\pi(s,a) = Q_\pi(s, a) - V_\pi(s)$ is the benefit of choosing action $a$ in state $s$. Since our system is deterministic (we know what state we'll end up in after each action) and there are no intermediate rewards, this ends up being the same as the difference in state values $V_\pi(s_{i+1}) -V_\pi(s_i)$.
 
-Instead of giving each step in the rollout the same reward factor, we can use the above to reward good steps and punish bad ones. And the $V$ are perf scores. So the current formulation is actually:
+Instead of giving each step in the rollout the same reward factor, we can use the above to reward good steps and punish bad ones. And the $V_i$ are perf scores $P_i$. So the current formulation is actually:
 
-$$ \alpha (P_\pi(S_i) -P_\pi(S_{i+1})) / P_B \{ \boldsymbol{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \boldsymbol{x}(s, k) } \} $$
+$$ \alpha \frac{P_\pi(S_i) -P_\pi(S_{i+1})}{P_{BASE}} \left \{ \boldsymbol{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \boldsymbol{x}(s, k) } \right \} $$
 
-(where again the order of the $V$s is reversed to handle the fact that lower scores or sizes are better.)
+(where again the order of the $P_i$ is reversed to handle the fact that lower scores or sizes are better.)
 
 Where do these $P_i$ values come from? Initially we just use the baseline JIT's perf scores but as the stochastic policy explores more of the space of possible options (and related scores) we keep track of the best possible score from each state.
 
