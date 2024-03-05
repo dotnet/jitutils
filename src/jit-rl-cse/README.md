@@ -603,6 +603,14 @@ $$ \alpha \frac{P_\pi(S_i) -P_\pi(S_{i+1})}{P_{BASE}} \left \{ \boldsymbol{x}(s,
 
 Where do these $P_i$ values come from? Initially we just use the baseline JIT's perf scores but as the stochastic policy explores more of the space of possible options (and related scores) we keep track of the best possible score from each state.
 
+The state-action space and $V$ and $Q$ values from stochastic exploration can also be saved, just like ones for MCMC (`--saveQVDot`, one version saved for each method for each summary interval). This can sometimes be useful in seeing which actual sequences the evolving policy seems to favor.
+
+For example, after 100 rounds, we can see that the policy is mostly settled on the two best sequences, and slightly favors CSE1 over CSE2:
+
+![Markov Chain for method 96698 after 100 rounds](MarkovChain96689PG100.png)
+
+The root node has been seen in 2500 rollouts (100 rounds, 25 rollouts per round).
+
 ### Details
 
 In this section we'll walk through the details of one individual minibatch run to see how the Policy Gradient parameter updates work.
