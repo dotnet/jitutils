@@ -146,13 +146,13 @@ To first order these should be somewhat well correlated; that is larger code wil
 
 This section assumes a familiarity with at least one of the two.
 
-| RL Concept  | M Concept | Notes |
+| RL Concept  | MLCSE Concept | Notes |
 |--- | --- |--- |
 | State $s$ | Method + CSEs Performed | see below |
 | Action $a$ | A CSE not yet performed, or the decision to stop and leave some CSEs undone | Each CSE candidate can be done at most once. We use non-negative numbers to describe candidates, eg `1` or in jit diagnostics, `CSE #01`. By convention action `0` is the stop action. |
 | Rollout | The sequence of CSEs performed by the heuristic | Sequence: e.g. 3,1,0
 | Reward $r$ | Perf Score | Lower is better. The only action providing a reward is the stop action |
-| Discount $\lambda$| n/a | We use an "undiscounted" approach. Discount allows RL algorithm to value immediate rewards more than future rewards; we have no immediate rewards (alternatively, $\lambda = 1$) |
+| Discount $\lambda$| n/a | We use an "undiscounted" approach. Discount allows RL algorithms to value immediate rewards more than future rewards; we have no immediate rewards (alternatively, $\lambda = 1$) |
 | Terminal State | Result of the stop action | Once the JIT decides to stop doing CSEs, it can run the rest of its phases and obtain the perf score|
 | Policy $\pi$ | CSE heuristic | At each step, decides which CSE to do next, or decides to stop |
 | Parameterized Policy $\pi_\theta$ | CSE heuristic with tuning knobs | $\theta$ will typically be a vector
