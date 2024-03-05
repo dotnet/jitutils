@@ -602,6 +602,7 @@ public class MLCSE
                     foreach (var method in methods)
                     {
                         string dotPath = Path.Combine(dumpDir, $"QV-{method.spmiIndex}-{r}.dot");
+                        Console.WriteLine($"==> {dotPath}");
                         using StreamWriter sw = new(dotPath);
                         QVDumpDot(method, sw);
                     }
