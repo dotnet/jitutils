@@ -30,9 +30,53 @@ namespace ManagedCodeGen
             m_start = DateTime.Now;
         }
 
+        private static void StartTasks(List<AssemblyInfo> assemblyWorkList, jitdiff.Config config, List<DasmWorkTask> tasks)
+        {
+            int counter = 0;
+
+            tasks = tasks
+                // Filter out tasks that have already been started if we're called with the same tasks list multiple times
+                .Where(t => t.Status == TaskStatus.Created)
+                // Individual tasks are mainly single-threaded, order them by size to prioritize starting longer tasks earlier
+                // Assume that tasks were created in the same order as assemblyWorkList
+                .OrderByDescending(_ => new FileInfo(assemblyWorkList[counter++ % assemblyWorkList.Count].Path).Length)
+                .ToList();
+
+            Task.Run(async () =>
+            {
+                // We limit the number of tasks we start in parallel to avoid overwhelming the system.
+                // E.g. running frameworks diffs involves 100s of tasks, which can be problematic on machines with limited memory.
+                int parallelism = config.Sequential ? 1 : Environment.ProcessorCount * 2;
+
+                bool anyFailed = false;
+
+                await Parallel.ForEachAsync(tasks, new ParallelOptions { MaxDegreeOfParallelism = parallelism }, async (task, _) =>
+                {
+                    if (anyFailed)
+                    {
+                        // We don't have to start other tasks.
+                        return;
+                    }
+
+                    try
+                    {
+                        task.Start();
+                        await task;
+                    }
+                    catch
+                    {
+                        // AwaitTasksAndShowProgress will observe any failures
+                        anyFailed = true;
+                    }
+                });
+            });
+        }
+
         public void AwaitTasksAndShowProgress(List<AssemblyInfo> assemblyWorkList, jitdiff.Config config,
             List<DasmWorkTask> tasks, bool isFinalAwait)
         {
+            StartTasks(assemblyWorkList, config, tasks);
+
             var taskArray = tasks.ToArray();
 
             // If output is redirected, just wait -- don't show any updates
@@ -161,19 +205,9 @@ namespace ManagedCodeGen
 
             private void StartDasmWork(DasmWorkKind kind, List<string> args)
             {
-                var task = DasmWorkTask.Factory.StartNew(() => (kind, RunDasmTool(new DasmWorkItem(args))));
+                // The task will be started by ProgressBar.AwaitTasksAndShowProgress
+                var task = new DasmWorkTask(() => (kind, RunDasmTool(new DasmWorkItem(args))));
                 DasmWorkTasks.Add(task);
-
-                if (m_config.Verbose)
-                {
-                    string command = String.Join(" ", args);
-                    Console.WriteLine("Started dasm command \"{0}\"", command);
-                }
-
-                if (m_config.Sequential)
-                {
-                    Task.WaitAll(task);
-                }
             }
 
             protected void StartDasmWorkOne(DasmWorkKind kind, List<string> commandArgs, string tagBaseDiff,
