@@ -56,8 +56,8 @@ namespace ManagedCodeGen
 
                 _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
                 {
-                    syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: x64, x86)");
-                    syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: Windows, OSX, Linux etc.)");
+                    syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: arm64, x64, x86)");
+                    syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: windows, osx, linux, etc.)");
                     syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
                     syntax.DefineOption("r|runtime", ref _runtimePath, "Full path to runtime directory");
                     syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
@@ -123,16 +123,16 @@ namespace ManagedCodeGen
                     {
                         if (match.Groups[1].Value.Trim() == "Windows")
                         {
-                            _os = "Windows";
+                            _os = "windows";
                         }
                         else if (match.Groups[1].Value.Trim() == "Darwin")
                         {
-                            _os = "OSX";
+                            _os = "osx";
                         }
                         else if (match.Groups[1].Value.Trim() == "Linux")
                         {
                             // Assuming anything other than Windows or OSX is a Linux flavor
-                            _os = "Linux";
+                            _os = "linux";
                         }
                         else
                         {
@@ -152,6 +152,10 @@ namespace ManagedCodeGen
                         Console.WriteLine("Defaulting architecture to x64.");
                     }
                     _arch = "x64";
+                }
+                else
+                {
+                    _arch = _arch.ToLower();
                 }
 
                 if (_build == null)
@@ -178,8 +182,12 @@ namespace ManagedCodeGen
                         Console.WriteLine("Operating system is {0}", _os);
                     }
                 }
+                else
+                {
+                    _os = _os.ToLower();
+                }
 
-                if ((_os != null) && (_os.ToLower() != "linux") && _cross)
+                if ((_os != null) && (_os != "linux") && _cross)
                 {
                     if (_verbose)
                     {
@@ -237,7 +245,7 @@ namespace ManagedCodeGen
                 }
 
                 // Check that we can find compile_commands.json on windows
-                if (_os.ToLower() == "windows")
+                if (_os == "windows")
                 {
                     // If the user didn't specify a compile_commands.json, we need to see if one exists, and if not, create it.
                     if (!_untidy && _compileCommands == null)
@@ -312,7 +320,7 @@ namespace ManagedCodeGen
                         {
                             Console.WriteLine("Can't find compile_commands.json file. Running configure.");
                             List<string> commandArgs = new() { _arch, _build, "configureonly", "-cmakeargs", "-DCMAKE_EXPORT_COMPILE_COMMANDS=1" };
-                            if (_os.ToLower() == "linux" && _cross)
+                            if (_os == "linux" && _cross)
                             {
                                 commandArgs.Add("-cross");
                             }
@@ -422,7 +430,7 @@ namespace ManagedCodeGen
                 return default(T);
             }
 
-            public bool IsWindows { get { return (_os.ToLower() == "windows"); } }
+            public bool IsWindows { get { return (_os == "windows"); } }
             public bool DoVerboseOutput { get { return _verbose; } }
             public bool DoClangTidy { get { return !_untidy; } }
             public bool DoClangFormat { get { return !_noformat; } }
