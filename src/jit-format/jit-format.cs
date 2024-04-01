@@ -13,6 +13,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -149,9 +150,37 @@ namespace ManagedCodeGen
                 {
                     if (_verbose)
                     {
-                        Console.WriteLine("Defaulting architecture to x64.");
+                        Console.WriteLine("Discovering process architecture.");
                     }
-                    _arch = "x64";
+
+                    Architecture a = RuntimeInformation.ProcessArchitecture;
+                    switch (a)
+                    {
+                        case Architecture.Arm:
+                            _arch = "arm";
+                            break;
+                        case Architecture.Arm64:
+                            _arch = "arm64";
+                            break;
+                        case Architecture.X86:
+                            _arch = "x86";
+                            break;
+                        case Architecture.X64:
+                            _arch = "x64";
+                            break;
+                        default:
+                            if (_verbose)
+                            {
+                                Console.WriteLine("Process architecture unknown; defaulting to x64");
+                            }
+                            _arch = "x64";
+                            break;
+                    }
+
+                    if (_verbose)
+                    {
+                        Console.WriteLine("Process architecture is {0}", _arch);
+                    }
                 }
                 else
                 {
@@ -210,7 +239,7 @@ namespace ManagedCodeGen
                     Console.WriteLine("Formatting dll project.");
                 }
 
-                if (!_untidy && ( (_arch == null) || (_os == null) || (_build == null)))
+                if (!_untidy && ((_arch == null) || (_os == null) || (_build == null)))
                 {
                     _syntaxResult.ReportError("Specify --arch, --os, and --build for clang-tidy run.");
                 }
