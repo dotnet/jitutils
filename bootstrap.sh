@@ -76,11 +76,18 @@ function download_tools {
 
     info=$(dotnet --info |grep RID:)
     info=${info##*RID:* }
+    echo "dotnet RID: ${info}"
 
     # override common RIDs with compatible version so we don't need to upload binaries for each RID
     case $info in
+        osx-x64)
+        info=osx.10.15-x64
+        ;;
         osx.*-x64)
         info=osx.10.15-x64
+        ;;
+        linux-x64)
+        info=ubuntu.18.04-x64
         ;;
         ubuntu.*-x64)
         info=ubuntu.18.04-x64
@@ -90,7 +97,7 @@ function download_tools {
     clangFormatUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-format
 
     if validate_url "$clangFormatUrl" > /dev/null; then
-        echo "Downloading clang-format to bin directory"
+        echo "Downloading clang-format from ${clangFormatUrl} to bin directory"
         # download appropriate version of clang-format
         if (( _machineHasCurl == 1 )); then
             curl --retry 4 --progress-bar --location --fail "$clangFormatUrl" -o bin/clang-format
@@ -105,7 +112,7 @@ function download_tools {
     clangTidyUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-tidy
 
     if validate_url "$clangTidyUrl" > /dev/null; then
-        echo "Downloading clang-tidy to bin directory"
+        echo "Downloading clang-tidy from ${clangTidyUrl} to bin directory"
         # download appropriate version of clang-tidy
         if (( _machineHasCurl == 1 )); then
             curl --retry 4 --progress-bar --location --fail "$clangTidyUrl" -o bin/clang-tidy
