@@ -89,6 +89,10 @@ function download_tools {
 
     # override common RIDs with compatible version so we don't need to upload binaries for each RID
     case $clangPlatform in
+        osx*-x64)
+        echo "clang-tidy/clang-format are not supported on osx-x64."
+        return 0
+        ;;
         ubuntu.*-x64)
         clangPlatform=linux-x64
         ;;
