@@ -61,6 +61,8 @@ function validate_url {
 
 function download_tools {
 
+    echo "Installing clang ${clangVersion} tools"
+
     # Do we have wget or curl?
 
     if command -v curl 2>/dev/null; then
@@ -70,28 +72,36 @@ function download_tools {
         return 1
     fi
 
-    # Figure out which version to download. The "RID:" value from "dotnet --info" looks
-    # like this:
+    # Figure out which version to download. Use the "RID:" value from "dotnet --info".
+    # It looks like one of these:
+    #      RID:         osx-arm64
+    #      RID:         linux-x64
     #      RID:         osx.10.12-x64
+    #      RID:         ubuntu.22.04-x64
+    #
+    # If the RID doesn't work directly, it could be used to pick the appropriate platform.
+    # Note that we currently don't support osx-x64 clang tools.
 
-    info=$(dotnet --info |grep RID:)
-    info=${info##*RID:* }
+    clangToolsRootUrl="https://clrjit2.blob.core.windows.net/clang-tools"
+
+    clangPlatform="$(dotnet --info | grep 'RID:')"
+    clangPlatform="${clangPlatform##*RID:* }"
 
     # override common RIDs with compatible version so we don't need to upload binaries for each RID
-    case $info in
-        osx.*-x64)
-        info=osx.10.15-x64
+    case $clangPlatform in
+        osx*-x64)
+        echo "clang-tidy/clang-format are not supported on osx-x64."
+        return 0
         ;;
         ubuntu.*-x64)
-        info=ubuntu.18.04-x64
+        clangPlatform=linux-x64
         ;;
     esac
 
-    clangFormatUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-format
+    clangFormatUrl="${clangToolsRootUrl}/${clangVersion}/${clangPlatform}/clang-format"
 
     if validate_url "$clangFormatUrl" > /dev/null; then
-        echo "Downloading clang-format to bin directory"
-        # download appropriate version of clang-format
+        echo "Downloading clang-format from ${clangFormatUrl} to bin directory"
         if (( _machineHasCurl == 1 )); then
             curl --retry 4 --progress-bar --location --fail "$clangFormatUrl" -o bin/clang-format
         else
@@ -102,11 +112,10 @@ function download_tools {
         echo "clang-format not found here: $clangFormatUrl"
     fi
 
-    clangTidyUrl=https://clrjit.blob.core.windows.net/clang-tools/${info}/clang-tidy
+    clangTidyUrl="${clangToolsRootUrl}/${clangVersion}/${clangPlatform}/clang-tidy"
 
     if validate_url "$clangTidyUrl" > /dev/null; then
-        echo "Downloading clang-tidy to bin directory"
-        # download appropriate version of clang-tidy
+        echo "Downloading clang-tidy from ${clangTidyUrl} to bin directory"
         if (( _machineHasCurl == 1 )); then
             curl --retry 4 --progress-bar --location --fail "$clangTidyUrl" -o bin/clang-tidy
         else
@@ -119,7 +128,7 @@ function download_tools {
 
     if [ ! -f bin/clang-format -o ! -f bin/clang-tidy ]; then
         echo "Either clang-tidy or clang-format was not installed. Please install and put them on the PATH to use jit-format."
-        echo "Tools can be found at https://llvm.org/releases/download.html#3.8.0"
+        echo "Tools can be found at https://github.com/llvm/llvm-project/releases/tag/llvmorg-${clangVersion}"
         return 1
     fi
 
@@ -199,17 +208,20 @@ if [ $exit_code != 0 ]; then
     exit $exit_code
 fi
 
+# Check for the formatting tools, and download them if necessary.
+
+clangVersion="17.0.6"
+
 exit_code=0
 if ! hash clang-format 2>/dev/null || ! hash clang-tidy 2>/dev/null; then
     download_tools
     exit_code=$?
 else
-    if ! clang-format --version | grep -q 3.8 || ! clang-tidy --version | grep -q 3.8; then
-        echo "jit-format requires clang-format and clang-tidy version 3.8.*. Currently installed: "
+    if ! clang-format --version | grep -q "version ${clangVersion}" || ! clang-tidy --version | grep -q "version ${clangVersion}"; then
+        echo "jit-format requires clang-format and clang-tidy version ${clangVersion}. Currently installed: "
         clang-format --version
         clang-tidy --version
 
-        echo "Installing version 3.8 of clang tools"
         download_tools
         exit_code=$?
     fi

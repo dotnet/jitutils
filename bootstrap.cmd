@@ -121,6 +121,8 @@ if errorlevel 1 echo ERROR: build failed.&set __ExitCode=1&goto :eof
 :: here (within the setlocal scope for now) before checking for them. Add 'bin'
 :: at the end of the path, to prefer other user downloaded versions, if any.
 
+set _clang_version=17.0.6
+
 set PATH=%PATH%;.\bin
 
 where /Q clang-format
@@ -131,24 +133,27 @@ IF %errorlevel% NEQ 0 GOTO DownloadTools
 
 REM We found the tools on the path; now make sure the versions are good.
 
-clang-format --version | findstr 3.8 > NUL
-If %errorlevel% EQU 0 GOTO build_done
+clang-format --version | findstr /c:"version %_clang_version%" > NUL
+IF %errorlevel% EQU 0 GOTO build_done
 
-echo jit-format requires clang-format and clang-tidy version 3.8.*. Currently installed:
+echo jit-format requires clang-format and clang-tidy version %_clang_version%. Currently installed:
 clang-format --version
 clang-tidy --version
-echo Please install version 3.8.* and put the tools on the PATH to use jit-format.
-echo Tools can be found at https://llvm.org/releases/download.html#3.8.0
+echo Please install version %_clang_version% and put the tools on the PATH to use jit-format.
+echo Tools can be found at https://github.com/llvm/llvm-project/releases/tag/llvmorg-%_clang_version%
 
 :DownloadTools
 
-:: Download clang-format and clang-tidy
 echo Downloading formatting tools
 
-call :download_url clang-format "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-format.exe" bin\clang-format.exe
+set _azdo_root=https://clrjit2.blob.core.windows.net/clang-tools
+set _platform=windows-x64
+set _azdo_dir=%_azdo_root%/%_clang_version%/%_platform%
+
+call :download_url clang-format "%_azdo_dir%/clang-format.exe" bin\clang-format.exe
 if %__ExitCode% NEQ 0 goto :eof
 
-call :download_url clang-tidy "https://clrjit.blob.core.windows.net/clang-tools/windows/clang-tidy.exe" bin\clang-tidy.exe
+call :download_url clang-tidy "%_azdo_dir%/clang-tidy.exe" bin\clang-tidy.exe
 if %__ExitCode% NEQ 0 goto :eof
 
 :build_done
