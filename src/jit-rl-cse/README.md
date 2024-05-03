@@ -525,9 +525,9 @@ $$ \pi(a, s,\theta) = \frac{e^{h(a,s,\theta)}}{\sum_b e^{h(b,s,\theta)}} $$
 
 For example, say in some state $s$ with parameters $\theta$ we have 3 candidates A, B, and C, with preference ($h$) scores 1, 0, and -1.
 * the common divisor is $e^1 + e^0 + e-1 = 2.78 + 1 + 0.37 \approx 4.15$
-* likelihood of A ($\pi(A, s, \theta)$) is $2.78 / 4.15 \approx 0.67$
-* likelihood of B ($\pi(B, s, \theta)$) is $1.00 / 4.15 \approx 0.24$
-* likelihood of C ($\pi(C, s, \theta)$) is $0.37 / 4.15 \approx 0.09$
+* likelihood of A $\pi(A, s, \theta)$ is $2.78 / 4.15 \approx 0.67$
+* likelihood of B $\pi(B, s, \theta)$ is $1.00 / 4.15 \approx 0.24$
+* likelihood of C $\pi(C, s, \theta)$ is $0.37 / 4.15 \approx 0.09$
 
 Note the likelihood of the three sums to 1.0. 
 
@@ -573,10 +573,10 @@ Translating this into our setting (assuming just one method for now), we get the
 
 Given: parameters $\theta_0$, parameterized stochastic policy $\pi(a|s,\theta)$, baseline perf score $P_B$, learning rate $\alpha$
 * Until done
-  * Use stochastic policy to obtain CSE sequence and perf score P_i
+  * Use stochastic policy to obtain CSE sequence and perf score $P$
   * $\phi = 0$
   * Loop for each CSE in the CSE sequence $t = 0, 1, ... T-1$:
-    * $\phi = \phi - \alpha (P_i / P_{BASE}) \nabla ln(\pi(CSE_t|S_t, \theta_i))$
+    * $\phi = \phi - \alpha (P / P_{BASE}) \nabla ln(\pi(CSE_t|S_t, \theta_i))$
   * $\theta_{i + 1} = \phi$
 
 Because we have a linear model, the "eligibility vector" $\nabla ln(\pi(a|s, \theta_i))$ is simply expressible via the features $\boldsymbol{x}$ of each candidate and their likelihoods:
@@ -585,19 +585,19 @@ $$ \nabla ln(\pi(a|s, \theta_i)) = \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta
 
 where $k$ runs over all the possible CSEs (and stopping) we could do. So the full update for one step in the sequence is
 
-$$ - \alpha (P_i / P_{BASE}) \left\{ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \right\} $$
+$$ - \alpha (P / P_{BASE}) \left[ \boldsymbol{x}(s,a) - \sum_k{\pi(a |s, \theta_i)\cdot \boldsymbol{x}(s, k) } \right] $$
 
 Roughly speaking this says for good outcomes we want to alter the parameters to encourage the policy to make these choices, and for bad outcomes, we want to discourage it from making these choices.
 
 ### Actor-Critic Formulation
 
-The above was our initial formulation, but it was too critical of CSEs sequences that had mostly good choices and one or two bad ones: each choice was "rewarded" or "punished" by the same factor $\alpha(P_i/P_{BASE})$
+The above was our initial formulation, but it was too critical of CSEs sequences that had mostly good choices and one or two bad ones: each choice was "rewarded" or "punished" by the same factor $\alpha(P/P_{BASE})$
 
 Recall the advantage $A_\pi(s,a) = Q_\pi(s, a) - V_\pi(s)$ is the benefit of choosing action $a$ in state $s$. Since our system is deterministic (we know what state we'll end up in after each action) and there are no intermediate rewards, this ends up being the same as the difference in state values $V_\pi(s_{i+1}) -V_\pi(s_i)$.
 
 Instead of giving each step in the rollout the same reward factor, we can use the above to reward good steps and punish bad ones. And the $V_i$ are perf scores $P_i$. So the current formulation is actually:
 
-$$ \alpha \frac{P_\pi(S_i) -P_\pi(S_{i+1})}{P_{BASE}} \left\{ \boldsymbol{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \boldsymbol{x}(s, k) } \right\} $$
+$$ \alpha \frac{P_\pi(S_i) -P_\pi(S_{i+1})}{P_{BASE}} \left[ \boldsymbol{x}(s,a) - \sum_k{\pi(k |S_i, \theta_i)\cdot \boldsymbol{x}(s, k) } \right] $$
 
 (where again the order of the $P_i$ is reversed to handle the fact that lower scores or sizes are better.)
 
