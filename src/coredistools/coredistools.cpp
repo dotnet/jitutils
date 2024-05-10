@@ -433,12 +433,11 @@ bool CorDisasm::decodeInstruction(BlockIterator &BIter, bool MayFail) const {
 
   if (!IsDecoded) {
     if (!MayFail) {
-      uint64_t InstSize = BIter.InstrSize;
       string buffer;
       raw_string_ostream OS(buffer);
 
       OS << format("%" PRIxPTR ": ", BIter.Addr);
-      dumpBytes(ArrayRef<uint8_t>(BIter.Ptr, InstSize), OS);
+      dumpBytes(ArrayRef<uint8_t>(BIter.Ptr, BIter.InstrSize), OS);
 
       Print->Error("Decode Failure %s@ offset:instr %s", BIter.Name, OS.str().c_str());
     }
