@@ -14,7 +14,7 @@ EnsureCrossRootfsDirectoryExists () {
 }
 
 CMakeOSXArchitectures=
-LLVMTargetsToBuild="AArch64;ARM;X86"
+LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
 
 # Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
 # `llvm-strip` is available in CBL-Mariner container,
@@ -53,7 +53,6 @@ case "$TargetOSArchitecture" in
         CMakeCrossCompiling=ON
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
-        LLVMTargetsToBuild="ARM"
         EnsureCrossRootfsDirectoryExists
         ;;
 
