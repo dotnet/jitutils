@@ -29,6 +29,15 @@ trigger:
     - coredistools.yml
     - pack-coredistools.cmd
 
+# Schedule a twice monthly build to ensure the pipeline isn't marked as inactive.
+schedules:
+- cron: '0 0 1,15 * *'
+  displayName: Twice monthly build
+  branches:
+    include:
+    - main
+  always: true
+
 # CBL-Mariner:
 resources:
   # The base CBL-Mariner tags used to build .NET are:
