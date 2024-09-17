@@ -22,27 +22,31 @@ EnsureCrossRootfsDirectoryExists () {
 }
 
 CMakeOSXArchitectures=
-LLVMTargetsToBuild="AArch64;ARM;X86"
+LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
 
 case "$TargetOSArchitecture" in
     linux-x64)
         LLVMHostTriple=x86_64-linux-gnu
         if [ $CrossBuildUsingMariner -eq 1 ]; then
             CMakeCrossCompiling=ON
+            CMakeSystemName=Linux
             EnsureCrossRootfsDirectoryExists
         else
             CMakeCrossCompiling=OFF
+            CMakeSystemName=
         fi
         ;;
 
     linux-loongarch64)
         CMakeCrossCompiling=OFF
+        CMakeSystemName=
         LLVMHostTriple=loongarch64-linux-gnu
         LLVMTargetsToBuild="LoongArch"
         ;;
 
     osx-x64)
         CMakeCrossCompiling=OFF
+        CMakeSystemName=
         CMakeOSXArchitectures=x86_64
         LLVMHostTriple=x86_64-apple-darwin
         ;;
@@ -79,6 +83,7 @@ if [ -z "$CrossRootfsDirectory" ]; then
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$C_COMPILER \
         -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
@@ -95,6 +100,7 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$C_COMPILER \
         -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
@@ -112,6 +118,7 @@ else
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$C_COMPILER \
         -DCMAKE_CXX_COMPILER=$CXX_COMPILER \

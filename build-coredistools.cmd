@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion EnableExtensions
 
 set TargetOSArchitecture=%1
-set LLVMTargetsToBuild=AArch64;ARM;X86
+set LLVMTargetsToBuild=AArch64;ARM;X86;LoongArch;RISCV
 
 if /i "%TargetOSArchitecture%" == "win-arm64" (
     set GeneratorPlatform=ARM64
