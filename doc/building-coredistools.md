@@ -10,7 +10,7 @@ cd jitutils
 
 2. Checkout the LLVM project repository into a subdirectory named src/llvm-project:
 ```
-git clone --depth 1 --branch llvmorg-17.0.6 https://github.com/llvm/llvm-project.git src\llvm-project
+git clone --depth 1 --branch llvmorg-19.1.0 https://github.com/llvm/llvm-project.git src\llvm-project
 ```
 
 3. Build `llvm-tblgen.exe`:
@@ -57,7 +57,7 @@ cd jitutils
 
 2. Checkout the LLVM project repository:
 ```
-git clone --depth 1 --branch llvmorg-17.0.6 https://github.com/llvm/llvm-project.git src/llvm-project
+git clone --depth 1 --branch llvmorg-19.1.0 https://github.com/llvm/llvm-project.git src/llvm-project
 ```
 
 3. Build `llvm-tblgen` in Docker:
