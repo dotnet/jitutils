@@ -3,7 +3,7 @@
     <!-- Target the oldest possible LTS framework version. This will allow   -->
     <!-- using multiple versions of the runtime with the same managed        -->
     <!-- executable.                                                         -->
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
 
 </Project>
