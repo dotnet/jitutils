@@ -94,7 +94,8 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         $SourcesDirectory/llvm-project/llvm
 elif [ $CrossBuildUsingMariner -eq 1 ]; then
-    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
+    C_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
+    CXX_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
     # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
     cmake \
         -G "Unix Makefiles" \
@@ -104,8 +105,8 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$C_COMPILER \
         -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
-        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${CXX_BUILD_FLAGS}" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
@@ -133,7 +134,7 @@ fi
 popd
 
 if [ "$?" -ne 0 ]; then
-    echo "ERROR: cmake exited with code $1"
+    echo "ERROR: cmake exited with code $?"
     exit 1
 fi
 
@@ -143,7 +144,7 @@ cmake \
     --config Release
 
 if [ "$?" -ne 0 ]; then
-    echo "ERROR: cmake exited with code $1"
+    echo "ERROR: cmake exited with code $?"
     exit 1
 fi
 
