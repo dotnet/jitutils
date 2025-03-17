@@ -59,7 +59,7 @@ resources:
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
   LLVMSourceBundle: llvm-project.bundle
-  LLVMSourceVersion: llvmorg-19.1.0
+  LLVMSourceVersion: llvmorg-20.1.0
 
 jobs:
 

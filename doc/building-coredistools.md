@@ -10,7 +10,7 @@ cd jitutils
 
 2. Checkout the LLVM project repository into a subdirectory named src/llvm-project:
 ```
-git clone --depth 1 --branch llvmorg-19.1.0 https://github.com/llvm/llvm-project.git src\llvm-project
+git clone --depth 1 --branch llvmorg-20.1.0 https://github.com/llvm/llvm-project.git src\llvm-project
 ```
 
 3. Build `llvm-tblgen.exe`:
@@ -57,15 +57,15 @@ cd jitutils
 
 2. Checkout the LLVM project repository:
 ```
-git clone --depth 1 --branch llvmorg-19.1.0 https://github.com/llvm/llvm-project.git src/llvm-project
+git clone --depth 1 --branch llvmorg-20.1.0 https://github.com/llvm/llvm-project.git src/llvm-project
 ```
 
 3. Build `llvm-tblgen` in Docker:
-You need to install the `ncurses-compat` package because the Mariner container we use doesn't have libtinfo.so.5, which the built
-llvm-tblgen needs to be able to run. (Note that we build in the Mariner container, but we also run some built binaries, namely llvm-tblgen,
+You need to install the `ncurses-compat` package because the Azure Linux container we use doesn't have libtinfo.so.5, which the built
+llvm-tblgen needs to be able to run. (Note that we build in the Azure Linux container, but we also run some built binaries, namely llvm-tblgen,
 as part of the build process.)
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-amd64
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64
 sudo tdnf install -y ncurses-compat
 ./build-tblgen.sh linux-x64 /crossrootfs/x64
 ```
@@ -92,7 +92,7 @@ find ./artifacts -name libcoredistools.so
 6. Build `libcoredistools.so` for Linux arm64 under Docker:
 
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm64
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64
 sudo tdnf install -y ncurses-compat
 export PATH=$(pwd)/bin:$PATH
 ./build-coredistools.sh linux-arm64 /crossrootfs/arm64
@@ -100,14 +100,14 @@ export PATH=$(pwd)/bin:$PATH
 
 7. Build `libcoredistools.so` for Linux arm under Docker:
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:cbl-mariner-2.0-cross-ubuntu-18.04-arm
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm
 sudo tdnf install -y ncurses-compat
 export PATH=$(pwd)/bin:$PATH
 ./build-coredistools.sh linux-arm /crossrootfs/arm
 ```
 
 8. Build `libcoredistools.so` for Linux riscv64 under Docker:  
-There is no CBL Mariner container for RISC-V so use the standard Ubuntu cross build container used for e.g. dotnet/runtime.
+There is no Azure Linux container for RISC-V so use the standard Ubuntu cross build container used for e.g. dotnet/runtime.
 ```
 docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-22.04-cross-riscv64
 apt install libtinfo5
