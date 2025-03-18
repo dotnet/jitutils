@@ -60,24 +60,32 @@ cd jitutils
 git clone --depth 1 --branch llvmorg-20.1.0 https://github.com/llvm/llvm-project.git src/llvm-project
 ```
 
-3. Build `llvm-tblgen` in Docker:
+3. Start the Docker container in which the build will be run:
+```
+docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64
+```
+
+4. Install necessary dependencies (in Docker):
 You need to install the `ncurses-compat` package because the Azure Linux container we use doesn't have libtinfo.so.5, which the built
 llvm-tblgen needs to be able to run. (Note that we build in the Azure Linux container, but we also run some built binaries, namely llvm-tblgen,
 as part of the build process.)
 ```
-docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64
 sudo tdnf install -y ncurses-compat
+```
+
+5. Build `llvm-tblgen` (in Docker):
+```
 ./build-tblgen.sh linux-x64 /crossrootfs/x64
 ```
 
 This builds llvm-tblgen and puts it in the `bin` subdirectory.
 
-4. Add `llvm-tblgen` to the PATH:
+6. Add `llvm-tblgen` to the PATH (in Docker):
 ```
 export PATH=$(pwd)/bin:$PATH
 ```
 
-5. Build `libcoredistools.so` for Linux x64 (in the same Docker container):
+7. Build `libcoredistools.so` for Linux x64 (in Docker):
 ```
 ./build-coredistools.sh linux-x64 /crossrootfs/x64
 ```
@@ -89,8 +97,7 @@ find ./artifacts -name libcoredistools.so
 ./artifacts/linux-x64/lib/libcoredistools.so
 ```
 
-6. Build `libcoredistools.so` for Linux arm64 under Docker:
-
+8. Build `libcoredistools.so` for Linux arm64 under Docker:
 ```
 docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64
 sudo tdnf install -y ncurses-compat
@@ -98,7 +105,7 @@ export PATH=$(pwd)/bin:$PATH
 ./build-coredistools.sh linux-arm64 /crossrootfs/arm64
 ```
 
-7. Build `libcoredistools.so` for Linux arm under Docker:
+9. Build `libcoredistools.so` for Linux arm under Docker:
 ```
 docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm
 sudo tdnf install -y ncurses-compat
@@ -106,7 +113,7 @@ export PATH=$(pwd)/bin:$PATH
 ./build-coredistools.sh linux-arm /crossrootfs/arm
 ```
 
-8. Build `libcoredistools.so` for Linux riscv64 under Docker:  
+10. Build `libcoredistools.so` for Linux riscv64 under Docker:
 There is no Azure Linux container for RISC-V so use the standard Ubuntu cross build container used for e.g. dotnet/runtime.
 ```
 docker run -it --rm --entrypoint /bin/bash -v ~/git/jitutils:/opt/code -w /opt/code mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-22.04-cross-riscv64

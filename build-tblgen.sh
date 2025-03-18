@@ -6,13 +6,15 @@
 # linux-x64, linux-arm, linux-arm64 builds) and osx-x64 version (used for
 # osx-x64 and osx-arm64 builds).
 #
-# The linux-x64 build is itself a cross-build when using CBL-Mariner container to build.
+# The linux-x64 build is itself a cross-build when using Azure Linux container to build.
+
+set -x
 
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
-# Set this to 1 to build using CBL-Mariner
-CrossBuildUsingMariner=1
+# Set this to 1 to build using Azure Linux
+CrossBuildUsingAzureLinux=1
 
 EnsureCrossRootfsDirectoryExists () {
     if [ ! -d "$CrossRootfsDirectory" ]; then
@@ -27,7 +29,7 @@ LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
 case "$TargetOSArchitecture" in
     linux-x64)
         LLVMHostTriple=x86_64-linux-gnu
-        if [ $CrossBuildUsingMariner -eq 1 ]; then
+        if [ $CrossBuildUsingAzureLinux -eq 1 ]; then
             CMakeCrossCompiling=ON
             CMakeSystemName=Linux
             EnsureCrossRootfsDirectoryExists
@@ -78,13 +80,13 @@ pushd "$BinariesDirectory"
 C_COMPILER=$(command -v clang{,-{20..15}} | head -n 1)
 CXX_COMPILER=$(command -v clang++{,-{20..15}} | head -n 1)
 
+echo "============== Configuring build"
 if [ -z "$CrossRootfsDirectory" ]; then
     BUILD_FLAGS=""
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
-        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$C_COMPILER \
         -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
@@ -93,24 +95,38 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         $SourcesDirectory/llvm-project/llvm
-elif [ $CrossBuildUsingMariner -eq 1 ]; then
-    C_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
-    CXX_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory"
-    # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+elif [ $CrossBuildUsingAzureLinux -eq 1 ]; then
+    C_BUILD_FLAGS=""
+    CXX_BUILD_FLAGS=""
+    # Azure Linux doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+    TARGET_TRIPLE=$LLVMHostTriple
+    ROOTFS_DIR=$CrossRootfsDirectory
+    GCC_VER=$(basename "$(find "$ROOTFS_DIR/usr/include/c++/" -mindepth 1 -maxdepth 1 -type d | sort -V | head -n1)")
+    CPP_INCLUDES="$ROOTFS_DIR/usr/include/c++/$GCC_VER"
+    TRIPLET_INCLUDES=$([ -e "$CPP_INCLUDES/$TARGET_TRIPLE" ] && echo "$CPP_INCLUDES/$TARGET_TRIPLE" || echo "$(realpath "$CPP_INCLUDES/../../$TARGET_TRIPLE");$(realpath "$CPP_INCLUDES/../../$TARGET_TRIPLE/c++/$GCC_VER")")
+    CLANG_MAJOR_VERSION=$(clang --version | grep -oP "(?<=version )\d+")
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
-        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
-        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
+        -DCMAKE_ASM_COMPILER=$C_COMPILER \
         -DCMAKE_C_COMPILER=$C_COMPILER \
         -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
+        -DCMAKE_ASM_COMPILER_TARGET="$LLVMHostTriple" \
+        -DCMAKE_C_COMPILER_TARGET="$LLVMHostTriple" \
+        -DCMAKE_CXX_COMPILER_TARGET="$LLVMHostTriple" \
         -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${CXX_BUILD_FLAGS}" \
+        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_SYSROOT="$CrossRootfsDirectory" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
-        -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
-        -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
+        -DLLVM_USE_LINKER=lld \
+        -DLLVM_ENABLE_RUNTIMES="libcxx" \
+        -DLIBCXX_ENABLE_SHARED=OFF \
+        -DLIBCXX_CXX_ABI=libstdc++ \
+        -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$CPP_INCLUDES;$TRIPLET_INCLUDES" \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         $SourcesDirectory/llvm-project/llvm
 else
@@ -120,7 +136,6 @@ else
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
         -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
-        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=$C_COMPILER \
         -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
         -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
@@ -138,6 +153,7 @@ if [ "$?" -ne 0 ]; then
     exit 1
 fi
 
+echo "============== Building llvm-tblgen"
 cmake \
     --build $BinariesDirectory \
     --target llvm-tblgen \
