@@ -1,5 +1,3 @@
-# Changes to build with CBL-Mariner are marked "CBL-Mariner"
-
 pr:
   branches:
     include:
@@ -38,7 +36,6 @@ schedules:
     - main
   always: true
 
-# CBL-Mariner:
 resources:
   containers:
   - container: linux_x64
@@ -47,14 +44,6 @@ resources:
     image: mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm
   - container: linux_arm64
     image: mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64
-
-# # Use the following for legacy Ubuntu 18.04 based Arm/Arm64 cross build (x64 build is not cross)
-# resources:
-#   containers:
-#   - container: linux_arm
-#     image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-20220312201346-b9de666
-#   - container: linux_arm64
-#     image: mcr.microsoft.com/dotnet-buildtools/prereqs:ubuntu-18.04-cross-arm64-20220312201346-b2c2436
 
 variables:
   LLVMRepositoryUri: https://github.com/llvm/llvm-project.git
@@ -93,14 +82,10 @@ jobs:
   dependsOn: checkout_llvm
   displayName: Build llvm-tblgen linux
 
-  # CBL-Mariner:
   container: linux_x64
 
   pool:
-    # CBL-Mariner:
     vmImage: ubuntu-latest
-    # non-CBL-Mariner:
-    # vmImage: ubuntu-20.04
 
   workspace:
     clean: all
@@ -108,35 +93,22 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  # CBL-Mariner:
-
-  - script: |
-      sudo tdnf install -y ncurses-compat
-    displayName: Install libtinfo.so.5 dependency of llvm-tblgen
-
   - script: |
       ./build-tblgen.sh linux-x64 /crossrootfs/x64
     displayName: Build llvm-tblgen
-
-  # non-CBL-Mariner:
-  #- script: ./build-tblgen.sh linux-x64
-  #  displayName: Build llvm-tblgen
 
   - publish: $(Build.SourcesDirectory)/bin/llvm-tblgen
     artifact: tblgen-linux
     displayName: Publish llvm-tblgen
 
-################################ Cross-build coredistools for linux-arm, linux-arm64 (and linux-x64 on CBL-Mariner)
+################################ Cross-build coredistools for linux-arm, linux-arm64, and linux-x64
 
 - job: crossbuild_coredistools_linux
   timeoutInMinutes: 60
   dependsOn:
   - checkout_llvm
   - build_tblgen_linux
-  # CBL-Mariner:
   displayName: Build coredistools Linux
-  # non-CBL-Mariner:
-  # displayName: Build coredistools Linux
 
   container: $[ variables['ContainerImage'] ]
 
@@ -145,7 +117,6 @@ jobs:
 
   strategy:
     matrix:
-      # CBL-Mariner (x64 section only):
       x64:
         ContainerImage: linux_x64
         CrossRootfsDirectory: /crossrootfs/x64
@@ -180,57 +151,12 @@ jobs:
     displayName: Add llvm-tblgen to the PATH
 
   - script: |
-      sudo tdnf install -y ncurses-compat
-    displayName: Install libtinfo.so.5 dependency of llvm-tblgen
-
-  - script: |
       ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
     displayName: Build coredistools
 
   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
     artifact: coredistools-$(TargetOSArchitecture)
     displayName: Publish coredistools
-
-################################ Cross-build coredistools for linux-x64: only non-CBL-Mariner
-
-# - job: build_coredistools_linux
-#   timeoutInMinutes: 60
-#   dependsOn:
-#   - checkout_llvm
-#   - build_tblgen_linux
-#   displayName: Build coredistools Linux x64
-# 
-#   pool:
-#     vmImage: ubuntu-20.04
-# 
-#   variables:
-#     TargetOSArchitecture: linux-x64
-# 
-#   workspace:
-#     clean: all
-# 
-#   steps:
-#   - template: /eng/download-checkout-llvm.yml
-# 
-#   - download: current
-#     artifact: tblgen-linux
-#     displayName: Download llvm-tblgen
-# 
-#   - script: |
-#       chmod +x $(Pipeline.Workspace)/tblgen-linux/llvm-tblgen
-#     displayName: Make llvm-tblgen executable
-# 
-#   - script: |
-#       echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
-#     displayName: Add llvm-tblgen to the PATH
-# 
-#   - script: |
-#       ./build-coredistools.sh $(TargetOSArchitecture)
-#     displayName: Build coredistools
-# 
-#   - publish: $(Build.SourcesDirectory)/artifacts/$(TargetOSArchitecture)/bin/libcoredistools.so
-#     artifact: coredistools-$(TargetOSArchitecture)
-#     displayName: Publish coredistools
 
 ################################ Build llvm-tblgen on Mac (x64)
 
@@ -369,8 +295,6 @@ jobs:
 - job: build_coredistools_nuget_packages
   dependsOn:
   - crossbuild_coredistools_linux
-  # only non-CBL-Mariner:
-  # - build_coredistools_linux
   - build_coredistools_macos
   - build_coredistools_windows
   displayName: Build coredistools NuGet packages
