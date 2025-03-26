@@ -153,7 +153,7 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
+        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
         -DCMAKE_C_COMPILER=${C_COMPILER} \
         -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
         -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
@@ -164,13 +164,15 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
         -DCMAKE_STRIP=$StripTool \
+        -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_INCLUDE_TESTS=OFF \
-        -DLLVM_TABLEGEN=$TblGenTool \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm

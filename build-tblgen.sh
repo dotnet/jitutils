@@ -117,7 +117,6 @@ elif [ $CrossBuildUsingAzureLinux -eq 1 ]; then
         -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
         -DCMAKE_CXX_FLAGS="${CXX_BUILD_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
-        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DCMAKE_SYSROOT="$CrossRootfsDirectory" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
