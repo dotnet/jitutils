@@ -153,7 +153,7 @@ elif [ $CrossBuildUsingMariner -eq 1 ]; then
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
+        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=${C_COMPILER} \
         -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
         -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
@@ -212,7 +212,7 @@ fi
 
 cmake \
     --build $BinariesDirectory \
-    --parallel \
+    --parallel 4 \
     --target install-coredistools-stripped
 
 if [ "$?" -ne 0 ]; then
