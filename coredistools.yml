@@ -113,8 +113,8 @@ jobs:
   container: $[ variables['ContainerImage'] ]
 
   pool:
-      name: NetCore-Public
-      demands: ImageOverride -equals Build.Ubuntu.2204.Amd64.Open
+    name: NetCore-Public
+    demands: ImageOverride -equals Build.Ubuntu.2204.Amd64.Open
 
   strategy:
     matrix:
