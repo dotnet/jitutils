@@ -127,6 +127,7 @@ fi
 echo "============== Building llvm-tblgen"
 cmake \
     --build $BinariesDirectory \
+    --parallel 4 \
     --target llvm-tblgen \
     --config Release
 
