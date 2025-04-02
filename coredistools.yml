@@ -78,28 +78,28 @@ jobs:
 
 ################################ Build llvm-tblgen on Linux (x64)
 
-# - job: build_tblgen_linux
-#   dependsOn: checkout_llvm
-#   displayName: Build llvm-tblgen linux
+- job: build_tblgen_linux
+  dependsOn: checkout_llvm
+  displayName: Build llvm-tblgen linux
 
-#   container: linux_x64
+  container: linux_x64
 
-#   pool:
-#     vmImage: ubuntu-latest
+  pool:
+    vmImage: ubuntu-latest
 
-#   workspace:
-#     clean: all
+  workspace:
+    clean: all
 
-#   steps:
-#   - template: /eng/download-checkout-llvm.yml
+  steps:
+  - template: /eng/download-checkout-llvm.yml
 
-#   - script: |
-#       ./build-tblgen.sh linux-x64 /crossrootfs/x64
-#     displayName: Build llvm-tblgen
+  - script: |
+      ./build-tblgen.sh linux-x64 /crossrootfs/x64
+    displayName: Build llvm-tblgen
 
-#   - publish: $(Build.SourcesDirectory)/bin/llvm-tblgen
-#     artifact: tblgen-linux
-#     displayName: Publish llvm-tblgen
+  - publish: $(Build.SourcesDirectory)/bin/llvm-tblgen
+    artifact: tblgen-linux
+    displayName: Publish llvm-tblgen
 
 ################################ Cross-build coredistools for linux-arm, linux-arm64, and linux-x64
 
@@ -107,7 +107,7 @@ jobs:
   timeoutInMinutes: 60
   dependsOn:
   - checkout_llvm
-  # - build_tblgen_linux
+  - build_tblgen_linux
   displayName: Build coredistools Linux
 
   container: $[ variables['ContainerImage'] ]
@@ -139,17 +139,17 @@ jobs:
   steps:
   - template: /eng/download-checkout-llvm.yml
 
-  # - download: current
-  #   artifact: tblgen-linux
-  #   displayName: Download llvm-tblgen
+  - download: current
+    artifact: tblgen-linux
+    displayName: Download llvm-tblgen
 
-  # - script: |
-  #     chmod +x $(Pipeline.Workspace)/tblgen-linux/llvm-tblgen
-  #   displayName: Make llvm-tblgen executable
+  - script: |
+      chmod +x $(Pipeline.Workspace)/tblgen-linux/llvm-tblgen
+    displayName: Make llvm-tblgen executable
 
-  # - script: |
-  #     echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
-  #   displayName: Add llvm-tblgen to the PATH
+  - script: |
+      echo "##vso[task.prependpath]$(Pipeline.Workspace)/tblgen-linux"
+    displayName: Add llvm-tblgen to the PATH
 
   - script: |
       ./build-coredistools.sh $(TargetOSArchitecture) $(CrossRootfsDirectory)
