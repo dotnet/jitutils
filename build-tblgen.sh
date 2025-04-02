@@ -5,8 +5,6 @@
 # during those builds. Thus, we need a linux-x64 version (used for
 # linux-x64, linux-arm, linux-arm64 builds) and osx-x64 version (used for
 # osx-x64 and osx-arm64 builds).
-#
-# The linux-x64 build is itself a cross-build when using Azure Linux container to build.
 
 set -x
 
@@ -14,14 +12,7 @@ TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
 # Set this to 1 to build using Azure Linux
-CrossBuildUsingAzureLinux=1
-
-EnsureCrossRootfsDirectoryExists () {
-    if [ ! -d "$CrossRootfsDirectory" ]; then
-        echo "Invalid or unspecified CrossRootfsDirectory: $CrossRootfsDirectory"
-        exit 1
-    fi
-}
+BuildUsingAzureLinux=1
 
 CMakeOSXArchitectures=
 LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
@@ -29,26 +20,14 @@ LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
 case "$TargetOSArchitecture" in
     linux-x64)
         LLVMHostTriple=x86_64-linux-gnu
-        if [ $CrossBuildUsingAzureLinux -eq 1 ]; then
-            CMakeCrossCompiling=ON
-            CMakeSystemName=Linux
-            EnsureCrossRootfsDirectoryExists
-        else
-            CMakeCrossCompiling=OFF
-            CMakeSystemName=
-        fi
         ;;
 
     linux-loongarch64)
-        CMakeCrossCompiling=OFF
-        CMakeSystemName=
         LLVMHostTriple=loongarch64-linux-gnu
         LLVMTargetsToBuild="LoongArch"
         ;;
 
     osx-x64)
-        CMakeCrossCompiling=OFF
-        CMakeSystemName=
         CMakeOSXArchitectures=x86_64
         LLVMHostTriple=x86_64-apple-darwin
         ;;
@@ -81,30 +60,10 @@ C_COMPILER=$(command -v clang{,-{20..15}} | head -n 1)
 CXX_COMPILER=$(command -v clang++{,-{20..15}} | head -n 1)
 
 echo "============== Configuring build"
-if [ -z "$CrossRootfsDirectory" ]; then
-    BUILD_FLAGS=""
-    cmake \
-        -G "Unix Makefiles" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
-        -DCMAKE_C_COMPILER=$C_COMPILER \
-        -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
-        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
-        -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
-        -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
-        $SourcesDirectory/llvm-project/llvm
-elif [ $CrossBuildUsingAzureLinux -eq 1 ]; then
+if [ $BuildUsingAzureLinux -eq 1 ]; then
     C_BUILD_FLAGS=""
     CXX_BUILD_FLAGS=""
     # Azure Linux doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
-    TARGET_TRIPLE=$LLVMHostTriple
-    ROOTFS_DIR=$CrossRootfsDirectory
-    GCC_VER=$(basename "$(find "$ROOTFS_DIR/usr/include/c++/" -mindepth 1 -maxdepth 1 -type d | sort -V | head -n1)")
-    CPP_INCLUDES="$ROOTFS_DIR/usr/include/c++/$GCC_VER"
-    TRIPLET_INCLUDES=$([ -e "$CPP_INCLUDES/$TARGET_TRIPLE" ] && echo "$CPP_INCLUDES/$TARGET_TRIPLE" || echo "$(realpath "$CPP_INCLUDES/../../$TARGET_TRIPLE");$(realpath "$CPP_INCLUDES/../../$TARGET_TRIPLE/c++/$GCC_VER")")
-    CLANG_MAJOR_VERSION=$(clang --version | grep -oP "(?<=version )\d+")
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
@@ -118,7 +77,6 @@ elif [ $CrossBuildUsingAzureLinux -eq 1 ]; then
         -DCMAKE_CXX_FLAGS="${CXX_BUILD_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=$RootDirectory \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DCMAKE_SYSROOT="$CrossRootfsDirectory" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
         -DLLVM_USE_LINKER=lld \
@@ -126,6 +84,20 @@ elif [ $CrossBuildUsingAzureLinux -eq 1 ]; then
         -DLIBCXX_ENABLE_SHARED=OFF \
         -DLIBCXX_CXX_ABI=libstdc++ \
         -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$CPP_INCLUDES;$TRIPLET_INCLUDES" \
+        -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
+        $SourcesDirectory/llvm-project/llvm
+elif [ -z "$CrossRootfsDirectory" ]; then
+    BUILD_FLAGS=""
+    cmake \
+        -G "Unix Makefiles" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SYSTEM_NAME=$CMakeSystemName \
+        -DCMAKE_C_COMPILER=$C_COMPILER \
+        -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
+        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_INSTALL_PREFIX=$RootDirectory \
+        -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         $SourcesDirectory/llvm-project/llvm
 else
