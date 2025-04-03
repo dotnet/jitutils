@@ -120,6 +120,7 @@ jobs:
     matrix:
       x64:
         ContainerImage: linux_x64
+        CrossRootfsDirectory: /crossrootfs/x64
         TargetOSArchitecture: linux-x64
 
       arm:

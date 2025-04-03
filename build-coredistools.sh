@@ -3,8 +3,8 @@
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
-# Set this to 1 to build using CBL-Mariner
-CrossBuildUsingMariner=1
+# Set this to 1 to build using Azure Linux 3
+BuildUsingAzureLinux=1
 
 EnsureCrossRootfsDirectoryExists () {
     if [ ! -d "$CrossRootfsDirectory" ]; then
@@ -17,7 +17,7 @@ CMakeOSXArchitectures=
 LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
 
 # Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
-# `llvm-strip` is available in CBL-Mariner container,
+# `llvm-strip` is available in Azure Linux 3 container,
 # `llvm-strip-<version>` is available on standard cross build Ubuntu container,
 # `strip` is available on macOS.
 StripTool=$(command -v llvm-strip{,-{20..15}} strip | head -n 1)
@@ -65,7 +65,7 @@ case "$TargetOSArchitecture" in
 
     linux-x64)
         LLVMHostTriple=x86_64-linux-gnu
-        if [ $CrossBuildUsingMariner -eq 1 ]; then
+        if [ $BuildUsingAzureLinux -eq 1 ]; then
             CMakeCrossCompiling=ON
             EnsureCrossRootfsDirectoryExists
         else
@@ -90,6 +90,7 @@ case "$TargetOSArchitecture" in
         CMakeCrossCompiling=ON
         CMakeOSXArchitectures=arm64
         LLVMHostTriple=arm64-apple-macos
+        BuildUsingAzureLinux=1
         ;;
 
     osx-x64)
@@ -147,10 +148,10 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
-elif [ $CrossBuildUsingMariner -eq 1 ]; then
+elif [ $BuildUsingAzureLinux -eq 1 ]; then
     C_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
     CXX_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
-    # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+    # Azure Linux 3 doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \

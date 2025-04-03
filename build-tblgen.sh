@@ -30,6 +30,7 @@ case "$TargetOSArchitecture" in
     osx-x64)
         CMakeOSXArchitectures=x86_64
         LLVMHostTriple=x86_64-apple-darwin
+        BuildUsingAzureLinux=0
         ;;
 
     *)
