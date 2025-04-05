@@ -3,8 +3,8 @@
 TargetOSArchitecture=$1
 CrossRootfsDirectory=$2
 
-# Set this to 1 to build using CBL-Mariner
-CrossBuildUsingMariner=1
+# Set this to 1 to build using Azure Linux 3
+BuildUsingAzureLinux=1
 
 EnsureCrossRootfsDirectoryExists () {
     if [ ! -d "$CrossRootfsDirectory" ]; then
@@ -14,10 +14,10 @@ EnsureCrossRootfsDirectoryExists () {
 }
 
 CMakeOSXArchitectures=
-LLVMTargetsToBuild="AArch64;ARM;X86"
+LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
 
 # Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
-# `llvm-strip` is available in CBL-Mariner container,
+# `llvm-strip` is available in Azure Linux 3 container,
 # `llvm-strip-<version>` is available on standard cross build Ubuntu container,
 # `strip` is available on macOS.
 StripTool=$(command -v llvm-strip{,-{20..15}} strip | head -n 1)
@@ -47,6 +47,7 @@ fi
 
 echo "Using C compiler: $C_COMPILER"
 echo "Using C++ compiler: $CXX_COMPILER"
+echo "Using llvm-tablegen: $TblGenTool"
 
 case "$TargetOSArchitecture" in
     linux-arm)
@@ -65,7 +66,7 @@ case "$TargetOSArchitecture" in
 
     linux-x64)
         LLVMHostTriple=x86_64-linux-gnu
-        if [ $CrossBuildUsingMariner -eq 1 ]; then
+        if [ $BuildUsingAzureLinux -eq 1 ]; then
             CMakeCrossCompiling=ON
             EnsureCrossRootfsDirectoryExists
         else
@@ -90,6 +91,7 @@ case "$TargetOSArchitecture" in
         CMakeCrossCompiling=ON
         CMakeOSXArchitectures=arm64
         LLVMHostTriple=arm64-apple-macos
+        BuildUsingAzureLinux=1
         ;;
 
     osx-x64)
@@ -124,15 +126,16 @@ fi
 pushd "$BinariesDirectory"
 
 if [ -z "$CrossRootfsDirectory" ]; then
-    BUILD_FLAGS="-target $LLVMHostTriple"
+    C_BUILD_FLAGS="-target $LLVMHostTriple"
+    CXX_BUILD_FLAGS="-target $LLVMHostTriple"
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=${C_COMPILER} \
         -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
-        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${CXX_BUILD_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_OSX_ARCHITECTURES=$CMakeOSXArchitectures \
         -DCMAKE_STRIP=$StripTool \
@@ -146,43 +149,48 @@ if [ -z "$CrossRootfsDirectory" ]; then
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
-elif [ $CrossBuildUsingMariner -eq 1 ]; then
-    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
-    # CBL-Mariner doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
+elif [ $BuildUsingAzureLinux -eq 1 ]; then
+    C_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
+    CXX_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
+    # Azure Linux 3 doesn't have `ld` so need to tell clang to use `lld` with "-fuse-ld=lld"
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
+        -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_C_COMPILER=${C_COMPILER} \
         -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
-        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${CXX_BUILD_FLAGS}" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
         -DCMAKE_STRIP=$StripTool \
+        -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
         -DLLVM_DEFAULT_TARGET_TRIPLE=$LLVMDefaultTargetTriple \
+        -DLLVM_TABLEGEN=$TblGenTool \
         -DLLVM_ENABLE_TERMINFO=OFF \
         -DLLVM_EXTERNAL_PROJECTS=coredistools \
         -DLLVM_EXTERNAL_COREDISTOOLS_SOURCE_DIR=$SourcesDirectory/coredistools \
         -DLLVM_HOST_TRIPLE=$LLVMHostTriple \
         -DLLVM_INCLUDE_TESTS=OFF \
-        -DLLVM_TABLEGEN=$TblGenTool \
         -DLLVM_TARGETS_TO_BUILD=$LLVMTargetsToBuild \
         -DLLVM_TOOL_COREDISTOOLS_BUILD=ON \
         $SourcesDirectory/llvm-project/llvm
 else
-    BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
+    C_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
+    CXX_BUILD_FLAGS="--sysroot=$CrossRootfsDirectory -target $LLVMHostTriple"
     cmake \
         -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CROSSCOMPILING=$CMakeCrossCompiling \
         -DCMAKE_C_COMPILER=${C_COMPILER} \
         -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
-        -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
-        -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+        -DCMAKE_C_FLAGS="${C_BUILD_FLAGS}" \
+        -DCMAKE_CXX_FLAGS="${CXX_BUILD_FLAGS}" \
         -DCMAKE_INCLUDE_PATH=$CrossRootfsDirectory/usr/include \
         -DCMAKE_INSTALL_PREFIX=$StagingDirectory \
         -DCMAKE_LIBRARY_PATH=$CrossRootfsDirectory/usr/lib/$LLVMHostTriple \
@@ -202,17 +210,17 @@ fi
 popd
 
 if [ "$?" -ne 0 ]; then
-    echo "ERROR: cmake exited with code $1"
+    echo "ERROR: cmake exited with code $?"
     exit 1
 fi
 
 cmake \
     --build $BinariesDirectory \
-    --parallel \
+    --parallel 4 \
     --target install-coredistools-stripped
 
 if [ "$?" -ne 0 ]; then
-    echo "ERROR: cmake exited with code $1"
+    echo "ERROR: cmake exited with code $?"
     exit 1
 fi
 
