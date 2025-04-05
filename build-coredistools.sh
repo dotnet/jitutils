@@ -54,6 +54,7 @@ case "$TargetOSArchitecture" in
         CMakeCrossCompiling=ON
         LLVMDefaultTargetTriple=thumbv7-linux-gnueabihf
         LLVMHostTriple=arm-linux-gnueabihf
+        LLVMTargetsToBuild="ARM"
         EnsureCrossRootfsDirectoryExists
         ;;
 
