@@ -375,10 +375,11 @@ bool CorDisasm::init() {
     // string "+all" to just enable all features, even those not implemented in any current CPU.
     FeaturesStr = "+all";
   } else if (TheTargetArch == Target_RiscV64) {
-    FeaturesStr = "+m,+a,+f,+d,+c,+zicsr,+zifencei,"  // RV64GC
-      "+zicntr,+zihpm,+ziccif,+ziccrse,+ziccamoa,+zicclsm,+za64rs,"  // RVA20
-      "+b,+zihintpause,+zic64b,+zicbom,+zicbop,+zicboz,+zfhmin,+zkt," // RVA22 mandatory
-      "+v,+zfh,+zkn,+zks"; // RVA22 optional
+    FeaturesStr = "+rva23u64,"
+      "+zkn,+zks," // RVA22-only options, superseded with "+zvkng,+zvksg" vector equivalents in RVA23
+      "+zvkng,+zvksg," // RVA23 localized options
+      "+zabha,+zacas,+zvbc,+zama16b," // RVA23 development options
+      "+zbc,+zfh,+zvfh,+zfbfmin,+zvfbfmin,+zvfbfwma"; // RVA23 expansion options
   }
 
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
