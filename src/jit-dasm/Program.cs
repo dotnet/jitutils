@@ -81,14 +81,11 @@ namespace ManagedCodeGen
             return errorCount;
         }
 
-        private T Get<T>(CliOption<T> option) => _command.Result.GetValue(option);
-        private T Get<T>(CliArgument<T> arg) => _command.Result.GetValue(arg);
+        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
+        private T Get<T>(Argument<T> arg) => _command.Result.GetValue(arg);
 
         private static int Main(string[] args) =>
-            new CliConfiguration(new JitDasmRootCommand(args).UseVersion())
-            {
-                EnableParseErrorReporting = true
-            }.Invoke(args);
+            new CommandLineConfiguration(new JitDasmRootCommand(args).UseVersion()).Invoke(args);
 
         public List<AssemblyInfo> GenerateAssemblyWorklist()
         {

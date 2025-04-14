@@ -9,35 +9,35 @@ using System.IO;
 
 namespace ManagedCodeGen
 {
-    internal sealed class JitDasmRootCommand : CliRootCommand
+    internal sealed class JitDasmRootCommand : RootCommand
     {
-        public CliOption<string> AltJit { get; } =
+        public Option<string> AltJit { get; } =
             new("--altjit") { Description = "If set, the name of the altjit to use (e.g., clrjit_win_arm64_x64.dll)" };
-        public CliOption<string> CrossgenPath { get; } =
+        public Option<string> CrossgenPath { get; } =
             new("--crossgen", "-c") { CustomParser = Helpers.GetResolvedPath, DefaultValueFactory = Helpers.GetResolvedPath, Description = "The crossgen or crossgen2 compiler exe." };
-        public CliOption<string> JitPath { get; } =
+        public Option<string> JitPath { get; } =
             new("--jit", "-j") { CustomParser = Helpers.GetResolvedPath, DefaultValueFactory = Helpers.GetResolvedPath, Description = "The full path to the jit library" };
-        public CliOption<string> OutputPath { get; } =
+        public Option<string> OutputPath { get; } =
             new("--output", "-o") { Description = "The output path" };
-        public CliOption<string> Filename { get; } =
+        public Option<string> Filename { get; } =
             new("--file", "-f") { Description = "Name of file to take list of assemblies from. Both a file and assembly list can be used" };
-        public CliOption<bool> DumpGCInfo { get; } =
+        public Option<bool> DumpGCInfo { get; } =
             new("--gcinfo") { Description = "Add GC info to the disasm output" };
-        public CliOption<bool> DumpDebugInfo { get; } =
+        public Option<bool> DumpDebugInfo { get; } =
             new("--debuginfo") { Description = "Add Debug info to the disasm output" };
-        public CliOption<bool> Verbose { get; } =
+        public Option<bool> Verbose { get; } =
             new("--verbose") { Description = "Enable verbose output" };
-        public CliOption<bool> NoDiffable { get; } =
+        public Option<bool> NoDiffable { get; } =
             new("--nodiffable") { Description = "Generate non-diffable asm (pointer values will be left in output)" };
-        public CliOption<bool> Recursive { get; } =
+        public Option<bool> Recursive { get; } =
             new("--recursive", "-r") { Description = "Search directories recursively" };
-        public CliOption<List<string>> PlatformPaths { get; } =
+        public Option<List<string>> PlatformPaths { get; } =
             new("--platform", "-p") { Description = "Path to platform assemblies" };
-        public CliOption<List<string>> Methods { get; } =
+        public Option<List<string>> Methods { get; } =
             new("--methods", "-m") { Description = "List of methods to disasm" };
-        public CliArgument<List<string>> AssemblyList { get; } =
+        public Argument<List<string>> AssemblyList { get; } =
             new("--assembly") { Description = "The list of assemblies or directories to scan for assemblies" };
-        public CliOption<bool> WaitForDebugger { get; } =
+        public Option<bool> WaitForDebugger { get; } =
             new("--wait", "-w") { Description = "Wait for debugger to attach" };
 
         public ParseResult Result;

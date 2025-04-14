@@ -125,7 +125,7 @@ internal class Program
         (value > 0 ? "+" : "") + value.ToString($"0.{precision}") + "%";
 
     private static void Main(string[] args) =>
-        new CliConfiguration(new JitTpAnalyzeRootCommand().UseVersion()).Invoke(args);
+        new CommandLineConfiguration(new JitTpAnalyzeRootCommand().UseVersion()).Invoke(args);
 
     private struct FunctionDiff
     {
@@ -137,7 +137,7 @@ internal class Program
     }
 }
 
-internal class JitTpAnalyzeRootCommand : CliRootCommand
+internal class JitTpAnalyzeRootCommand : RootCommand
 {
     public JitTpAnalyzeRootCommand() : base("Compare PIN-based throughput traces")
     {
@@ -166,10 +166,10 @@ internal class JitTpAnalyzeRootCommand : CliRootCommand
         });
     }
 
-    public CliOption<string> BasePath { get; } =
+    public Option<string> BasePath { get; } =
         new("--base", "-b") { Description = "Base trace file", DefaultValueFactory = (_) => "basetp.txt" };
-    public CliOption<string> DiffPath { get; } =
+    public Option<string> DiffPath { get; } =
         new("--diff", "-d") { Description = "Diff trace file", DefaultValueFactory = (_) => "difftp.txt" };
-    public CliOption<double> Noise { get; } =
+    public Option<double> Noise { get; } =
         new("--noise", "-n") { Description = "Minimal contribution percentage for inclusion into the summary", DefaultValueFactory = (_) => 0.1 };
 }

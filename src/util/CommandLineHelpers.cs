@@ -8,7 +8,7 @@ using System.IO;
 
 public static class Helpers
 {
-    public static CliRootCommand UseVersion(this CliRootCommand command)
+    public static RootCommand UseVersion(this RootCommand command)
     {
         for (int i = 0; i < command.Options.Count; i++)
         {

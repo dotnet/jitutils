@@ -906,13 +906,10 @@ namespace ManagedCodeGen
             return fileToTextDiffCount;
         }
 
-        private T Get<T>(CliOption<T> option) => _command.Result.GetValue(option);
+        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
 
         private static int Main(string[] args) =>
-            new CliConfiguration(new JitAnalyzeRootCommand(args).UseVersion())
-            {
-                EnableParseErrorReporting = true
-            }.Invoke(args);
+            new CommandLineConfiguration(new JitAnalyzeRootCommand(args).UseVersion()).Invoke(args);
 
         public int Run()
         {
