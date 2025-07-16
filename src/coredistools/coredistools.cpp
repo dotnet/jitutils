@@ -523,8 +523,9 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
                              "                  "};
     OS << (Padding[(InstSize < 7) ? (7 - InstSize) : 0]);
   }
-  else if (TheTargetArch == Target_Thumb) {
+  else if ((TheTargetArch == Target_Thumb) || (TheTargetArch == Target_RiscV64)) {
     // Thumb-2 encoding has 32-bit instructions and 16-bit instructions.
+    // RISC-V RVC has 32-bit instructions and 16-bit instructions.
     if (InstSize == 2) {
       OS << "      ";
     }
