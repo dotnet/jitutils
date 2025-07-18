@@ -211,6 +211,7 @@ namespace CoreClrInstRetired
         public static double ProcessEnd;
 
         public static string samplePattern;
+        public static string eventPattern;
 
         static void UpdateSampleCountMap(ulong address, ulong count)
         {
@@ -397,6 +398,17 @@ namespace CoreClrInstRetired
                         break;
                     case "-show-events":
                         showEvents = true;
+                        break;
+                    case "-show-events-for":
+                        {
+                            if (i + 1 == args.Length)
+                            {
+                                Console.WriteLine($"Missing pattern value after '{args[i]}'");
+                            }
+                            eventPattern = args[i + 1];
+                            Console.WriteLine($"Will show events for methods matching `{eventPattern}`");
+                            i++;
+                        }
                         break;
                     case "-show-jit-times":
                         showJitTimes = true;
@@ -777,26 +789,31 @@ namespace CoreClrInstRetired
 
                                     string fullName = GetName(loadUnloadData, assemblyName);
                                     if (j != null) j.MethodName = fullName;
-                                    
+
+                                    if (eventPattern != null && fullName.Contains(eventPattern))
+                                    {
+                                        Console.WriteLine($"Method load of {(loadUnloadData.IsJitted ? "jitted" : "r2r")} {fullName}");
+                                    }
+
                                     // Console.WriteLine($"Method 0x{loadUnloadData.MethodStartAddress:X16} for 0x{loadUnloadData.MethodSize:X} bytes: {fullName}");
-                                    
+
                                     // string key = fullName + "@" + loadUnloadData.MethodID.ToString("X");
                                     string key = loadUnloadData.MethodID.ToString("X") + loadUnloadData.ReJITID;
                                     if (!ImageMap.ContainsKey(key))
                                     {
                                         ImageInfo methodInfo = new ImageInfo(fullName, loadUnloadData.MethodStartAddress,
                                             loadUnloadData.MethodSize);
-                                        
+
                                         methodInfo.IsJitGeneratedCode = true;
                                         methodInfo.IsJittedCode = loadUnloadData.IsJitted;
-                                        methodInfo.Tier = (OptimizationTier) loadUnloadData.PayloadByName("OptimizationTier");
+                                        methodInfo.Tier = (OptimizationTier)loadUnloadData.PayloadByName("OptimizationTier");
                                         methodInfo.AssemblyId = assemblyId;
-                                        
+
                                         ImageMap.Add(key, methodInfo);
                                     }
                                     else
                                     {
-                                        Console.WriteLine($"eh? reloading method {fullName}");
+                                        // Console.WriteLine($"eh? reloading method {fullName}");
                                     }
 
                                     break;
@@ -811,13 +828,18 @@ namespace CoreClrInstRetired
                                     if (moduleInfo.ContainsKey(loadUnloadData.ModuleID))
                                     {
                                         assemblyId = moduleInfo[loadUnloadData.ModuleID].AssemblyId;
-                                        
+
                                         if (assemblyNames.ContainsKey(assemblyId))
                                         {
                                             assemblyName = assemblyNames[assemblyId];
                                         }
                                     }
                                     string fullName = GetName(loadUnloadData, assemblyName);
+
+                                    if (eventPattern != null && fullName.Contains(eventPattern))
+                                    {
+                                        Console.WriteLine($"Method unload of {(loadUnloadData.IsJitted ? "jitted" : "r2r")} {fullName}");
+                                    }
 
                                     // Console.WriteLine($"Unload @ {loadUnloadData.MethodStartAddress:X16}: {fullName}");
                                     // string key = fullName + "@" + loadUnloadData.MethodID.ToString("X");
@@ -831,7 +853,7 @@ namespace CoreClrInstRetired
 
                                         methodInfo.IsJitGeneratedCode = true;
                                         methodInfo.IsJittedCode = loadUnloadData.IsJitted;
-                                        methodInfo.Tier = (OptimizationTier) loadUnloadData.PayloadByName("OptimizationTier");
+                                        methodInfo.Tier = (OptimizationTier)loadUnloadData.PayloadByName("OptimizationTier");
                                         methodInfo.AssemblyId = assemblyId;
 
                                         ImageMap.Add(key, methodInfo);
@@ -847,7 +869,8 @@ namespace CoreClrInstRetired
                 };
 
                 source.Process();
-            };
+            }
+            ;
 
             AttributeSampleCounts();
 
@@ -944,12 +967,12 @@ namespace CoreClrInstRetired
                         {
                             switch (i.Tier)
                             {
-                                case OptimizationTier.MinOptJitted:               codeDesc = "MinOpt "; break;
-                                case OptimizationTier.Optimized:                  codeDesc = "FullOpt"; break;
-                                case OptimizationTier.QuickJitted:                codeDesc = "Tier-0 "; break;
-                                case OptimizationTier.OptimizedTier1:             codeDesc = "Tier-1 "; break;
-                                case OptimizationTier.OptimizedTier1OSR:          codeDesc = "OSR    "; break;
-                                case OptimizationTier.QuickJittedInstrumented:    codeDesc = "Tier-0i"; break;
+                                case OptimizationTier.MinOptJitted: codeDesc = "MinOpt "; break;
+                                case OptimizationTier.Optimized: codeDesc = "FullOpt"; break;
+                                case OptimizationTier.QuickJitted: codeDesc = "Tier-0 "; break;
+                                case OptimizationTier.OptimizedTier1: codeDesc = "Tier-1 "; break;
+                                case OptimizationTier.OptimizedTier1OSR: codeDesc = "OSR    "; break;
+                                case OptimizationTier.QuickJittedInstrumented: codeDesc = "Tier-0i"; break;
                                 case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
                                 default: codeDesc = "???"; break;
                             }
@@ -1057,16 +1080,44 @@ namespace CoreClrInstRetired
                 {
                     foreach (var i in ImageMap)
                     {
-                        if (i.Key.Contains(samplePattern))
+                        ImageInfo info = i.Value;
+                        if (info.Name.Contains(samplePattern))
                         {
-                            ImageInfo info = i.Value;
-                            Console.WriteLine("Raw samples for {info.Name} at 0x{info.BaseAddress:X16} -- 0x{info.EndAddress:X16} (length 0x{info.EndAddress - info.BaseAddress}:4X)");
-
+                            bool needsHeader = true;
                             foreach (ulong address in SampleCountMap.Keys)
                             {
                                 if ((address >= info.BaseAddress) && (address <= info.EndAddress))
                                 {
-                                    Console.WriteLine("0x{address - info.BaseAddress:4X} : {SampleCountMap[address]}");
+                                    if (needsHeader)
+                                    {
+                                        string codeDesc = "native ";
+
+                                        if (info.IsJitGeneratedCode)
+                                        {
+                                            if (info.IsJittedCode)
+                                            {
+                                                switch (info.Tier)
+                                                {
+                                                    case OptimizationTier.MinOptJitted: codeDesc = "MinOpt "; break;
+                                                    case OptimizationTier.Optimized: codeDesc = "FullOpt"; break;
+                                                    case OptimizationTier.QuickJitted: codeDesc = "Tier-0 "; break;
+                                                    case OptimizationTier.OptimizedTier1: codeDesc = "Tier-1 "; break;
+                                                    case OptimizationTier.OptimizedTier1OSR: codeDesc = "OSR    "; break;
+                                                    case OptimizationTier.QuickJittedInstrumented: codeDesc = "Tier-0i"; break;
+                                                    case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
+                                                    default: codeDesc = "???"; break;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                codeDesc = "R2R";
+                                            }
+                                        }
+                                        Console.WriteLine($"\nRaw samples for {info.Name} [{codeDesc}] at 0x{info.BaseAddress:X16} -- 0x{info.EndAddress:X16} (length 0x{(info.EndAddress - info.BaseAddress):X4})");
+                                        needsHeader = false;
+                                    }
+
+                                    Console.WriteLine($"0x{(address - info.BaseAddress):X4} : {SampleCountMap[address]}");
                                 }
                             }
                         }
