@@ -10,6 +10,10 @@ set(LLVM_LINK_COMPONENTS
 
 set(SOURCES coredistools.cpp)
 
+if (MSVC)
+  add_link_options(/guard:cf)
+endif()
+
 set(LLVM_EXPORTED_SYMBOL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/coredistools.exports)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
