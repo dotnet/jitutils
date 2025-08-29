@@ -11,7 +11,7 @@ set(LLVM_LINK_COMPONENTS
 set(SOURCES coredistools.cpp)
 
 if (MSVC)
-  add_compile_options(/guard:cf>)
+  add_compile_options(/guard:cf)
   add_link_options(/guard:cf)
 endif()
 
