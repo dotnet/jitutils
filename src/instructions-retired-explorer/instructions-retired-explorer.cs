@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Xml;
 
 // tracelog.exe -profilesources Help
 //
@@ -87,6 +88,33 @@ namespace CoreClrInstRetired
         public bool ContainsAddress(ulong address)
         {
             return (address >= BaseAddress && address < EndAddress);
+        }
+    }
+
+    public class RejitEvent
+    {
+        public RejitEvent() { sampleCountMap = new SortedDictionary<ulong, ulong>(); counts = new Program.AttributedCounts(); }
+        public double startTimestamp;
+        public double endTimestamp;
+        public int pendingMethods;
+        public int jittedMethods;
+        public bool isPause;
+        public SortedDictionary<ulong, ulong> sampleCountMap;
+        public Program.AttributedCounts counts; 
+
+        public void UpdateSampleCountMap(ulong address, ulong count)
+        {
+            if (!sampleCountMap.ContainsKey(address))
+            {
+                sampleCountMap[address] = 0;
+            }
+            sampleCountMap[address] += count;
+            counts.TotalSampleCount += count;
+        }
+
+        public void AttributeSamples()
+        {
+            Program.AttributeSampleCounts(sampleCountMap, counts);
         }
     }
 
@@ -177,31 +205,9 @@ namespace CoreClrInstRetired
         public static Dictionary<long, AssemblyInfo> assemblyInfo = new Dictionary<long, AssemblyInfo>();
         public static List<JitInvocation> AllJitInvocations = new List<JitInvocation>();
         public static List<BenchmarkInterval> BenchmarkIntervals = new List<BenchmarkInterval>();
-        public static ulong JitSampleCount = 0;
-        public static ulong TotalSampleCount = 0;
+        public static List<RejitEvent> RejitEvents = new List<RejitEvent>();
 
-        // unknown code
-        public static ulong UnknownImageSampleCount = 0;
-
-        // all managed code (jit-generated)
-        public static ulong JitGeneratedCodeSampleCount = 0;
-
-        // all jitted code
-        public static ulong JittedCodeSampleCount = 0;
-
-        // all pre-jitted code
-        public static ulong PreJittedCodeSampleCount = 0;
-
-        // categories of jitted code
-        public static ulong JitMinOptSampleCount = 0;
-        public static ulong JitFullOptSampleCount = 0;
-        public static ulong JitTier0SampleCount = 0;
-        public static ulong JitTier1SampleCount = 0;
-        public static ulong JitTier1OSRSampleCount = 0;
-        public static ulong JitTier0InstrSampleCount = 0;
-        public static ulong JitTier1InstrSampleCount = 0;
-        public static ulong JitMysterySampleCount = 0;
-
+        public static AttributedCounts Counts = new AttributedCounts();
 
         public static ulong JittedCodeSize = 0;
         public static ulong ManagedMethodCount = 0;
@@ -220,7 +226,7 @@ namespace CoreClrInstRetired
                 SampleCountMap[address] = 0;
             }
             SampleCountMap[address] += count;
-            TotalSampleCount += count;
+            Counts.TotalSampleCount += count;
         }
 
         static void UpdateThreadCountMap(int threadId, ulong count)
@@ -232,16 +238,49 @@ namespace CoreClrInstRetired
             ThreadCountMap[threadId] += count;
         }
 
-        static void AttributeSampleCounts()
+        static ImageInfo[] imageArray;
+
+        public class AttributedCounts
+        {
+            public ulong JitSampleCount;
+            public ulong TotalSampleCount;
+
+            // unknown code
+            public ulong UnknownImageSampleCount;
+
+            // all managed code (jit-generated)
+            public ulong JitGeneratedCodeSampleCount;
+
+            // all jitted code
+            public ulong JittedCodeSampleCount;
+
+            // all pre-jitted code
+            public ulong PreJittedCodeSampleCount;
+
+            // categories of jitted code
+            public ulong JitMinOptSampleCount;
+            public ulong JitFullOptSampleCount;
+            public ulong JitTier0SampleCount;
+            public ulong JitTier1SampleCount;
+            public ulong JitTier1OSRSampleCount;
+            public ulong JitTier0InstrSampleCount;
+            public ulong JitTier1InstrSampleCount;
+            public ulong JitMysterySampleCount;
+        }
+
+        public static void AttributeSampleCounts(SortedDictionary<ulong, ulong> sampleCountMap, AttributedCounts counts)
         {
             // Sort images by starting address.
-            ImageInfo[] imageArray = new ImageInfo[ImageMap.Count];
-            ImageMap.Values.CopyTo(imageArray, 0);
-            Array.Sort(imageArray, ImageInfo.LowerAddress);
+            if (imageArray == null)
+            {
+                imageArray = new ImageInfo[ImageMap.Count];
+                ImageMap.Values.CopyTo(imageArray, 0);
+                Array.Sort(imageArray, ImageInfo.LowerAddress);
+            }
             int index = 0;
             int backupIndex = 0;
 
-            foreach (ulong address in SampleCountMap.Keys)
+            foreach (ulong address in sampleCountMap.Keys)
             {
                 ImageInfo image = null;
 
@@ -270,46 +309,50 @@ namespace CoreClrInstRetired
                     }
                 }
 
-                ulong counts = SampleCountMap[address];
+                ulong sampleCount = sampleCountMap[address];
 
-                if (image == null)
+                // For the main attribution warn if a sigificant number of samples can't be attributed to an image
+                if (image == null) 
                 {
-                    bool significant = ((double)counts / TotalSampleCount) > 0.001;
-                    if (significant)
+                    if (counts == Counts && counts.TotalSampleCount > 0)
                     {
-                        Console.WriteLine("Can't map address {0:X} -- {1} counts", address, SampleCountMap[address]);
+                        bool significant = ((double)sampleCount / counts.TotalSampleCount) > 0.001;
+                        if (significant)
+                        {
+                            Console.WriteLine("Can't map address {0:X} -- {1} counts", address, SampleCountMap[address]);
+                        }
                     }
-                    UnknownImageSampleCount += counts;
+                    counts.UnknownImageSampleCount += sampleCount;
                     continue;
                 }
 
                 // Console.WriteLine($"{counts} counts for image {image.Name} at {address:X16}");
 
-                image.SampleCount += counts;
+                image.SampleCount += sampleCount;
 
                 if (image.IsJitGeneratedCode)
                 {
-                    JitGeneratedCodeSampleCount += counts;
+                    counts.JitGeneratedCodeSampleCount += sampleCount;
 
                     if (image.IsJittedCode)
                     {
-                        JittedCodeSampleCount += counts;
+                        counts.JittedCodeSampleCount += sampleCount;
 
                         switch (image.Tier)
                         {
-                            case OptimizationTier.MinOptJitted: JitMinOptSampleCount += counts; break;
-                            case OptimizationTier.Optimized: JitFullOptSampleCount += counts; break;
-                            case OptimizationTier.QuickJitted: JitTier0SampleCount += counts; break;
-                            case OptimizationTier.OptimizedTier1: JitTier1SampleCount += counts; break;
-                            case OptimizationTier.OptimizedTier1OSR: JitTier1OSRSampleCount += counts; break;
-                            case OptimizationTier.QuickJittedInstrumented: JitTier0InstrSampleCount += counts; break;
-                            case OptimizationTier.OptimizedTier1Instrumented: JitTier1InstrSampleCount += counts; break;
-                            default: JitMysterySampleCount += counts; break;
+                            case OptimizationTier.MinOptJitted: counts.JitMinOptSampleCount += sampleCount; break;
+                            case OptimizationTier.Optimized: counts.JitFullOptSampleCount += sampleCount; break;
+                            case OptimizationTier.QuickJitted: counts.JitTier0SampleCount += sampleCount; break;
+                            case OptimizationTier.OptimizedTier1: counts.JitTier1SampleCount += sampleCount; break;
+                            case OptimizationTier.OptimizedTier1OSR: counts.JitTier1OSRSampleCount += sampleCount; break;
+                            case OptimizationTier.QuickJittedInstrumented: counts.JitTier0InstrSampleCount += sampleCount; break;
+                            case OptimizationTier.OptimizedTier1Instrumented: counts.JitTier1InstrSampleCount += sampleCount; break;
+                            default: counts.JitMysterySampleCount += sampleCount; break;
                         }
                     }
                     else
                     {
-                        PreJittedCodeSampleCount += counts;
+                        counts.PreJittedCodeSampleCount += sampleCount;
                     }
                 }
                 continue;
@@ -353,9 +396,11 @@ namespace CoreClrInstRetired
             bool filterToBenchmark = false;
             bool instructionsRetired = false;
             BenchmarkInterval benchmarkInterval = null;
+            RejitEvent rejitEvent = new RejitEvent() { startTimestamp = 0, isPause = true };
             int targetPid = -2;
             int benchmarkPid = -2;
             bool isPartialProcess = false;
+            bool rejitInfo = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -423,6 +468,10 @@ namespace CoreClrInstRetired
                         }
                         filterToBenchmark = true;
                         break;
+                    case "-rejit":
+                        rejitInfo = true;
+                        break;
+
                     default:
                         if (args[i].StartsWith("-"))
                         {
@@ -640,13 +689,17 @@ namespace CoreClrInstRetired
                                 SampledProfileTraceData traceData = (SampledProfileTraceData)data;
                                 if ((traceData.ProcessID == benchmarkPid) && !instructionsRetired)
                                 {
+                                    ulong instructionPointer = traceData.InstructionPointer;
+                                    ulong count = PMCInterval;
+
                                     if (!filterToBenchmark || (benchmarkInterval != null))
                                     {
-                                        ulong instructionPointer = traceData.InstructionPointer;
-                                        ulong count = PMCInterval;
+
                                         UpdateSampleCountMap(instructionPointer, count);
                                         UpdateThreadCountMap(traceData.ThreadID, count);
                                     }
+
+                                    rejitEvent?.UpdateSampleCountMap(instructionPointer, count);
                                 }
                                 break;
                             }
@@ -701,6 +754,58 @@ namespace CoreClrInstRetired
 
                         switch (data.EventName)
                         {
+                            case "TieredCompilation/BackgroundJitStart":
+                                if (rejitInfo)
+                                {
+                                    if (rejitEvent == null)
+                                    {
+                                        Console.WriteLine($"Eh? No active rejit event at {data.TimeStampRelativeMSec}ms");
+                                    }
+                                    else  if (rejitEvent.isPause)
+                                    {
+                                        TieredCompilationBackgroundJitStartTraceData startData = (TieredCompilationBackgroundJitStartTraceData)data;
+                                        rejitEvent.endTimestamp = startData.TimeStampRelativeMSec;
+                                        RejitEvents.Add(rejitEvent);
+
+                                        rejitEvent = new RejitEvent();
+                                        rejitEvent.startTimestamp = startData.TimeStampRelativeMSec;
+                                        rejitEvent.pendingMethods = startData.PendingMethodCount;
+                                        rejitEvent.isPause = false;
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Eh? Rejit event overlap at {data.TimeStampRelativeMSec}ms");
+                                    }
+
+                                }
+                                break;
+
+                            case "TieredCompilation/BackgroundJitStop":
+                                if (rejitInfo)
+                                {
+                                    if (rejitEvent == null)
+                                    {
+                                        Console.WriteLine($"Eh? Rejit event unpaired stop at {data.TimeStampRelativeMSec}ms");
+                                    }
+                                    else if (rejitEvent.isPause)
+                                    {
+                                        Console.WriteLine($"Eh? No active rejit event at {data.TimeStampRelativeMSec}ms");
+                                    }
+                                    else
+                                    {
+                                        TieredCompilationBackgroundJitStopTraceData stopData = (TieredCompilationBackgroundJitStopTraceData)data;
+
+                                        rejitEvent.endTimestamp = stopData.TimeStampRelativeMSec;
+                                        rejitEvent.jittedMethods = stopData.JittedMethodCount;
+                                        RejitEvents.Add(rejitEvent);
+
+                                        rejitEvent = new RejitEvent();
+                                        rejitEvent.startTimestamp = stopData.TimeStampRelativeMSec;
+                                        rejitEvent.isPause = true;
+                                    }                            
+                                }
+                                break;
+
                             case "Loader/AssemblyLoad":
                                 {
                                     AssemblyLoadUnloadTraceData assemblyData = (AssemblyLoadUnloadTraceData)data;
@@ -764,7 +869,7 @@ namespace CoreClrInstRetired
                                         }
                                         j.FinalThreadCount = ThreadCountMap[j.ThreadId];
                                         j.FinalTimestamp = loadUnloadData.TimeStampRelativeMSec;
-                                        JitSampleCount += j.JitInstrs();
+                                        Counts.JitSampleCount += j.JitInstrs();
                                         ManagedMethodCount++;
                                         JittedCodeSize += (ulong)loadUnloadData.MethodExtent;
                                     }
@@ -872,7 +977,7 @@ namespace CoreClrInstRetired
             }
             ;
 
-            AttributeSampleCounts();
+            AttributeSampleCounts(SampleCountMap, Counts);
 
             if (showEvents)
             {
@@ -899,46 +1004,46 @@ namespace CoreClrInstRetired
                 ulong CountsPerEvent = 1; // review
                 ulong eventCount = eventCounts[eventToSummarize];
                 ulong JitDllSampleCount = jitDllKey == null ? 0 : ImageMap[jitDllKey].SampleCount;
-                ulong JitInterfaceCount = JitSampleCount - JitDllSampleCount;
+                ulong JitInterfaceCount = Counts.JitSampleCount - JitDllSampleCount;
 
                 Console.WriteLine($"{eventName} for {benchmarkName}: {eventCount} events for {summaryType}");
 
                 Console.WriteLine("Jitting           : {0:00.00%} {1,-8:G3} samples {2} methods",
-                    (double)JitSampleCount / TotalSampleCount, JitSampleCount * CountsPerEvent, AllJitInvocations.Count);
+                    (double)Counts.JitSampleCount / Counts.TotalSampleCount, Counts.JitSampleCount * CountsPerEvent, AllJitInvocations.Count);
                 Console.WriteLine("  JitInterface    : {0:00.00%} {1,-8:G3} samples",
-                    (double)JitInterfaceCount / TotalSampleCount, JitInterfaceCount * CountsPerEvent);
+                    (double)JitInterfaceCount / Counts.TotalSampleCount, JitInterfaceCount * CountsPerEvent);
                 Console.WriteLine("Jit-generated code: {0:00.00%} {1,-8:G3} samples",
-                    (double)JitGeneratedCodeSampleCount / TotalSampleCount, JitGeneratedCodeSampleCount * CountsPerEvent);
+                    (double)Counts.JitGeneratedCodeSampleCount / Counts.TotalSampleCount, Counts.JitGeneratedCodeSampleCount * CountsPerEvent);
                 Console.WriteLine("  Jitted code     : {0:00.00%} {1,-8:G3} samples",
-                    (double)JittedCodeSampleCount / TotalSampleCount, JittedCodeSampleCount * CountsPerEvent);
+                    (double)Counts.JittedCodeSampleCount / Counts.TotalSampleCount, Counts.JittedCodeSampleCount * CountsPerEvent);
                 Console.WriteLine("  MinOpts code    : {0:00.00%} {1,-8:G3} samples",
-                    (double)JitMinOptSampleCount / TotalSampleCount, JitMinOptSampleCount * CountsPerEvent);
+                    (double)Counts.JitMinOptSampleCount / Counts.TotalSampleCount, Counts.JitMinOptSampleCount * CountsPerEvent);
                 Console.WriteLine("  FullOpts code   : {0:00.00%} {1,-8:G3} samples",
-                    (double)JitFullOptSampleCount / TotalSampleCount, JitFullOptSampleCount * CountsPerEvent);
+                    (double)Counts.JitFullOptSampleCount / Counts.TotalSampleCount, Counts.JitFullOptSampleCount * CountsPerEvent);
                 Console.WriteLine("  Tier-0 code     : {0:00.00%} {1,-8:G3} samples",
-                    (double)JitTier0SampleCount / TotalSampleCount, JitTier0SampleCount * CountsPerEvent);
+                    (double)Counts.JitTier0SampleCount / Counts.TotalSampleCount, Counts.JitTier0SampleCount * CountsPerEvent);
                 Console.WriteLine("  Tier-1 code     : {0:00.00%} {1,-8:G3} samples",
-                    (double)JitTier1SampleCount / TotalSampleCount, JitTier1SampleCount * CountsPerEvent);
+                    (double)Counts.JitTier1SampleCount / Counts.TotalSampleCount, Counts.JitTier1SampleCount * CountsPerEvent);
                 Console.WriteLine("  Tier-0 inst code: {0:00.00%} {1,-8:G3} samples",
-                    (double)JitTier0InstrSampleCount / TotalSampleCount, JitTier0InstrSampleCount * CountsPerEvent);
+                    (double)Counts.JitTier0InstrSampleCount / Counts.TotalSampleCount, Counts.JitTier0InstrSampleCount * CountsPerEvent);
                 Console.WriteLine("  Tier-1 inst code: {0:00.00%} {1,-8:G3} samples",
-                    (double)JitTier1InstrSampleCount / TotalSampleCount, JitTier1InstrSampleCount * CountsPerEvent);
+                    (double)Counts.JitTier1InstrSampleCount / Counts.TotalSampleCount, Counts.JitTier1InstrSampleCount * CountsPerEvent);
                 Console.WriteLine("  R2R code        : {0:00.00%} {1,-8:G3} samples",
-                    (double)PreJittedCodeSampleCount / TotalSampleCount, PreJittedCodeSampleCount * CountsPerEvent);
+                    (double)Counts.PreJittedCodeSampleCount / Counts.TotalSampleCount, Counts.PreJittedCodeSampleCount * CountsPerEvent);
 
-                if (JitMysterySampleCount > 0)
+                if ( Counts.JitMysterySampleCount > 0)
                 {
                     Console.WriteLine("  ???     code    : {0:00.00%} {1,-8:G3} samples",
-                        (double)JitMysterySampleCount / TotalSampleCount, JitMysterySampleCount * CountsPerEvent);
+                        (double)Counts.JitMysterySampleCount / Counts.TotalSampleCount, Counts.JitMysterySampleCount * CountsPerEvent);
                 }
                 Console.WriteLine();
 
-                double ufrac = (double)UnknownImageSampleCount / TotalSampleCount;
+                double ufrac = (double) Counts.UnknownImageSampleCount / Counts.TotalSampleCount;
                 if (ufrac > 0.002)
                 {
                     Console.WriteLine("{0:00.00%}   {1,-8:G3}    {2} {3}",
                         ufrac,
-                        UnknownImageSampleCount * CountsPerEvent,
+                            Counts.UnknownImageSampleCount * CountsPerEvent,
                         "?       ",
                         "Unknown");
                 }
@@ -948,7 +1053,7 @@ namespace CoreClrInstRetired
 
                 foreach (var i in ImageMap)
                 {
-                    double frac = (double)i.Value.SampleCount / TotalSampleCount;
+                    double frac = (double)i.Value.SampleCount / Counts.TotalSampleCount;
                     if (frac > 0.0005)
                     {
                         significantInfos.Add(i.Value);
@@ -983,7 +1088,7 @@ namespace CoreClrInstRetired
                         }
                     }
                     Console.WriteLine("{0:00.00%}   {1,-9:G4}   {2}  {3}",
-                        (double)i.SampleCount / TotalSampleCount,
+                        (double)i.SampleCount / Counts.TotalSampleCount,
                         i.SampleCount * CountsPerEvent, codeDesc,
                         i.Name);
                 }
@@ -993,7 +1098,7 @@ namespace CoreClrInstRetired
                     // Show significant jit invocations (samples)
                     AllJitInvocations.Sort(JitInvocation.MoreJitInstructions);
                     bool printed = false;
-                    ulong signficantCount = (5 * JitSampleCount) / 1000;
+                    ulong signficantCount = (5 * Counts.JitSampleCount) / 1000;
                     foreach (var j in AllJitInvocations)
                     {
                         ulong totalCount = j.JitInstrs();
@@ -1005,7 +1110,7 @@ namespace CoreClrInstRetired
                                 Console.WriteLine("Slow jitting methods (anything taking more than 0.5% of total samples)");
                                 printed = true;
                             }
-                            Console.WriteLine("{0:00.00%}    {1,-9:G4} {2}", (double)totalCount / TotalSampleCount, totalCount * CountsPerEvent, j.MethodName);
+                            Console.WriteLine("{0:00.00%}    {1,-9:G4} {2}", (double)totalCount / Counts.TotalSampleCount, totalCount * CountsPerEvent, j.MethodName);
                         }
                     }
 
@@ -1141,6 +1246,44 @@ namespace CoreClrInstRetired
                     }
                 }
             }
+
+            // Show rejitting info
+            if (rejitInfo)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"Rejit: found {RejitEvents.Count} rejit intervals");
+                int i = 0;
+                foreach (var x in RejitEvents)
+                {
+                    if (x.isPause)
+                    {
+                        continue;
+                    }
+
+                    x.AttributeSamples();
+                
+                    // todo: collect aggregate cpu samples for each rejit event interval
+                    //
+                    Console.WriteLine($"{i++:D3} {x.startTimestamp:F3} -- {x.endTimestamp:F3} : {x.endTimestamp - x.startTimestamp:F3}ms, {x.pendingMethods} pending, {x.jittedMethods} jitted");
+
+                    Console.WriteLine("  Jitted code     : {0:00.00%}",
+                        (double)x.counts.JittedCodeSampleCount / x.counts.TotalSampleCount);
+                    Console.WriteLine("  MinOpts code    : {0:00.00%}",
+                        (double)x.counts.JitMinOptSampleCount / x.counts.TotalSampleCount);
+                    Console.WriteLine("  FullOpts code   : {0:00.00%}",
+                        (double)x.counts.JitFullOptSampleCount / x.counts.TotalSampleCount);
+                    Console.WriteLine("  Tier-0 code     : {0:00.00%}",
+                        (double)x.counts.JitTier0SampleCount / x.counts.TotalSampleCount);
+                    Console.WriteLine("  Tier-1 code     : {0:00.00%}",
+                        (double)x.counts.JitTier1SampleCount / x.counts.TotalSampleCount);
+                    Console.WriteLine("  Tier-0 inst code: {0:00.00%}",
+                        (double)x.counts.JitTier0InstrSampleCount / x.counts.TotalSampleCount);
+                    Console.WriteLine("  Tier-1 inst code: {0:00.00%} ",
+                        (double)x.counts.JitTier1InstrSampleCount / x.counts.TotalSampleCount);
+                    Console.WriteLine("  R2R code        : {0:00.00%}",
+                        (double)x.counts.PreJittedCodeSampleCount / x.counts.TotalSampleCount);
+                }
+            }
         }
 
         static void Usage()
@@ -1155,6 +1298,7 @@ namespace CoreClrInstRetired
             Console.WriteLine("   -show-jit-times: summarize data on time spent jitting");
             Console.WriteLine("   -show-samples <pattern>: show raw method-relative hits for some methods");
             Console.WriteLine("   -instructions-retired: if ETL has instructions retired events, summarize those instead of profile samples");
+            Console.WriteLine("   -rejit: summarize tiered compilation rejitting behavior");
         }
     }
 }
