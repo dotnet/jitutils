@@ -100,7 +100,7 @@ namespace CoreClrInstRetired
         public int jittedMethods;
         public bool isPause;
         public SortedDictionary<ulong, ulong> sampleCountMap;
-        public Program.AttributedCounts counts; 
+        public Program.AttributedCounts counts;
 
         public void UpdateSampleCountMap(ulong address, ulong count)
         {
@@ -312,7 +312,7 @@ namespace CoreClrInstRetired
                 ulong sampleCount = sampleCountMap[address];
 
                 // For the main attribution warn if a sigificant number of samples can't be attributed to an image
-                if (image == null) 
+                if (image == null)
                 {
                     if (counts == Counts && counts.TotalSampleCount > 0)
                     {
@@ -330,7 +330,7 @@ namespace CoreClrInstRetired
 
                 image.SampleCount += sampleCount;
 
-                if (image.IsJitGeneratedCode)
+                if (image.IsJitGeneratedCode || image.IsBackupImage)
                 {
                     counts.JitGeneratedCodeSampleCount += sampleCount;
 
@@ -665,9 +665,13 @@ namespace CoreClrInstRetired
 
                                     if (!ImageMap.ContainsKey(fullName))
                                     {
-                                        ImageInfo imageInfo = new ImageInfo(Path.GetFileName(fileName), imageBase, imageSize);
+                                        string filePart = Path.GetFileName(fileName);
+                                        ImageInfo imageInfo = new ImageInfo(filePart, imageBase, imageSize);
 
-                                        if (fileName.Contains("Microsoft.") || fileName.Contains("System.") || fileName.Contains("Newtonsoft."))
+                                        // We no longer get load/unload events for R2R methods, so we recognize them hackily...
+                                        // (may have bits on assembly load to look at ?)
+                                        //
+                                        if (filePart.Contains("Microsoft.") || filePart.Contains("System.") || filePart.Contains("Newtonsoft."))
                                         {
                                             imageInfo.IsBackupImage = true;
                                         }
@@ -761,7 +765,7 @@ namespace CoreClrInstRetired
                                     {
                                         Console.WriteLine($"Eh? No active rejit event at {data.TimeStampRelativeMSec}ms");
                                     }
-                                    else  if (rejitEvent.isPause)
+                                    else if (rejitEvent.isPause)
                                     {
                                         TieredCompilationBackgroundJitStartTraceData startData = (TieredCompilationBackgroundJitStartTraceData)data;
                                         rejitEvent.endTimestamp = startData.TimeStampRelativeMSec;
@@ -802,7 +806,7 @@ namespace CoreClrInstRetired
                                         rejitEvent = new RejitEvent();
                                         rejitEvent.startTimestamp = stopData.TimeStampRelativeMSec;
                                         rejitEvent.isPause = true;
-                                    }                            
+                                    }
                                 }
                                 break;
 
@@ -1031,14 +1035,14 @@ namespace CoreClrInstRetired
                 Console.WriteLine("  R2R code        : {0:00.00%} {1,-8:G3} samples",
                     (double)Counts.PreJittedCodeSampleCount / Counts.TotalSampleCount, Counts.PreJittedCodeSampleCount * CountsPerEvent);
 
-                if ( Counts.JitMysterySampleCount > 0)
+                if (Counts.JitMysterySampleCount > 0)
                 {
                     Console.WriteLine("  ???     code    : {0:00.00%} {1,-8:G3} samples",
                         (double)Counts.JitMysterySampleCount / Counts.TotalSampleCount, Counts.JitMysterySampleCount * CountsPerEvent);
                 }
                 Console.WriteLine();
 
-                double ufrac = (double) Counts.UnknownImageSampleCount / Counts.TotalSampleCount;
+                double ufrac = (double)Counts.UnknownImageSampleCount / Counts.TotalSampleCount;
                 if (ufrac > 0.002)
                 {
                     Console.WriteLine("{0:00.00%}   {1,-8:G3}    {2} {3}",
@@ -1066,7 +1070,7 @@ namespace CoreClrInstRetired
                 {
                     string codeDesc = "native ";
 
-                    if (i.IsJitGeneratedCode)
+                    if (i.IsJitGeneratedCode || i.IsBackupImage)
                     {
                         if (i.IsJittedCode)
                         {
@@ -1079,12 +1083,12 @@ namespace CoreClrInstRetired
                                 case OptimizationTier.OptimizedTier1OSR: codeDesc = "OSR    "; break;
                                 case OptimizationTier.QuickJittedInstrumented: codeDesc = "Tier-0i"; break;
                                 case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
-                                default: codeDesc = "???"; break;
+                                default: codeDesc = "???    "; break;
                             }
                         }
                         else
                         {
-                            codeDesc = "R2R";
+                            codeDesc = "R2R    ";
                         }
                     }
                     Console.WriteLine("{0:00.00%}   {1,-9:G4}   {2}  {3}",
@@ -1197,7 +1201,7 @@ namespace CoreClrInstRetired
                                     {
                                         string codeDesc = "native ";
 
-                                        if (info.IsJitGeneratedCode)
+                                        if (info.IsJitGeneratedCode || info.IsBackupImage)
                                         {
                                             if (info.IsJittedCode)
                                             {
@@ -1210,12 +1214,12 @@ namespace CoreClrInstRetired
                                                     case OptimizationTier.OptimizedTier1OSR: codeDesc = "OSR    "; break;
                                                     case OptimizationTier.QuickJittedInstrumented: codeDesc = "Tier-0i"; break;
                                                     case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
-                                                    default: codeDesc = "???"; break;
+                                                    default: codeDesc = "???    "; break;
                                                 }
                                             }
                                             else
                                             {
-                                                codeDesc = "R2R";
+                                                codeDesc = "R2R    ";
                                             }
                                         }
                                         Console.WriteLine($"\nRaw samples for {info.Name} [{codeDesc}] at 0x{info.BaseAddress:X16} -- 0x{info.EndAddress:X16} (length 0x{(info.EndAddress - info.BaseAddress):X4})");
@@ -1252,36 +1256,35 @@ namespace CoreClrInstRetired
             {
                 Console.WriteLine();
                 Console.WriteLine($"Rejit: found {RejitEvents.Count} rejit intervals");
-                int i = 0;
+                Console.WriteLine("Start,End,Length,Pending,Jitted,TotalJitted,JitPct,MinPct,FullPct,T0Pct,T1Pct,T0iPct,T1iPct,R2RPct");
+                int totalJitted = 0;
                 foreach (var x in RejitEvents)
                 {
+                    // consider displaying stats during pause as well?
+
                     if (x.isPause)
                     {
                         continue;
                     }
 
-                    x.AttributeSamples();
-                
-                    // todo: collect aggregate cpu samples for each rejit event interval
-                    //
-                    Console.WriteLine($"{i++:D3} {x.startTimestamp:F3} -- {x.endTimestamp:F3} : {x.endTimestamp - x.startTimestamp:F3}ms, {x.pendingMethods} pending, {x.jittedMethods} jitted");
+                    double divisor = (double)Math.Max(1, x.counts.TotalSampleCount);
 
-                    Console.WriteLine("  Jitted code     : {0:00.00%}",
-                        (double)x.counts.JittedCodeSampleCount / x.counts.TotalSampleCount);
-                    Console.WriteLine("  MinOpts code    : {0:00.00%}",
-                        (double)x.counts.JitMinOptSampleCount / x.counts.TotalSampleCount);
-                    Console.WriteLine("  FullOpts code   : {0:00.00%}",
-                        (double)x.counts.JitFullOptSampleCount / x.counts.TotalSampleCount);
-                    Console.WriteLine("  Tier-0 code     : {0:00.00%}",
-                        (double)x.counts.JitTier0SampleCount / x.counts.TotalSampleCount);
-                    Console.WriteLine("  Tier-1 code     : {0:00.00%}",
-                        (double)x.counts.JitTier1SampleCount / x.counts.TotalSampleCount);
-                    Console.WriteLine("  Tier-0 inst code: {0:00.00%}",
-                        (double)x.counts.JitTier0InstrSampleCount / x.counts.TotalSampleCount);
-                    Console.WriteLine("  Tier-1 inst code: {0:00.00%} ",
-                        (double)x.counts.JitTier1InstrSampleCount / x.counts.TotalSampleCount);
-                    Console.WriteLine("  R2R code        : {0:00.00%}",
-                        (double)x.counts.PreJittedCodeSampleCount / x.counts.TotalSampleCount);
+                    x.AttributeSamples();
+
+                    totalJitted += x.jittedMethods;
+
+                    // Todo (perhaps) : non excel format...
+                    //
+                    Console.Write($"{x.startTimestamp:F3},{x.endTimestamp:F3},{x.endTimestamp - x.startTimestamp:F3},{x.pendingMethods},{x.jittedMethods},{totalJitted},");
+                    Console.Write("{0:00.00%},", (double)x.counts.JittedCodeSampleCount / divisor);
+                    Console.Write("{0:00.00%},", (double)x.counts.JitMinOptSampleCount / divisor);
+                    Console.Write("{0:00.00%},", (double)x.counts.JitFullOptSampleCount / divisor);
+                    Console.Write("{0:00.00%},", (double)x.counts.JitTier0SampleCount / divisor);
+                    Console.Write("{0:00.00%},", (double)x.counts.JitTier1SampleCount / divisor);
+                    Console.Write("{0:00.00%},", (double)x.counts.JitTier0InstrSampleCount / divisor);
+                    Console.Write("{0:00.00%},", (double)x.counts.JitTier1InstrSampleCount / divisor);
+                    Console.Write("{0:00.00%}", (double)x.counts.PreJittedCodeSampleCount / divisor);
+                    Console.WriteLine();
                 }
             }
         }
