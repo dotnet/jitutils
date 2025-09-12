@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Xml;
 
 // tracelog.exe -profilesources Help
@@ -46,8 +47,11 @@ namespace CoreClrInstRetired
         public bool IsJitGeneratedCode;
         public bool IsJittedCode;
         public bool IsBackupImage;
+        public bool IsPartOfGroup;
         public long AssemblyId;
         public OptimizationTier Tier;
+        public long MethodId;
+        public List<ImageInfo> GroupMembers;
 
         public ImageInfo(string name, ulong baseAddress, int size)
         {
@@ -59,7 +63,11 @@ namespace CoreClrInstRetired
             IsJitGeneratedCode = false;
             IsBackupImage = false;
             AssemblyId = -1;
+            MethodId = -1;
+            GroupMembers = null;
         }
+
+        public bool IsGroupImage => (GroupMembers != null);
 
         public static int LowerAddress(ImageInfo x, ImageInfo y)
         {
@@ -88,6 +96,43 @@ namespace CoreClrInstRetired
         public bool ContainsAddress(ulong address)
         {
             return (address >= BaseAddress && address < EndAddress);
+        }
+
+        public string CodeDescriptor()
+        {
+            string codeDesc = "native ";
+
+            if (IsJitGeneratedCode || IsBackupImage)
+            {
+                if (IsJittedCode)
+                {
+                    if (IsGroupImage)
+                    {
+                        codeDesc = "group  ";
+                    }
+                    else
+                    {
+                        switch (Tier)
+                        {
+                            case OptimizationTier.MinOptJitted: codeDesc = "MinOpt "; break;
+                            case OptimizationTier.Optimized: codeDesc = "FullOpt"; break;
+                            case OptimizationTier.QuickJitted: codeDesc = "Tier-0 "; break;
+                            case OptimizationTier.OptimizedTier1: codeDesc = "Tier-1 "; break;
+                            case OptimizationTier.OptimizedTier1OSR: codeDesc = "OSR    "; break;
+                            case OptimizationTier.QuickJittedInstrumented: codeDesc = "Tier-0i"; break;
+                            case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
+                            default: codeDesc = "???    "; break;
+                        }
+                    }
+                }
+                else
+                {
+                    codeDesc = "R2R    ";
+
+                }
+            }
+
+            return codeDesc;
         }
     }
 
@@ -359,6 +404,72 @@ namespace CoreClrInstRetired
             }
         }
 
+        // Create ImageInfos representing all versions of a method
+        // Expects sample attribution to have been done
+        static void GroupMethods()
+        {
+            Dictionary<long, ImageInfo> groupMap = new Dictionary<long, ImageInfo>();
+            int groupCount = 0;
+            foreach (ImageInfo i in ImageMap.Values)
+            {
+                if (i.MethodId != -1)
+                {
+                    if (!groupMap.ContainsKey(i.MethodId))
+                    {
+                        // initially first group member is stored
+                        groupMap[i.MethodId] = i;
+                    }
+                    else
+                    {
+                        ImageInfo firstImage = groupMap[i.MethodId];
+
+                        if (firstImage.IsGroupImage)
+                        {
+                            // Existing group
+                            firstImage.GroupMembers.Add(i);
+                            firstImage.SampleCount += i.SampleCount;
+                            i.IsPartOfGroup = true;
+                        }
+                        else
+                        {
+                            // New group
+                            ImageInfo groupImage = new ImageInfo(firstImage.Name, 0, 0);
+                            List<ImageInfo> members = new List<ImageInfo>();
+                            groupImage.GroupMembers = members;
+                            groupImage.IsJitGeneratedCode = true;
+                            groupImage.IsJittedCode = true;
+                            groupImage.MethodId = firstImage.MethodId;
+
+                            groupMap[i.MethodId] = groupImage;
+
+                            members.Add(firstImage);
+                            groupImage.SampleCount += firstImage.SampleCount;
+                            firstImage.IsPartOfGroup = true;
+
+                            members.Add(i);
+                            groupImage.SampleCount += i.SampleCount;
+                            i.IsPartOfGroup = true;
+
+                            groupCount++;
+                        }
+                    }
+                }
+            }
+
+            Console.WriteLine($"Formed {groupCount} method groups from approximately {ImageMap.Count} methods");
+
+            // inject group images into the map
+            // 
+            foreach (ImageInfo i in groupMap.Values)
+            {
+                if (i.IsGroupImage)
+                {
+                    string key = i.MethodId.ToString("X") + "G";
+                    ImageMap[key] = i;
+                }
+            }
+        }
+
         private static string GetName(MethodLoadUnloadVerboseTraceData data, string assembly)
         {
             // Prepare sig (strip return value)
@@ -401,6 +512,9 @@ namespace CoreClrInstRetired
             int benchmarkPid = -2;
             bool isPartialProcess = false;
             bool rejitInfo = false;
+            bool groupMethods = true;
+            bool showUnusedImages = false;
+            bool showLargeGroups = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -471,7 +585,15 @@ namespace CoreClrInstRetired
                     case "-rejit":
                         rejitInfo = true;
                         break;
-
+                    case "-groupMethods":
+                        groupMethods = true;
+                        break;
+                    case "-showUnused":
+                        showUnusedImages = true;
+                        break;
+                    case "-showLargeGroups":
+                        showLargeGroups = true;
+                        break;
                     default:
                         if (args[i].StartsWith("-"))
                         {
@@ -917,6 +1039,7 @@ namespace CoreClrInstRetired
                                         methodInfo.IsJittedCode = loadUnloadData.IsJitted;
                                         methodInfo.Tier = (OptimizationTier)loadUnloadData.PayloadByName("OptimizationTier");
                                         methodInfo.AssemblyId = assemblyId;
+                                        methodInfo.MethodId = loadUnloadData.MethodID;
 
                                         ImageMap.Add(key, methodInfo);
                                     }
@@ -982,6 +1105,11 @@ namespace CoreClrInstRetired
             ;
 
             AttributeSampleCounts(SampleCountMap, Counts);
+
+            if (groupMethods)
+            {
+                GroupMethods();
+            }
 
             if (showEvents)
             {
@@ -1068,166 +1196,133 @@ namespace CoreClrInstRetired
 
                 foreach (var i in significantInfos)
                 {
-                    string codeDesc = "native ";
-
-                    if (i.IsJitGeneratedCode || i.IsBackupImage)
-                    {
-                        if (i.IsJittedCode)
-                        {
-                            switch (i.Tier)
-                            {
-                                case OptimizationTier.MinOptJitted: codeDesc = "MinOpt "; break;
-                                case OptimizationTier.Optimized: codeDesc = "FullOpt"; break;
-                                case OptimizationTier.QuickJitted: codeDesc = "Tier-0 "; break;
-                                case OptimizationTier.OptimizedTier1: codeDesc = "Tier-1 "; break;
-                                case OptimizationTier.OptimizedTier1OSR: codeDesc = "OSR    "; break;
-                                case OptimizationTier.QuickJittedInstrumented: codeDesc = "Tier-0i"; break;
-                                case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
-                                default: codeDesc = "???    "; break;
-                            }
-                        }
-                        else
-                        {
-                            codeDesc = "R2R    ";
-                        }
-                    }
-                    Console.WriteLine("{0:00.00%}   {1,-9:G4}   {2}  {3}",
+                    if (i.IsPartOfGroup) continue;
+                    Console.WriteLine("{0:00.00%}   {1,-9:G4}    {2}   {3}",
                         (double)i.SampleCount / Counts.TotalSampleCount,
-                        i.SampleCount * CountsPerEvent, codeDesc,
+                        i.SampleCount * CountsPerEvent, i.CodeDescriptor(),
                         i.Name);
+
+                    if (i.IsGroupImage)
+                    {
+                        foreach (var si in i.GroupMembers)
+                        {
+                            Console.WriteLine("                                {0:00.00%}   {1,-9:G4}    +{2}",
+                                (double)si.SampleCount / Counts.TotalSampleCount,
+                                si.SampleCount * CountsPerEvent, si.CodeDescriptor());
+                        }
+                    }
+                }
+            }
+
+            if (showJitTimes)
+            {
+                // Show significant jit invocations (samples)
+                AllJitInvocations.Sort(JitInvocation.MoreJitInstructions);
+                bool printed = false;
+                ulong signficantCount = (5 * Counts.JitSampleCount) / 1000;
+                ulong CountsPerEvent = 1; // review
+                foreach (var j in AllJitInvocations)
+                {
+                    ulong totalCount = j.JitInstrs();
+                    if (totalCount > signficantCount)
+                    {
+                        if (!printed)
+                        {
+                            Console.WriteLine();
+                            Console.WriteLine("Slow jitting methods (anything taking more than 0.5% of total samples)");
+                            printed = true;
+                        }
+                        Console.WriteLine("{0:00.00%}    {1,-9:G4} {2}", (double)totalCount / Counts.TotalSampleCount, totalCount * CountsPerEvent, j.MethodName);
+                    }
                 }
 
-                if (showJitTimes)
+                Console.WriteLine();
+                double totalJitTime = AllJitInvocations.Sum(j => j.JitTime());
+                Console.WriteLine($"Total jit time: {totalJitTime:F2}ms {AllJitInvocations.Count} methods {totalJitTime / AllJitInvocations.Count:F2}ms avg");
+
+                // Show 10 slowest jit invocations (time, ms)
+                AllJitInvocations.Sort(JitInvocation.MoreJitTime);
+                Console.WriteLine();
+                Console.WriteLine($"Slow jitting methods (time)");
+                int kLimit = 10;
+                for (int k = 0; k < kLimit; k++)
                 {
-                    // Show significant jit invocations (samples)
-                    AllJitInvocations.Sort(JitInvocation.MoreJitInstructions);
-                    bool printed = false;
-                    ulong signficantCount = (5 * Counts.JitSampleCount) / 1000;
-                    foreach (var j in AllJitInvocations)
+                    if (k < AllJitInvocations.Count)
                     {
-                        ulong totalCount = j.JitInstrs();
-                        if (totalCount > signficantCount)
-                        {
-                            if (!printed)
-                            {
-                                Console.WriteLine();
-                                Console.WriteLine("Slow jitting methods (anything taking more than 0.5% of total samples)");
-                                printed = true;
-                            }
-                            Console.WriteLine("{0:00.00%}    {1,-9:G4} {2}", (double)totalCount / Counts.TotalSampleCount, totalCount * CountsPerEvent, j.MethodName);
-                        }
+                        JitInvocation j = AllJitInvocations[k];
+                        Console.WriteLine($"{j.JitTime(),6:F2} {j.MethodName} starting at {j.InitialTimestamp,6:F2}");
                     }
-
-                    Console.WriteLine();
-                    double totalJitTime = AllJitInvocations.Sum(j => j.JitTime());
-                    Console.WriteLine($"Total jit time: {totalJitTime:F2}ms {AllJitInvocations.Count} methods {totalJitTime / AllJitInvocations.Count:F2}ms avg");
-
-                    // Show 10 slowest jit invocations (time, ms)
-                    AllJitInvocations.Sort(JitInvocation.MoreJitTime);
-                    Console.WriteLine();
-                    Console.WriteLine($"Slow jitting methods (time)");
-                    int kLimit = 10;
-                    for (int k = 0; k < kLimit; k++)
-                    {
-                        if (k < AllJitInvocations.Count)
-                        {
-                            JitInvocation j = AllJitInvocations[k];
-                            Console.WriteLine($"{j.JitTime(),6:F2} {j.MethodName} starting at {j.InitialTimestamp,6:F2}");
-                        }
-                    }
-
-                    // Show data on cumulative distribution of jit times.
-                    if (AllJitInvocations.Count > 0)
-                    {
-                        Console.WriteLine();
-                        Console.WriteLine("Jit time percentiles");
-                        for (int percentile = 10; percentile <= 100; percentile += 10)
-                        {
-                            int pIndex = (AllJitInvocations.Count * (100 - percentile)) / 100;
-                            JitInvocation p = AllJitInvocations[pIndex];
-                            Console.WriteLine($"{percentile,3:D}%ile jit time is {p.JitTime():F3}ms");
-                        }
-                    }
-
-
-                    // Show assembly inventory
-                    // Would be nice to have counts of jitted/prejitted per assembly, order by total number of methods somehow
-                    Console.WriteLine();
-                    Console.WriteLine("Per Assembly Jitting Details");
-                    int totalJitted = 0;
-                    foreach (var assemblyId in assemblyInfo.Keys)
-                    {
-                        AssemblyInfo info = assemblyInfo[assemblyId];
-
-                        bool isNative = (info.Flags & AssemblyFlags.Native) != 0;
-                        bool isDynamic = (info.Flags & AssemblyFlags.Dynamic) != 0;
-
-                        info.NumberPrejitted = ImageMap.Where(x => x.Value.AssemblyId == assemblyId && x.Value.IsJitGeneratedCode && !x.Value.IsJittedCode).Count();
-                        info.NumberJitted = ImageMap.Where(x => x.Value.AssemblyId == assemblyId && x.Value.IsJitGeneratedCode && x.Value.IsJittedCode).Count();
-
-                        if (info.NumberJitted > 0)
-                        {
-                            info.TimeJitting = AllJitInvocations.Where(x => x.AssemblyId == assemblyId).Sum(x => x.JitTime());
-                        }
-                        info.CodegenKind = isNative ? " [NGEN]" : info.NumberPrejitted > 0 ? " [R2R]" : isDynamic ? " [DYNAMIC]" : " [JITTED]";
-
-                        totalJitted += info.NumberJitted;
-                    }
-
-                    foreach (var x in assemblyInfo.Values.OrderByDescending(x => x.TimeJitting))
-                    {
-                        if (x.NumberJitted > 0)
-                        {
-                            Console.WriteLine($"{x.CodegenKind,10} {x.NumberPrejitted,5} prejitted {x.NumberJitted,5} jitted in {x.TimeJitting,8:F3}ms {100 * x.TimeJitting / totalJitTime,6:F2}% {x.Name} ");
-                        }
-                    }
-
-                    Console.WriteLine($"{totalJitted,32} jitted in {totalJitTime,8:F3}ms 100.00% --- TOTAL ---");
                 }
 
-                if (samplePattern != null)
+                // Show data on cumulative distribution of jit times.
+                if (AllJitInvocations.Count > 0)
                 {
-                    foreach (var i in ImageMap)
+                    Console.WriteLine();
+                    Console.WriteLine("Jit time percentiles");
+                    for (int percentile = 10; percentile <= 100; percentile += 10)
                     {
-                        ImageInfo info = i.Value;
-                        if (info.Name.Contains(samplePattern))
+                        int pIndex = (AllJitInvocations.Count * (100 - percentile)) / 100;
+                        JitInvocation p = AllJitInvocations[pIndex];
+                        Console.WriteLine($"{percentile,3:D}%ile jit time is {p.JitTime():F3}ms");
+                    }
+                }
+
+                // Show assembly inventory
+                // Would be nice to have counts of jitted/prejitted per assembly, order by total number of methods somehow
+                Console.WriteLine();
+                Console.WriteLine("Per Assembly Jitting Details");
+                int totalJitted = 0;
+                foreach (var assemblyId in assemblyInfo.Keys)
+                {
+                    AssemblyInfo info = assemblyInfo[assemblyId];
+
+                    bool isNative = (info.Flags & AssemblyFlags.Native) != 0;
+                    bool isDynamic = (info.Flags & AssemblyFlags.Dynamic) != 0;
+
+                    info.NumberPrejitted = ImageMap.Where(x => x.Value.AssemblyId == assemblyId && x.Value.IsJitGeneratedCode && !x.Value.IsJittedCode).Count();
+                    info.NumberJitted = ImageMap.Where(x => x.Value.AssemblyId == assemblyId && x.Value.IsJitGeneratedCode && x.Value.IsJittedCode).Count();
+
+                    if (info.NumberJitted > 0)
+                    {
+                        info.TimeJitting = AllJitInvocations.Where(x => x.AssemblyId == assemblyId).Sum(x => x.JitTime());
+                    }
+                    info.CodegenKind = isNative ? " [NGEN]" : info.NumberPrejitted > 0 ? " [R2R]" : isDynamic ? " [DYNAMIC]" : " [JITTED]";
+
+                    totalJitted += info.NumberJitted;
+                }
+
+                foreach (var x in assemblyInfo.Values.OrderByDescending(x => x.TimeJitting))
+                {
+                    if (x.NumberJitted > 0)
+                    {
+                        Console.WriteLine($"{x.CodegenKind,10} {x.NumberPrejitted,5} prejitted {x.NumberJitted,5} jitted in {x.TimeJitting,8:F3}ms {100 * x.TimeJitting / totalJitTime,6:F2}% {x.Name} ");
+                    }
+                }
+
+                Console.WriteLine($"{totalJitted,32} jitted in {totalJitTime,8:F3}ms 100.00% --- TOTAL ---");
+            }
+
+            // Show events matching method name pattern
+            //
+            if (samplePattern != null)
+            {
+                foreach (var i in ImageMap)
+                {
+                    ImageInfo info = i.Value;
+                    if (info.Name.Contains(samplePattern))
+                    {
+                        bool needsHeader = true;
+                        foreach (ulong address in SampleCountMap.Keys)
                         {
-                            bool needsHeader = true;
-                            foreach (ulong address in SampleCountMap.Keys)
+                            if ((address >= info.BaseAddress) && (address <= info.EndAddress))
                             {
-                                if ((address >= info.BaseAddress) && (address <= info.EndAddress))
+                                if (needsHeader)
                                 {
-                                    if (needsHeader)
-                                    {
-                                        string codeDesc = "native ";
-
-                                        if (info.IsJitGeneratedCode || info.IsBackupImage)
-                                        {
-                                            if (info.IsJittedCode)
-                                            {
-                                                switch (info.Tier)
-                                                {
-                                                    case OptimizationTier.MinOptJitted: codeDesc = "MinOpt "; break;
-                                                    case OptimizationTier.Optimized: codeDesc = "FullOpt"; break;
-                                                    case OptimizationTier.QuickJitted: codeDesc = "Tier-0 "; break;
-                                                    case OptimizationTier.OptimizedTier1: codeDesc = "Tier-1 "; break;
-                                                    case OptimizationTier.OptimizedTier1OSR: codeDesc = "OSR    "; break;
-                                                    case OptimizationTier.QuickJittedInstrumented: codeDesc = "Tier-0i"; break;
-                                                    case OptimizationTier.OptimizedTier1Instrumented: codeDesc = "Tier-1i"; break;
-                                                    default: codeDesc = "???    "; break;
-                                                }
-                                            }
-                                            else
-                                            {
-                                                codeDesc = "R2R    ";
-                                            }
-                                        }
-                                        Console.WriteLine($"\nRaw samples for {info.Name} [{codeDesc}] at 0x{info.BaseAddress:X16} -- 0x{info.EndAddress:X16} (length 0x{(info.EndAddress - info.BaseAddress):X4})");
-                                        needsHeader = false;
-                                    }
-
-                                    Console.WriteLine($"0x{(address - info.BaseAddress):X4} : {SampleCountMap[address]}");
+                                    Console.WriteLine($"\nRaw samples for {info.Name} [{info.CodeDescriptor()}] at 0x{info.BaseAddress:X16} -- 0x{info.EndAddress:X16} (length 0x{(info.EndAddress - info.BaseAddress):X4})");
+                                    needsHeader = false;
                                 }
+
+                                Console.WriteLine($"0x{(address - info.BaseAddress):X4} : {SampleCountMap[address]}");
                             }
                         }
                     }
@@ -1287,6 +1382,67 @@ namespace CoreClrInstRetired
                     Console.WriteLine();
                 }
             }
+
+            // Show groups with unusually large membership
+            // (a typical method has 2 or 3 rejits all at distinct tiers)
+            if (groupMethods && showLargeGroups)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Large/Unusual Method Groups/Reundant Rejits");
+
+                // Note we don't track the OSR IL offset so can't say for sure of multiple OSR rejits are redundant or not.
+                int excessJits = 0;
+                foreach (var i in ImageMap)
+                {
+                    ImageInfo info = i.Value;
+
+                    if (info.IsGroupImage)
+                    {
+                        int groupCount = info.GroupMembers.Count;
+                        int tierCount = info.GroupMembers.GroupBy(x => x.Tier).Count();
+
+                        if (tierCount < groupCount)
+                        {
+                            excessJits += (groupCount - tierCount);
+                            Console.Write($"Method {info.Name} has {groupCount} members, {tierCount} tiers:");
+                            foreach (var si in info.GroupMembers)
+                            {
+                                Console.Write($" {si.CodeDescriptor()}");
+                            }
+                            Console.WriteLine();
+                        }
+                    }
+                }
+                Console.WriteLine($"Possibly {excessJits} excess rejits");
+            }
+
+            // Show methods jitted with no sample hits... this may be too noisy to be useful
+            // Just show Tier-1 methods for now as those are the most costly to jit
+            if (showUnusedImages)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Tier-1 jitted methods with no samples");
+                int unusedCount = 0;
+                int usedCount = 0;
+                foreach (var i in ImageMap)
+                {
+                    ImageInfo info = i.Value;
+
+                    if (info.IsJittedCode && info.Tier == OptimizationTier.OptimizedTier1)
+                    {
+                        if (info.SampleCount == 0)
+                        {
+                            unusedCount++;
+                            Console.WriteLine($"{info.CodeDescriptor()}{info.Name}");
+                        }
+                        else
+                        {
+                            usedCount++;
+                        }
+                    }
+                }
+                Console.WriteLine($"Found {unusedCount} unused Tier-1 jitted methods, {usedCount} used Tier-1 jitted methods");
+            }
         }
 
         static void Usage()
@@ -1302,6 +1458,9 @@ namespace CoreClrInstRetired
             Console.WriteLine("   -show-samples <pattern>: show raw method-relative hits for some methods");
             Console.WriteLine("   -instructions-retired: if ETL has instructions retired events, summarize those instead of profile samples");
             Console.WriteLine("   -rejit: summarize tiered compilation rejitting behavior");
+            Console.WriteLine("   -groupMethods: add entries representing all tiers of a method");
+            Console.WriteLine("   -showUnused: show Tier-1 jitted methods with no samples");
+            Console.WriteLine("   -showLargeGroups: (with groupMethods) show groups with redundant tiers or unusually large membership");
         }
     }
 }
