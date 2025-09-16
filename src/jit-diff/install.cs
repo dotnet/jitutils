@@ -2,6 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+//
+//  jit-diff
+//
+
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
@@ -18,7 +22,7 @@ using System.Xml;
 
 namespace ManagedCodeGen
 {
-    public partial class jitdiff
+    public partial class JitDiff
     {
         public static int InstallCommand(Config config)
         {
@@ -163,7 +167,7 @@ namespace ManagedCodeGen
             // Overwrite current config.json with new data.
             using (var sw = File.CreateText(configFilePath))
             {
-                var json = JsonSerializer.Serialize (jObj, new JsonSerializerOptions { WriteIndented = true });
+                var json = JsonSerializer.Serialize(jObj, new JsonSerializerOptions { WriteIndented = true });
                 sw.Write(json);
             }
 
