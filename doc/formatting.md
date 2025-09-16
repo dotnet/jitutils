@@ -2,7 +2,7 @@
 
 JIT source code is automatically formatted by the jit-format tool.
 The idea is to automatically enforce the
-[CLR JIT Coding Conventions](https://github.com/dotnet/coreclr/blob/master/Documentation/coding-guidelines/clr-jit-coding-conventions.md)
+[CLR JIT Coding Conventions](https://github.com/dotnet/runtime/blob/main/docs/coding-guidelines/clr-jit-coding-conventions.md)
 where possible, although the tool by its nature ends up defining the
 coding conventions by the formatting it enforces. The tool invokes clang-format and clang-tidy
 to do its work.

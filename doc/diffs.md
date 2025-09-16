@@ -8,7 +8,7 @@ automate that process.
 ## Assumptions
 
 This guide assumes that you have built CoreCLR.
-See the [CoreCLR](https://github.com/dotnet/coreclr) GitHub repo for directions on building.
+See the [Workflow Guide](https://github.com/dotnet/runtime/blob/main/docs/workflow/README.md) for directions on building.
 
 ## Assembly diff tools
 
@@ -290,8 +290,8 @@ or
 ```
     c:\coreclr> tests\runtest.cmd GenerateLayoutOnly
 ```
-On non-Windows, consult the test instructions
-[here](https://github.com/dotnet/coreclr/blob/master/Documentation/building/unix-test-instructions.md).
+On non-Windows, see
+[Building and running tests on Linux, macOS, and FreeBSD](https://github.com/dotnet/runtime/blob/main/docs/workflow/testing/coreclr/unix-test-instructions.md).
 Note that you can pass `--testDir=NONE` to runtest.sh to get the
 same effect as passing `GenerateLayoutOnly` to runtest.cmd on Windows.
 
