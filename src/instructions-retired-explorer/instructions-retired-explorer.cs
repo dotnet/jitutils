@@ -52,6 +52,8 @@ namespace CoreClrInstRetired
         public OptimizationTier Tier;
         public long MethodId;
         public List<ImageInfo> GroupMembers;
+        public double InitialTimestamp;
+        public double LoadTimestamp;
 
         public ImageInfo(string name, ulong baseAddress, int size)
         {
@@ -236,6 +238,7 @@ namespace CoreClrInstRetired
 
     public class BenchmarkInterval
     {
+        public string name;
         public double startTimestamp;
         public double endTimestamp;
     }
@@ -250,6 +253,7 @@ namespace CoreClrInstRetired
         public static Dictionary<long, AssemblyInfo> assemblyInfo = new Dictionary<long, AssemblyInfo>();
         public static List<JitInvocation> AllJitInvocations = new List<JitInvocation>();
         public static List<BenchmarkInterval> BenchmarkIntervals = new List<BenchmarkInterval>();
+        public static List<BenchmarkInterval> OtherIntervals = new List<BenchmarkInterval>();
         public static List<RejitEvent> RejitEvents = new List<RejitEvent>();
 
         public static AttributedCounts Counts = new AttributedCounts();
@@ -263,6 +267,8 @@ namespace CoreClrInstRetired
 
         public static string samplePattern;
         public static string eventPattern;
+
+        public static string rejitPattern;
 
         static void UpdateSampleCountMap(ulong address, ulong count)
         {
@@ -512,9 +518,10 @@ namespace CoreClrInstRetired
             int benchmarkPid = -2;
             bool isPartialProcess = false;
             bool rejitInfo = false;
-            bool groupMethods = true;
+            bool groupMethods = false;
             bool showUnusedImages = false;
             bool showLargeGroups = false;
+            bool showIntervals = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -594,6 +601,20 @@ namespace CoreClrInstRetired
                     case "-showLargeGroups":
                         showLargeGroups = true;
                         break;
+                    case "-showRejitting":
+                        {
+                            if (i + 1 == args.Length)
+                            {
+                                Console.WriteLine($"Missing pattern value after '{args[i]}'");
+                            }
+                            rejitPattern = args[i + 1];
+                            Console.WriteLine($"Will show rejit timing for methods matching `{rejitPattern}`");
+                            i++;
+                        }
+                        break;
+                    case "-showIntervals":
+                        showIntervals = true;
+                        break;
                     default:
                         if (args[i].StartsWith("-"))
                         {
@@ -655,6 +676,7 @@ namespace CoreClrInstRetired
                                 {
                                     benchmarkInterval = new BenchmarkInterval();
                                     benchmarkInterval.startTimestamp = data.TimeStampRelativeMSec;
+                                    benchmarkInterval.name = "Actual";
                                 }
                             }
                             break;
@@ -668,6 +690,35 @@ namespace CoreClrInstRetired
                                 {
                                     benchmarkInterval.endTimestamp = data.TimeStampRelativeMSec;
                                     BenchmarkIntervals.Add(benchmarkInterval);
+                                    benchmarkInterval = null;
+                                }
+
+                            }
+                            break;
+                        case "WorkloadWarmup/Start":
+                            {
+                                if (benchmarkInterval != null)
+                                {
+                                    Console.WriteLine($"Eh? benchmark intervals overlap at {data.TimeStampRelativeMSec}ms");
+                                }
+                                else
+                                {
+                                    benchmarkInterval = new BenchmarkInterval();
+                                    benchmarkInterval.startTimestamp = data.TimeStampRelativeMSec;
+                                    benchmarkInterval.name = "Warmup";
+                                }
+                            }
+                            break;
+                        case "WorkloadWarmup/Stop":
+                            {
+                                if (benchmarkInterval == null)
+                                {
+                                    Console.WriteLine($"Eh? benchmark intervals overlap at {data.TimeStampRelativeMSec}ms");
+                                }
+                                else
+                                {
+                                    benchmarkInterval.endTimestamp = data.TimeStampRelativeMSec;
+                                    OtherIntervals.Add(benchmarkInterval);
                                     benchmarkInterval = null;
                                 }
 
@@ -789,6 +840,8 @@ namespace CoreClrInstRetired
                                     {
                                         string filePart = Path.GetFileName(fileName);
                                         ImageInfo imageInfo = new ImageInfo(filePart, imageBase, imageSize);
+
+                                        imageInfo.LoadTimestamp = data.TimeStampRelativeMSec;
 
                                         // We no longer get load/unload events for R2R methods, so we recognize them hackily...
                                         // (may have bits on assembly load to look at ?)
@@ -985,6 +1038,7 @@ namespace CoreClrInstRetired
 
                                     JitInvocation j = null;
 
+
                                     if (ActiveJitInvocations.ContainsKey(loadUnloadData.ThreadID))
                                     {
                                         j = ActiveJitInvocations[loadUnloadData.ThreadID];
@@ -1040,6 +1094,13 @@ namespace CoreClrInstRetired
                                         methodInfo.Tier = (OptimizationTier)loadUnloadData.PayloadByName("OptimizationTier");
                                         methodInfo.AssemblyId = assemblyId;
                                         methodInfo.MethodId = loadUnloadData.MethodID;
+
+                                        if (j != null)
+                                        {
+                                            methodInfo.InitialTimestamp = j.InitialTimestamp;
+                                        }
+
+                                        methodInfo.LoadTimestamp = data.TimeStampRelativeMSec;
 
                                         ImageMap.Add(key, methodInfo);
                                     }
@@ -1329,20 +1390,39 @@ namespace CoreClrInstRetired
                 }
             }
 
-            // Show BenchmarkIntervals
-            if (filterToBenchmark && (BenchmarkIntervals.Count > 0))
+            // Show Rejit timing for methods matching rejitPattern
+            if (rejitPattern != null)
             {
-                double meanInterval = BenchmarkIntervals.Select(x => x.endTimestamp - x.startTimestamp).Average();
-                Console.WriteLine();
-                Console.WriteLine($"Benchmark: found {BenchmarkIntervals.Count} intervals; mean interval {meanInterval:F3}ms");
-                bool showIntervals = false;
-                if (showIntervals)
+                Console.WriteLine($"\nRejitting\n");
+                foreach (var i in ImageMap)
                 {
-                    int rr = 0;
-                    foreach (var x in BenchmarkIntervals)
+                    ImageInfo info = i.Value;
+                    if (info.IsJitGeneratedCode && info.Name.Contains(rejitPattern))
                     {
-                        Console.WriteLine($"{rr++:D3} {x.startTimestamp:F3} -- {x.endTimestamp:F3} : {x.endTimestamp - x.startTimestamp:F3}");
+                        Console.WriteLine($"{info.LoadTimestamp:F3} {info.CodeDescriptor()} {info.Name} [jitting started at {info.InitialTimestamp:F3}]");
                     }
+                }
+            }
+
+            // Show BenchmarkIntervals
+            if (filterToBenchmark && (BenchmarkIntervals.Count > 0) && showIntervals)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"Benchmark: found {OtherIntervals.Count} warmup intervals");
+
+                int rr = 0;
+                foreach (var x in OtherIntervals)
+                {
+                    Console.WriteLine($"{rr++:D3} {x.startTimestamp:F3} -- {x.endTimestamp:F3} : {x.endTimestamp - x.startTimestamp:F3}");
+                }
+
+                double meanInterval = BenchmarkIntervals.Select(x => x.endTimestamp - x.startTimestamp).Average();
+                Console.WriteLine($"Benchmark: found {BenchmarkIntervals.Count} actual intervals; mean interval {meanInterval:F3}ms");
+
+                rr = 0;
+                foreach (var x in BenchmarkIntervals)
+                {
+                    Console.WriteLine($"{rr++:D3} {x.startTimestamp:F3} -- {x.endTimestamp:F3} : {x.endTimestamp - x.startTimestamp:F3}");
                 }
             }
 
@@ -1428,7 +1508,7 @@ namespace CoreClrInstRetired
                 {
                     ImageInfo info = i.Value;
 
-                    if (info.IsJittedCode && info.Tier == OptimizationTier.OptimizedTier1)
+                    if (info.IsJittedCode && ((info.Tier == OptimizationTier.OptimizedTier1) || (info.Tier == OptimizationTier.OptimizedTier1Instrumented)))
                     {
                         if (info.SampleCount == 0)
                         {
@@ -1461,6 +1541,7 @@ namespace CoreClrInstRetired
             Console.WriteLine("   -groupMethods: add entries representing all tiers of a method");
             Console.WriteLine("   -showUnused: show Tier-1 jitted methods with no samples");
             Console.WriteLine("   -showLargeGroups: (with groupMethods) show groups with redundant tiers or unusually large membership");
+            Console.WriteLine("   -showRejitting <pattern>: show rejit timing for methods matching pattern");
         }
     }
 }
