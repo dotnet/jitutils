@@ -1508,7 +1508,7 @@ namespace CoreClrInstRetired
                 {
                     ImageInfo info = i.Value;
 
-                    if (info.IsJittedCode && (info.Tier == OptimizationTier.OptimizedTier1) || (info.Tier == OptimizationTier.OptimizedTier1Instrumented))
+                    if (info.IsJittedCode && ((info.Tier == OptimizationTier.OptimizedTier1) || (info.Tier == OptimizationTier.OptimizedTier1Instrumented)))
                     {
                         if (info.SampleCount == 0)
                         {
@@ -1541,7 +1541,7 @@ namespace CoreClrInstRetired
             Console.WriteLine("   -groupMethods: add entries representing all tiers of a method");
             Console.WriteLine("   -showUnused: show Tier-1 jitted methods with no samples");
             Console.WriteLine("   -showLargeGroups: (with groupMethods) show groups with redundant tiers or unusually large membership");
-            Console.WriteLine("   -showRejitting <pattern>: show rejit events for methods matching pattern");
+            Console.WriteLine("   -showRejitting <pattern>: show rejit timing for methods matching pattern");
         }
     }
 }
