@@ -492,7 +492,7 @@ namespace CoreClrInstRetired
                 // When parsing ETL, we used size zero for methods whose size were not known.
                 // Collect these up so we can determine an approximate size (good enough for sample attribution).
                 //
-                if (i.IsJitGeneratedCode && i.Tier == OptimizationTier.ReadyToRun && i.Size == 1)
+                if (i.IsJitGeneratedCode && i.Tier == OptimizationTier.ReadyToRun && i.Size == 0)
                 {
                     r2rMethodImages.Add(i);
                 }
