@@ -489,21 +489,24 @@ namespace CoreClrInstRetired
             List<ImageInfo> r2rAssembyImages = new List<ImageInfo>();
             foreach (ImageInfo i in ImageMap.Values)
             {
+                // When parsing ETL, we used size zero for methods whose size were not known.
+                // Collect these up so we can determine an approximate size (good enough for sample attribution).
+                //
                 if (i.IsJitGeneratedCode && i.Tier == OptimizationTier.ReadyToRun && i.Size == 1)
                 {
                     r2rMethodImages.Add(i);
                 }
                 else
                 {
+                    // This might be a native image containing R2R method images. Remember it so
+                    // we can determine the size of the last method in the assembly.
+                    //
                     r2rAssembyImages.Add(i);
                 }
             }
 
-            ImageInfo[] methodArray = new ImageInfo[r2rMethodImages.Count];
-            ImageInfo[] assemblyArray = new ImageInfo[r2rAssembyImages.Count];
-
-            r2rMethodImages.CopyTo(methodArray, 0);
-            r2rAssembyImages.CopyTo(assemblyArray, 0);
+            ImageInfo[] methodArray = r2rMethodImages.ToArray();
+            ImageInfo[] assemblyArray = r2rAssembyImages.ToArray();
 
             Array.Sort(methodArray, ImageInfo.LowerAddress);
             Array.Sort(assemblyArray, ImageInfo.LowerAddress);
@@ -1251,8 +1254,9 @@ namespace CoreClrInstRetired
 
                                         if (!ImageMap.ContainsKey(key))
                                         {
-                                            // Pretend this is an "image"... we will fix the length later
-                                            ImageInfo methodInfo = new ImageInfo(fullName, (ulong)r2rData.EntryPoint, 1);
+                                            // Pretend this is an "image"... Set the length to 0 for now.
+                                            // We will fix the length later once we've seen all the R2R methods.
+                                            ImageInfo methodInfo = new ImageInfo(fullName, (ulong)r2rData.EntryPoint, 0);
 
                                             methodInfo.IsJitGeneratedCode = true;
                                             methodInfo.IsJittedCode = false;
