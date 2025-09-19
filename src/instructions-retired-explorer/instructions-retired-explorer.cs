@@ -9,8 +9,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Xml;
+
+// Note: pass -RuntimeLoading to perfview to enable R2R events
+//
 
 // tracelog.exe -profilesources Help
 //
@@ -41,7 +42,7 @@ namespace CoreClrInstRetired
     {
         public readonly string Name;
         public readonly ulong BaseAddress;
-        public readonly int Size;
+        public int Size;
         public ulong SampleCount;
         public ulong EndAddress;
         public bool IsJitGeneratedCode;
@@ -67,6 +68,12 @@ namespace CoreClrInstRetired
             AssemblyId = -1;
             MethodId = -1;
             GroupMembers = null;
+        }
+
+        public void SetSize(int newSize)
+        {
+            Size = newSize;
+            EndAddress = BaseAddress + (uint)Size;
         }
 
         public bool IsGroupImage => (GroupMembers != null);
@@ -476,6 +483,78 @@ namespace CoreClrInstRetired
             }
         }
 
+        static void FixR2RLengths()
+        {
+            List<ImageInfo> r2rMethodImages = new List<ImageInfo>();
+            List<ImageInfo> r2rAssemblyImages = new List<ImageInfo>();
+            foreach (ImageInfo i in ImageMap.Values)
+            {
+                // When parsing ETL, we used size zero for methods whose size were not known.
+                // Collect these up so we can determine an approximate size (good enough for sample attribution).
+                //
+                if (i.IsJitGeneratedCode && i.Tier == OptimizationTier.ReadyToRun && i.Size == 0)
+                {
+                    r2rMethodImages.Add(i);
+                }
+                else
+                {
+                    // This might be a native image containing R2R method images. Remember it so
+                    // we can determine the size of the last method in the assembly.
+                    //
+                    r2rAssemblyImages.Add(i);
+                }
+            }
+
+            ImageInfo[] methodArray = r2rMethodImages.ToArray();
+            ImageInfo[] assemblyArray = r2rAssemblyImages.ToArray();
+
+            Array.Sort(methodArray, ImageInfo.LowerAddress);
+            Array.Sort(assemblyArray, ImageInfo.LowerAddress);
+
+            ImageInfo prevMethod = null;
+            ImageInfo prevAssembly = null;
+
+            foreach (ImageInfo i in methodArray)
+            {
+                bool found = false;
+
+                foreach (ImageInfo a in assemblyArray)
+                {
+                    if ((i.BaseAddress >= a.BaseAddress) && (i.BaseAddress < a.EndAddress))
+                    {
+                        i.AssemblyId = a.AssemblyId;
+
+                        if (prevMethod != null)
+                        {
+                            if (prevAssembly == a)
+                            {
+                                prevMethod.SetSize((int)(i.BaseAddress - prevMethod.BaseAddress));
+                            }
+                            else
+                            {
+                                prevMethod.SetSize((int)(prevAssembly.EndAddress - prevMethod.BaseAddress));
+                            }
+                        }
+
+                        found = true;
+                        prevMethod = i;
+                        prevAssembly = a;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    Console.WriteLine($"Eh? Could not find length for R2R method {i.Name} with entry point 0x{i.BaseAddress:X}");
+                }
+            }
+
+            if (prevAssembly != null)
+            {
+                prevMethod.SetSize((int)(prevAssembly.EndAddress - prevMethod.BaseAddress));
+            }
+        }
+
         private static string GetName(MethodLoadUnloadVerboseTraceData data, string assembly)
         {
             // Prepare sig (strip return value)
@@ -522,6 +601,7 @@ namespace CoreClrInstRetired
             bool showUnusedImages = false;
             bool showLargeGroups = false;
             bool showIntervals = false;
+            bool needToFixR2RLengths = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -1157,13 +1237,51 @@ namespace CoreClrInstRetired
                                     }
                                 }
                                 break;
+
+                            // From -RuntimeLoading arg to perfview
+                            //
+                            case "Method/R2RGetEntryPoint":
+                                {
+                                    // We get the start address but not the length
+                                    R2RGetEntryPointTraceData r2rData = (R2RGetEntryPointTraceData)data;
+
+                                    // 0 ==> no R2R entry point
+
+                                    if (r2rData.EntryPoint != 0)
+                                    {
+                                        string fullName = $"{r2rData.MethodNamespace}.{r2rData.MethodName}({r2rData.MethodSignature})";
+                                        string key = r2rData.MethodID.ToString("X") + "-R2R";
+
+                                        if (!ImageMap.ContainsKey(key))
+                                        {
+                                            // Pretend this is an "image"... Set the length to 0 for now.
+                                            // We will fix the length later once we've seen all the R2R methods.
+                                            ImageInfo methodInfo = new ImageInfo(fullName, (ulong)r2rData.EntryPoint, 0);
+
+                                            methodInfo.IsJitGeneratedCode = true;
+                                            methodInfo.IsJittedCode = false;
+                                            methodInfo.Tier = OptimizationTier.ReadyToRun;
+                                            methodInfo.AssemblyId = -1;
+                                            methodInfo.MethodId = r2rData.MethodID;
+
+                                            ImageMap.Add(key, methodInfo);
+
+                                            needToFixR2RLengths = true;
+                                        }
+                                    }
+                                }
+                                break;
                         }
                     }
                 };
 
                 source.Process();
             }
-            ;
+
+            if (needToFixR2RLengths)
+            {
+                FixR2RLengths();
+            }
 
             AttributeSampleCounts(SampleCountMap, Counts);
 
