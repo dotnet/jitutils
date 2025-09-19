@@ -486,7 +486,7 @@ namespace CoreClrInstRetired
         static void FixR2RLengths()
         {
             List<ImageInfo> r2rMethodImages = new List<ImageInfo>();
-            List<ImageInfo> r2rAssembyImages = new List<ImageInfo>();
+            List<ImageInfo> r2rAssemblyImages = new List<ImageInfo>();
             foreach (ImageInfo i in ImageMap.Values)
             {
                 // When parsing ETL, we used size zero for methods whose size were not known.
@@ -501,12 +501,12 @@ namespace CoreClrInstRetired
                     // This might be a native image containing R2R method images. Remember it so
                     // we can determine the size of the last method in the assembly.
                     //
-                    r2rAssembyImages.Add(i);
+                    r2rAssemblyImages.Add(i);
                 }
             }
 
             ImageInfo[] methodArray = r2rMethodImages.ToArray();
-            ImageInfo[] assemblyArray = r2rAssembyImages.ToArray();
+            ImageInfo[] assemblyArray = r2rAssemblyImages.ToArray();
 
             Array.Sort(methodArray, ImageInfo.LowerAddress);
             Array.Sort(assemblyArray, ImageInfo.LowerAddress);
