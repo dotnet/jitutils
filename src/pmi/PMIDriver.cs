@@ -51,7 +51,7 @@ namespace PMIDriver
             while (!isFileCompleted && prepallRetryCount <= PREPALL_MAX_RETRY_COUNT)
             {
                 prepallRetryCount++;
-                PrepAllResult pr = Compute(pi);
+                PrepAllResult pr = Compute(pi, verbose);
                 if (pr.success)
                 {
                     isFileCompleted = true;
@@ -152,7 +152,7 @@ namespace PMIDriver
             }
         }
 
-        private static PrepAllResult Compute(PrepAllInfo pi)
+        private static PrepAllResult Compute(PrepAllInfo pi, bool verbose)
         {
             PrepAllResult temp = new PrepAllResult();
             temp.success = false;
@@ -219,11 +219,14 @@ namespace PMIDriver
                 p.StartInfo.FileName = driverName;
                 p.StartInfo.Arguments = newCommandLine;
 
-                Console.WriteLine($"DRIVEALL: Invoking {driverName} {newCommandLine}");
-
-                foreach (var pair in pi.environment)
+                if (verbose)
                 {
-                    Console.WriteLine($"    {pair.Key}={pair.Value}");
+                    Console.WriteLine($"DRIVEALL: Invoking {driverName} {newCommandLine}");
+
+                    foreach (var pair in pi.environment)
+                    {
+                        Console.WriteLine($"    {pair.Key}={pair.Value}");
+                    }
                 }
 
                 p.Start();
