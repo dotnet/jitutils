@@ -29,7 +29,8 @@ Current tools include:
     cd jitutils
     bootstrap.cmd
 ```
-(on non-Windows, run bootstrap.sh. NOTE: On Mac, you need to first use `ulimit -n 2048` or the `dotnet restore` part of the build will fail.)
+(on non-Windows, run bootstrap.sh.
+**macOS note:** On macOS versions **prior to 14 (Sonoma)** you must first run `ulimit -n 2048`, otherwise the `dotnet restore` part of the build may fail due to the lower default file descriptor limit.)
 
 4. Optionally, add the built tools directory to your path, e.g.:
 ```
