@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-//
-//  jit-diff
-//
-
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
@@ -29,7 +25,7 @@ namespace ManagedCodeGen
         public string OutputPath { get; set; }
     }
 
-    public partial class JitDiff
+    public partial class @jitdiff
     {
         // Supported commands.  List to view information from the CI system, and Copy to download artifacts.
         public enum Commands

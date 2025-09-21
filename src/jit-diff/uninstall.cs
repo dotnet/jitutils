@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-//
-//  jit-diff
-//
-
 using System;
 using System.CommandLine;
 using System.IO;
@@ -15,7 +11,7 @@ using System.Text.Json.Nodes;
 
 namespace ManagedCodeGen
 {
-    public partial class JitDiff
+    public partial class @jitdiff
     {
         public static int UninstallCommand(Config config)
         {

@@ -30,7 +30,7 @@ namespace ManagedCodeGen
             m_start = DateTime.Now;
         }
 
-        private static void StartTasks(List<AssemblyInfo> assemblyWorkList, JitDiff.Config config, List<DasmWorkTask> tasks)
+        private static void StartTasks(List<AssemblyInfo> assemblyWorkList, jitdiff.Config config, List<DasmWorkTask> tasks)
         {
             int counter = 0;
 
@@ -72,7 +72,7 @@ namespace ManagedCodeGen
             });
         }
 
-        public void AwaitTasksAndShowProgress(List<AssemblyInfo> assemblyWorkList, JitDiff.Config config,
+        public void AwaitTasksAndShowProgress(List<AssemblyInfo> assemblyWorkList, jitdiff.Config config,
             List<DasmWorkTask> tasks, bool isFinalAwait)
         {
             StartTasks(assemblyWorkList, config, tasks);
@@ -130,7 +130,7 @@ namespace ManagedCodeGen
         }
     }
 
-    public partial class JitDiff
+    public partial class @jitdiff
     {
         public class DasmResult
         {
