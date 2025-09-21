@@ -130,7 +130,7 @@ namespace ManagedCodeGen
         }
     }
 
-    public partial class jitdiff
+    public partial class @jitdiff
     {
         public class DasmResult
         {

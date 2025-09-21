@@ -22,7 +22,7 @@ using System.Xml;
 
 namespace ManagedCodeGen
 {
-    public class jitformat
+    public class @jitformat
     {
         // Define options to be parsed 
         public class Config

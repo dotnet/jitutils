@@ -25,7 +25,7 @@ namespace ManagedCodeGen
         public string OutputPath { get; set; }
     }
 
-    public partial class jitdiff
+    public partial class @jitdiff
     {
         // Supported commands.  List to view information from the CI system, and Copy to download artifacts.
         public enum Commands
