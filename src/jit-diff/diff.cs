@@ -46,7 +46,7 @@ namespace ManagedCodeGen
             {
                 // We limit the number of tasks we start in parallel to avoid overwhelming the system.
                 // E.g. running frameworks diffs involves 100s of tasks, which can be problematic on machines with limited memory.
-                int parallelism = config.Sequential ? 1 : Environment.ProcessorCount * 2;
+                int parallelism = config.Sequential ? 1 : Environment.ProcessorCount;
 
                 bool anyFailed = false;
 
