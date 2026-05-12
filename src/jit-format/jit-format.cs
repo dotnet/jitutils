@@ -2,11 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-///////////////////////////////////////////////////////////////////////////////
-//
-//  jit-format -
-//
-
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
@@ -36,8 +31,8 @@ namespace ManagedCodeGen
             private string _build = null;
             private string _runtimePath = null;
             private string _coreclrPath = null;
-            private IReadOnlyList<string> _filenames = Array.Empty<string>();
-            private IReadOnlyList<string> _projects = Array.Empty<string>();
+            private IReadOnlyList<string> _filenames = [];
+            private IReadOnlyList<string> _projects = [];
             private string _srcDirectory = null;
             private bool _untidy = false;
             private bool _noformat = false;

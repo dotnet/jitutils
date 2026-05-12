@@ -5,13 +5,10 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
-using System.CommandLine.Parsing;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 
 namespace ManagedCodeGen
@@ -148,7 +145,7 @@ namespace ManagedCodeGen
             private string _platformName = null;
             private string _branchName = null;
             private bool _pmi = false;
-            private IReadOnlyList<string> _assemblyList = Array.Empty<string>();
+            private IReadOnlyList<string> _assemblyList = [];
             private bool _tsv;
             private bool _cctors;
             private int  _count = 20;
@@ -771,62 +768,8 @@ namespace ManagedCodeGen
 
                 if (_validationError)
                 {
-                    DisplayUsageMessage();
+                    jitdiff.DisplayCommandHelp(_command);
                     Environment.Exit(-1);
-                }
-            }
-
-            private void DisplayUsageMessage()
-            {
-                Console.Error.WriteLine("");
-                Console.Error.WriteLine("Usage: jit-diff <diff|list|install|uninstall> [options]");
-                Console.Error.WriteLine("Run 'jit-diff <command> --help' for command-specific options.");
-
-                if (_command == Commands.Diff)
-                {
-                    string[] diffExampleText = {
-                    @"Examples:",
-                    @"",
-                    @"  jit-diff diff --output c:\diffs --corelib --core_root c:\runtime\artifacts\tests\coreclr\windows.x64.Release\Tests\Core_Root --base c:\runtime_base\artifacts\bin\coreclr\windows.x64.Checked --diff c:\runtime\artifacts\bin\coreclr\windows.x86.Checked",
-                    @"      Generate diffs of prejitted code for System.Private.CoreLib.dll by specifying baseline and",
-                    @"      diff compiler directories explicitly.",
-                    @"",
-                    @"  jit-diff diff --output c:\diffs --base c:\runtime_base\artifacts\bin\coreclr\windows.x64.Checked --diff",
-                    @"      If run within the c:\runtime git clone of dotnet/runtime, does the same",
-                    @"      as the prevous example, using defaults.",
-                    @"",
-                    @"  jit-diff diff --output c:\diffs --base --base_root c:\runtime_base --diff",
-                    @"      Does the same as the prevous example, using -base_root to find the base",
-                    @"      directory (if run from c:\runtime tree).",
-                    @"",
-                    @"  jit-diff diff --base --diff",
-                    @"      Does the same as the prevous example (if run from c:\runtime tree), but uses",
-                    @"      default c:\runtime\artifacts\diffs output directory, and `base_root` must be specified",
-                    @"      in the config.json file in the directory pointed to by the JIT_UTILS_ROOT",
-                    @"      environment variable.",
-                    @"",
-                    @"  jit-diff diff --base --diff --pmi",
-                    @"      Does the same as the prevous example (if run from c:\runtime tree)",
-                    @"      but shows diffs for jitted code, via PMI",
-                    @"",
-                    @"  jit-diff diff --diff",
-                    @"      Only generates asm using the diff JIT -- does not generate asm from a baseline compiler --",
-                    @"      using all computed defaults.",
-                    @"",
-                    @"  jit-diff diff --diff --pmi --assembly test.exe",
-                    @"      Generates asm using the diff JIT, showing jitted code for all methods",
-                    @"      in the assembly test.exe",
-                    @"",
-                    @"  jit-diff diff --diff --arch x86",
-                    @"      Generate diffs, but for x86, even if there is an x64 compiler available.",
-                    @"",
-                    @"  jit-diff diff --diff --build Debug",
-                    @"      Generate diffs, but using a Debug build, even if there is a Checked build available."
-                    };
-                    foreach (var line in diffExampleText)
-                    {
-                        Console.Error.WriteLine(line);
-                    }
                 }
             }
 
@@ -976,11 +919,18 @@ namespace ManagedCodeGen
                     // Extract set value for tool and see if we can find it
                     // in the installed tools.
                     var tools = (JsonArray)_jObj[s_configFileRootKey]["tools"];
-                    var path = tools.Where(x => (string)x["tag"] == tag)
-                                    .Select(x => (string)x["path"]);
-                    // If the tag resolves to a tool return it, otherwise just return it 
-                    // as a posible path.
-                    return path.Any() ? path.First() : tag;
+                    foreach (JsonNode installedTool in tools)
+                    {
+                        if ((string)installedTool["tag"] == tag)
+                        {
+                            // If the tag resolves to a tool, return the resolved path.
+                            return (string)installedTool["path"];
+                        }
+                    }
+
+                    // If the tag doesn't resolve to an installed tool, return it as
+                    // a possible path.
+                    return tag;
                 }
 
                 found = false;
@@ -1348,13 +1298,62 @@ namespace ManagedCodeGen
             "V8"
         };
 
-        private static string s_CoreLibAssembly = "System.Private.CoreLib.dll";
+        private const string CoreLibAssemblyName = "System.Private.CoreLib.dll";
+
+        private static RootCommand CreateRootCommand(string[] args) =>
+            new JitDiffRootCommand(args)
+                .UseVersion()
+                .UseExtendedHelp(PrintExtendedHelp);
+
+        internal static void DisplayCommandHelp(Commands command)
+        {
+            string[] helpArgs = command switch
+            {
+                Commands.Diff or Commands.PmiDiff => ["diff", "--help"],
+                Commands.List => ["list", "--help"],
+                Commands.Install => ["install", "--help"],
+                Commands.Uninstall => ["uninstall", "--help"],
+                _ => ["--help"]
+            };
+
+            CreateRootCommand([]).Parse(helpArgs).Invoke();
+        }
+
+        public static void PrintExtendedHelp(ParseResult parseResult)
+        {
+            if (!string.Equals(parseResult.CommandResult.Command.Name, "diff", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            Console.WriteLine("""
+
+            Examples:
+
+            jit-diff diff --output c:\diffs --corelib --core_root c:\runtime\artifacts\tests\coreclr\windows.x64.Release\Tests\Core_Root --base c:\runtime_base\artifacts\bin\coreclr\windows.x64.Checked --diff c:\runtime\artifacts\bin\coreclr\windows.x64.Checked
+                Generate corelib prejit diffs by specifying explicit baseline and diff compiler directories.
+
+            jit-diff diff --output c:\diffs --base --base_root c:\runtime_base --diff
+                If run from a dotnet/runtime clone, infer the remaining paths and architecture/build defaults.
+
+            jit-diff diff --base --diff
+                Same as above, but use the default output directory under artifacts\diffs.
+
+            jit-diff diff --base --diff --pmi
+                Diff jitted code via PMI instead of prejitting with crossgen.
+
+            jit-diff diff --diff --pmi --assembly test.exe
+                Diff all jitted methods for a specific assembly.
+
+            jit-diff diff --diff --arch x86
+                Force x86 diffs even when x64 defaults are available.
+            """);
+        }
 
         public static int Main(string[] args)
         {
-            var command = new JitDiffRootCommand(args).UseVersion();
+            var command = CreateRootCommand(args);
             return command.Parse(args).Invoke();
         }
     }
 }
-
