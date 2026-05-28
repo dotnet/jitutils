@@ -14,7 +14,7 @@ EnsureCrossRootfsDirectoryExists () {
 }
 
 CMakeOSXArchitectures=
-LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
+LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV;WebAssembly"
 
 # Figure out which `strip` to use. Prefer `llvm-strip` if it is available.
 # `llvm-strip` is available in Azure Linux 3 container,

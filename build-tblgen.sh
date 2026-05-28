@@ -15,7 +15,7 @@ CrossRootfsDirectory=$2
 BuildUsingAzureLinux=1
 
 CMakeOSXArchitectures=
-LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV"
+LLVMTargetsToBuild="AArch64;ARM;X86;LoongArch;RISCV;WebAssembly"
 
 case "$TargetOSArchitecture" in
     linux-x64)

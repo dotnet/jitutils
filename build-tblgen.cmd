@@ -22,7 +22,7 @@ pushd "%BinariesDirectory%"
 cmake.exe ^
     -G "Visual Studio 17 2022" ^
     -DCMAKE_INSTALL_PREFIX="%RootDirectory%\" ^
-    -DLLVM_TARGETS_TO_BUILD=AArch64;ARM;X86;LoongArch;RISCV ^
+    -DLLVM_TARGETS_TO_BUILD=AArch64;ARM;X86;LoongArch;RISCV;WebAssembly ^
     "%SourcesDirectory%\llvm-project\llvm"
 
 popd

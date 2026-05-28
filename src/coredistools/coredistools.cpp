@@ -289,6 +289,9 @@ bool CorDisasm::setTarget() {
     case Triple::riscv64:
       TheTargetArch = Target_RiscV64;
       break;
+    case Triple::wasm32:
+      TheTargetArch = Target_Wasm32;
+      break;
     default:
       Print->Error("Unsupported Architecture: %s\n",
                    Triple::getArchTypeName(TheTriple->getArch()));
@@ -314,6 +317,9 @@ bool CorDisasm::setTarget() {
     break;
   case Target_RiscV64:
     TheTriple->setArch(Triple::riscv64);
+    break;
+  case Target_Wasm32:
+    TheTriple->setArch(Triple::wasm32);
     break;
   default:
     Print->Error("Unsupported Architecture: %s\n",
@@ -380,6 +386,12 @@ bool CorDisasm::init() {
       "+zvkng,+zvksg," // RVA23 localized options
       "+zabha,+zacas,+zvbc,+zama16b," // RVA23 development options
       "+zbc,+zfh,+zvfh,+zfbfmin,+zvfbfmin,+zvfbfwma"; // RVA23 expansion options
+  } else if (TheTargetArch == Target_Wasm32) {
+    // Enable the Wasm proposals the LLVM/Wasm RyuJIT backend may emit.
+    // Keep this in sync with the JIT's emitted feature set on each LLVM bump.
+    FeaturesStr = "+simd128,+sign-ext,+nontrapping-fptoint,+mutable-globals,"
+                  "+reference-types,+bulk-memory,+tail-call,"
+                  "+exception-handling,+multivalue";
   }
 
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));

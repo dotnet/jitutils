@@ -43,6 +43,7 @@ enum TargetArch {
     Target_Arm64,
     Target_LoongArch64,
     Target_RiscV64,
+    Target_Wasm32,
 };
 
 struct CorDisasm;
