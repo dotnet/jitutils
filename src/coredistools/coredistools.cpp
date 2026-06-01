@@ -229,7 +229,7 @@ public:
   // known one, so the stream remains parseable). Does not render the
   // locals -- the dump path uses formatWasmLocals for that.
   bool parseWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
-                       uint64_t *NumLocalGroups);
+                       uint64_t *NumLocalGroups) const;
 
   enum TargetArch getTargetArch() const { return TheTargetArch; }
 
@@ -837,7 +837,7 @@ static const char *wasmValTypeName(uint8_t Code) {
 
 bool CorDisasm::parseWasmLocals(const uint8_t **Cursor,
                                 const uint8_t *BodyEnd,
-                                uint64_t *NumLocalGroups) {
+                                uint64_t *NumLocalGroups) const {
   uint64_t Groups = 0;
   if (readULEB128(Cursor, BodyEnd, &Groups) == 0) {
     return false;
