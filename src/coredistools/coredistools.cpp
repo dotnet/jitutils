@@ -220,11 +220,16 @@ public:
 
   // Parses one body's locals declaration at *Cursor (which must point at the
   // first byte of the body, i.e. immediately after the body-length prefix),
-  // advancing *Cursor past the locals header. Returns true on success and
-  // stores nothing for callers that don't need the parsed locals (the locals
-  // are reported to a callback by the framed walker for printing).
-  static bool parseWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
-                              uint64_t *NumLocalGroups);
+  // advancing *Cursor past the locals header. On success returns true and
+  // writes the parsed group count to *NumLocalGroups (which must not be
+  // null). Returns false on malformed input (bad ULEB128 or truncated body);
+  // *Cursor is left in an unspecified state in that case. Emits a Log
+  // warning via Print if an unrecognized valtype byte is encountered, but
+  // still returns true (an unknown valtype consumes one byte just like a
+  // known one, so the stream remains parseable). Does not render the
+  // locals -- the dump path uses formatWasmLocals for that.
+  bool parseWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
+                       uint64_t *NumLocalGroups);
 
   enum TargetArch getTargetArch() const { return TheTargetArch; }
 
@@ -458,8 +463,8 @@ bool CorDisasm::init() {
   } else if (TheTargetArch == Target_Wasm32) {
     // Enable the Wasm proposals the LLVM/Wasm RyuJIT backend may emit.
     // Keep this in sync with the JIT's emitted feature set on each LLVM bump.
-    FeaturesStr = "+simd128,+sign-ext,+nontrapping-fptoint,+mutable-globals,"
-                  "+reference-types,+bulk-memory,+tail-call,"
+    FeaturesStr = "+simd128,+relaxed-simd,+sign-ext,+nontrapping-fptoint,"
+                  "+mutable-globals,+reference-types,+bulk-memory,+tail-call,"
                   "+exception-handling,+multivalue";
   }
 
@@ -845,7 +850,12 @@ bool CorDisasm::parseWasmLocals(const uint8_t **Cursor,
     if (*Cursor >= BodyEnd) {
       return false;
     }
-    (*Cursor)++; // consume valtype byte
+    uint8_t VT = *(*Cursor)++;
+    if (wasmValTypeName(VT) == nullptr) {
+      Print->Log("Wasm: unrecognized valtype byte 0x%02x in locals header "
+                 "(group %" PRIu64 "); wasmValTypeName needs update",
+                 VT, I);
+    }
   }
   *NumLocalGroups = Groups;
   return true;
@@ -854,9 +864,11 @@ bool CorDisasm::parseWasmLocals(const uint8_t **Cursor,
 // Format a locals header like "(local i32 i32 i64)" given the per-group
 // count + valtype pairs. Cursor must point at the start of the locals
 // declaration; on success it is advanced to the start of the opcode stream.
-// Returns false if the locals declaration is malformed.
+// Returns false if the locals declaration is malformed. If Print is
+// non-null, also emits a Log warning when an unrecognized valtype byte is
+// encountered (in addition to rendering it as "?XX" inline).
 static bool formatWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
-                             std::string &Out) {
+                             std::string &Out, const PrintControl *Print) {
   uint64_t Groups = 0;
   if (readULEB128(Cursor, BodyEnd, &Groups) == 0) return false;
 
@@ -875,6 +887,11 @@ static bool formatWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
     const char *Name = wasmValTypeName(VT);
     char Buf[16];
     if (Name == nullptr) {
+      if (Print != nullptr) {
+        Print->Log("Wasm: unrecognized valtype byte 0x%02x in locals header "
+                   "(group %" PRIu64 "); wasmValTypeName needs update",
+                   VT, G);
+      }
       snprintf(Buf, sizeof(Buf), "?%02x", VT);
       Name = Buf;
     }
@@ -920,7 +937,7 @@ bool CorDisasm::dumpWasmFramedBlock(const BlockInfo &Block) const {
                 BodyIndex, BodySize, (ptrdiff_t)(BodyStart - Block.Ptr));
 
     std::string LocalsText;
-    if (!formatWasmLocals(&Cursor, BodyEnd, LocalsText)) {
+    if (!formatWasmLocals(&Cursor, BodyEnd, LocalsText, Print)) {
       Print->Error("Wasm framed dump: malformed locals header in body %u",
                    BodyIndex);
       return false;
@@ -964,6 +981,12 @@ bool CorAsmDiff::compareWasmInstOperands(const MCInst &InstL,
     return false;
   }
 
+  // Defensive belt: nearDiffWasmFramed pre-screens each instruction-pair
+  // by comparing encoded InstrSize before calling here, so for equal
+  // opcodes the operand counts should already agree. In particular, two
+  // br_tables with different table lengths encode to different sizes and
+  // are rejected before reaching this point. Keep the check anyway in
+  // case future opcodes have variable operand counts at fixed widths.
   size_t numOperands = InstL.getNumOperands();
   if (numOperands != InstR.getNumOperands()) {
     Print->Log("Wasm Operand Count Mismatch @buf-off %zu", BlockOffset);
@@ -1084,6 +1107,10 @@ bool CorAsmDiff::nearDiffWasmFramed(const BlockInfo &LeftBlock,
         // produce equal instruction widths. A mismatch here is either a
         // codegen change (different opcode width family) or a JIT regression
         // around reloc-slot padding -- either way, flag as a real diff in v1.
+        // Variable-length payloads (notably br_table's branch list) also
+        // produce different InstrSizes when the table count differs, so
+        // those mismatches are caught here before reaching the operand
+        // comparator below.
         Print->Log("Wasm framed diff: instr-size mismatch in body %u "
                    "@buf-off %zu (%" PRIu64 " vs %" PRIu64 ")",
                    BodyIndex, LBufOff, LIter.InstrSize, RIter.InstrSize);
