@@ -863,21 +863,22 @@ bool CorDisasm::parseWasmLocals(const uint8_t **Cursor,
 
 // Format a locals header like "(local i32 i32 i64)" given the per-group
 // count + valtype pairs. Cursor must point at the start of the locals
-// declaration; on success it is advanced to the start of the opcode stream.
+// declaration; on success it is advanced to the start of the opcode stream
+// and the rendered text is written to *Out (which must not be null).
 // Returns false if the locals declaration is malformed. If Print is
 // non-null, also emits a Log warning when an unrecognized valtype byte is
 // encountered (in addition to rendering it as "?XX" inline).
 static bool formatWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
-                             std::string &Out, const PrintControl *Print) {
+                             std::string *Out, const PrintControl *Print) {
   uint64_t Groups = 0;
   if (readULEB128(Cursor, BodyEnd, &Groups) == 0) return false;
 
   if (Groups == 0) {
-    Out = "(local)";
+    *Out = "(local)";
     return true;
   }
 
-  raw_string_ostream OS(Out);
+  raw_string_ostream OS(*Out);
   OS << "(local";
   for (uint64_t G = 0; G < Groups; G++) {
     uint64_t Count = 0;
@@ -937,7 +938,7 @@ bool CorDisasm::dumpWasmFramedBlock(const BlockInfo &Block) const {
                 BodyIndex, BodySize, (ptrdiff_t)(BodyStart - Block.Ptr));
 
     std::string LocalsText;
-    if (!formatWasmLocals(&Cursor, BodyEnd, LocalsText, Print)) {
+    if (!formatWasmLocals(&Cursor, BodyEnd, &LocalsText, Print)) {
       Print->Error("Wasm framed dump: malformed locals header in body %u",
                    BodyIndex);
       return false;
