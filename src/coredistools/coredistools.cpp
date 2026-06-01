@@ -1089,6 +1089,15 @@ bool CorAsmDiff::nearDiffWasmFramed(const BlockInfo &LeftBlock,
       return false;
     }
 
+    // Mirror the per-body progress trace emitted by dumpWasmFramedBlock so
+    // that callers tailing the dump stream can see how far the diff
+    // iteration reached even when no mismatch was logged.
+    Print->Dump("Wasm framed diff: comparing body %u "
+                "(size=%" PRIu64 ", baseline-off=%tu, diff-off=%tu)",
+                BodyIndex, LBodySize,
+                (ptrdiff_t)(LLocStart - LeftBlock.Ptr),
+                (ptrdiff_t)(RLocStart - RightBlock.Ptr));
+
     // Opcode-by-opcode comparison.
     while (LCur < LBodyEnd && RCur < RBodyEnd) {
       size_t LBufOff = (size_t)(LCur - LeftBlock.Ptr);
