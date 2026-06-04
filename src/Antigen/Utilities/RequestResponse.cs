@@ -13,8 +13,8 @@ namespace ExecutionEngine
 {
     public class Request
     {
-        public byte[] Debug { get; set; }
-        public byte[] Release { get; set; }
+        public byte[] Debug { get; set; } = [];
+        public byte[] Release { get; set; } = [];
     }
 
     public class Response
@@ -26,6 +26,6 @@ namespace ExecutionEngine
         public bool IsTimeout { get; set; }
         public bool IsJitAssert { get; set; }
         public bool HasCrashed { get; set; }
-        public IReadOnlyList<Tuple<string, string>> EnvironmentVariables { get; set; }
+        public IReadOnlyList<Tuple<string, string>>? EnvironmentVariables { get; set; }
     }
 }

@@ -4,7 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Antigen.Config;
-using CommandLine;
+using System.CommandLine;
+using System.CommandLine.Parsing;
 using Utils;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -38,23 +39,27 @@ namespace Antigen
 
         static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<CommandLineOptions>(args).MapResult(Run, err => 1);
+            var command = new AntigenRootCommand(args).UseVersion();
+            return command.Parse(args).Invoke();
         }
 
-        private static int Run(CommandLineOptions opts)
+        internal static int Run(AntigenRootCommand command)
         {
             try
             {
+                ParseResult result = command.Result;
                 PRNG.Initialize(s_runOptions.Seed);
-                s_runOptions.CoreRun = opts.CoreRunPath;
-                s_runOptions.OutputDirectory = opts.IssuesFolder;
-                if (opts.RunDuration > 0)
+                s_runOptions.CoreRun = result.GetValue(command.CoreRunPath);
+                s_runOptions.OutputDirectory = result.GetValue(command.IssuesFolder);
+                int runDuration = result.GetValue(command.RunDuration);
+                if (runDuration > 0)
                 {
-                    s_runOptions.RunDuration = opts.RunDuration;
+                    s_runOptions.RunDuration = runDuration;
                 }
-                if (opts.NumTestCases > 0)
+                int numTestCases = result.GetValue(command.NumTestCases);
+                if (numTestCases > 0)
                 {
-                    s_runOptions.NumTestCases = opts.NumTestCases;
+                    s_runOptions.NumTestCases = numTestCases;
                 }
 
                 if (s_runOptions.RunDuration != -1)
@@ -294,20 +299,5 @@ namespace Antigen
                 }
             }
         }
-    }
-
-    public class CommandLineOptions
-    {
-        [Option(shortName: 'c', longName: "CoreRun", Required = true, HelpText = "Full path to CoreRun/CoreRun.exe.")]
-        public string CoreRunPath { get; set; }
-
-        [Option(shortName: 'o', longName: "IssuesFolder", Required = true, HelpText = "Full path to folder where issues will be copied.")]
-        public string IssuesFolder { get; set; }
-
-        [Option(shortName: 'n', longName: "NumTestCases", Required = false, HelpText = "Number of test cases to execute. By default, 1000.")]
-        public int NumTestCases { get; set; }
-
-        [Option(shortName: 'd', longName: "RunDuration", Required = false, HelpText = "Duration in minutes to run. By default until NumTestCases, but if Duration is given, will override the NumTestCases.")]
-        public int RunDuration { get; set; }
     }
 }

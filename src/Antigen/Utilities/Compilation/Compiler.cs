@@ -39,8 +39,8 @@ namespace Antigen.Compilation
         private static readonly MetadataReference[] s_references =
 {
              MetadataReference.CreateFromFile(s_corelibPath),
-             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath), "System.Console.dll")),
-             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath), "System.Runtime.dll")),
+             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath)!, "System.Console.dll")),
+             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath)!, "System.Runtime.dll")),
              MetadataReference.CreateFromFile(typeof(SyntaxTree).Assembly.Location),
              MetadataReference.CreateFromFile(typeof(CSharpSyntaxTree).Assembly.Location),
         };
@@ -63,7 +63,7 @@ namespace Antigen.Compilation
             return new CompileResult(assemblyName, null, debugBytes, releaseBytes);
         }
 
-        private byte[] CompileAndGetBytes(SyntaxTree programTree, string assemblyName, CSharpCompilationOptions options)
+        private byte[]? CompileAndGetBytes(SyntaxTree programTree, string assemblyName, CSharpCompilationOptions options)
         {
             string tag = options.OptimizationLevel == OptimizationLevel.Debug ? "Debug" : "Release";
             var cc = CSharpCompilation.Create($"{assemblyName}-{tag}.exe", new SyntaxTree[] { programTree }, s_references, options);

@@ -4,7 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.Intrinsics;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Antigen.Config
 {
@@ -25,7 +26,7 @@ namespace Antigen.Config
         // Percent of time to execute baseline
         public double ExecuteBaseline;
 
-        [NonSerialized()]
+        [JsonIgnore]
         public string CoreRun = null;
 
         public List<ConfigOptions> Configs;
@@ -40,7 +41,16 @@ namespace Antigen.Config
             string antiGenConfig = Path.Combine(currentDirectory, "Config", "antigen.json");
             Debug.Assert(File.Exists(antiGenConfig));
 
-            var runOption = JsonConvert.DeserializeObject<RunOptions>(File.ReadAllText(antiGenConfig));
+            JsonSerializerOptions options = new()
+            {
+                IncludeFields = true,
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true,
+                NumberHandling = JsonNumberHandling.AllowReadingFromString,
+            };
+
+            var runOption = JsonSerializer.Deserialize<RunOptions>(File.ReadAllText(antiGenConfig), options);
             EnvVarOptions.Initialize(runOption.BaselineEnvVars, runOption.TestEnvVars);
 
             return runOption;

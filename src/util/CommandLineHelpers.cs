@@ -9,7 +9,7 @@ using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using System.IO;
 
-public static class Helpers
+internal static class Helpers
 {
     public static RootCommand UseVersion(this RootCommand command)
     {
@@ -55,7 +55,7 @@ public static class Helpers
 
         public CustomizedHelpAction(HelpOption helpOption, Action<ParseResult> customizer)
         {
-            _helpAction = (HelpAction)helpOption.Action;
+            _helpAction = (HelpAction)helpOption.Action!;
             _customizer = customizer;
         }
 

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -14,7 +15,7 @@ using System.Threading;
 using System.Threading.Tasks;
 //using Antigen.Config;
 using ExecutionEngine;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Utils;
 
 namespace Antigen.Execution
@@ -54,6 +55,7 @@ namespace Antigen.Execution
             _testCaseExecutionCount = 0;
         }
 
+        [MemberNotNull(nameof(_envVars), nameof(_envVarsList))]
         private void SetEnvironmentVariables(ProcessStartInfo startInfo, Dictionary<string, string> envVars)
         {
             envVars["DOTNET_TieredCompilation"] = "0";
@@ -96,7 +98,7 @@ namespace Antigen.Execution
 
         public Response Execute(Request request)
         {
-            _process.StandardInput.WriteLine(JsonConvert.SerializeObject(request));
+            _process.StandardInput.WriteLine(JsonSerializer.Serialize(request));
 
             bool killed = false;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(TimeoutInSeconds));
@@ -104,7 +106,7 @@ namespace Antigen.Execution
             StringBuilder responseReader = new StringBuilder();
             while (true)
             {
-                string line = _process.StandardOutput.ReadLine();
+                string? line = _process.StandardOutput.ReadLine();
                 if ((line == null) || (line == "Done"))
                 {
                     break;
@@ -124,7 +126,7 @@ namespace Antigen.Execution
 
             try
             {
-                return JsonConvert.DeserializeObject<Response>(responseReader.ToString());
+                return JsonSerializer.Deserialize<Response>(responseReader.ToString()) ?? new() { HasCrashed = true };
             }
             catch (JsonException)
             {

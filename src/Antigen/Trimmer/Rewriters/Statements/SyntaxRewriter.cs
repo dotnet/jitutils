@@ -44,8 +44,8 @@ namespace Antigen.Trimmer.Rewriters
 
         public override SyntaxTrivia VisitTrivia(SyntaxTrivia trivia)
         {
-            if (trivia.Kind() == SyntaxKind.SingleLineCommentTrivia ||
-                trivia.Kind() == SyntaxKind.MultiLineCommentTrivia)
+            if (trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
+                trivia.IsKind(SyntaxKind.MultiLineCommentTrivia))
             {
                 return default(SyntaxTrivia);
             }
