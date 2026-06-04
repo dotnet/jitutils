@@ -166,6 +166,36 @@ bool DefaultEqualityComparator(const void *UserData, size_t BlockOffset,
   return Offset1 == Offset2;
 }
 
+// ULEB128 helpers used to walk Wasm framed code buffers.
+//
+// readULEB128:
+//   On success, stores the decoded value in *Result, returns the number of
+//   consumed bytes, and advances *Cursor past the consumed bytes.
+//   On failure (buffer exhausted, or value would exceed 10 bytes), returns
+//   0 and leaves *Cursor untouched.
+static unsigned readULEB128(const uint8_t **Cursor, const uint8_t *End,
+                            uint64_t *Result) {
+  const uint8_t *P = *Cursor;
+  uint64_t Value = 0;
+  unsigned Shift = 0;
+  unsigned BytesConsumed = 0;
+
+  // ULEB128 is at most 10 bytes for a 64-bit value.
+  while (P < End && BytesConsumed < 10) {
+    uint8_t B = *P++;
+    Value |= (uint64_t)(B & 0x7F) << Shift;
+    BytesConsumed++;
+    if ((B & 0x80) == 0) {
+      *Result = Value;
+      *Cursor = P;
+      return BytesConsumed;
+    }
+    Shift += 7;
+  }
+
+  return 0;
+}
+
 // Instruction-wise disassembler helper.
 // This utility is used to implement GcStress in CoreCLr
 // Adapted from LLVM-objdump
@@ -181,6 +211,27 @@ public:
   uint64_t disasmInstruction(BlockIterator &BIter, bool DumpAsm = false) const;
   void dumpInstruction(const BlockIterator &BIter) const;
   void dumpBlock(const BlockInfo &Block) const;
+
+  // Wasm framed-buffer helpers (see coredistools.h for the framing layout).
+  // dumpWasmFramedBlock walks the framed buffer and prints each body as
+  // `.wat`-style assembly. Returns false on a malformed buffer (bad ULEB128,
+  // truncated body, or a body that fails to fully disassemble).
+  bool dumpWasmFramedBlock(const BlockInfo &Block) const;
+
+  // Parses one body's locals declaration at *Cursor (which must point at the
+  // first byte of the body, i.e. immediately after the body-length prefix),
+  // advancing *Cursor past the locals header. On success returns true and
+  // writes the parsed group count to *NumLocalGroups (which must not be
+  // null). Returns false on malformed input (bad ULEB128 or truncated body);
+  // *Cursor is left in an unspecified state in that case. Emits a Log
+  // warning via Print if an unrecognized valtype byte is encountered, but
+  // still returns true (an unknown valtype consumes one byte just like a
+  // known one, so the stream remains parseable). Does not render the
+  // locals -- the dump path uses formatWasmLocals for that.
+  bool parseWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
+                       uint64_t *NumLocalGroups) const;
+
+  enum TargetArch getTargetArch() const { return TheTargetArch; }
 
 protected:
   enum TargetArch TheTargetArch;
@@ -224,9 +275,32 @@ public:
   bool nearDiff(const BlockInfo &LeftBlock, const BlockInfo &RightBlock,
                 const void *UserData) const;
 
+  // Wasm framed-buffer differ. Walks both buffers as length-prefixed bodies
+  // and compares opcodes / operands per body. The OffsetComparator is invoked
+  // for differing integer immediates with BlockOffset set to the opcode byte
+  // offset measured from the start of the framed buffer (i.e. the same key
+  // the JIT-side recorded reloc tables use).
+  bool nearDiffWasmFramed(const BlockInfo &LeftBlock,
+                          const BlockInfo &RightBlock,
+                          const void *UserData) const;
+
+  // Pretty-print both framed buffers, one body at a time, prefixed with a
+  // "(baseline)" / "(diff)" label per body so a human can spot which body
+  // differs at a glance.
+  void dumpDiffWasmFramed(const BlockInfo &LeftBlock,
+                          const BlockInfo &RightBlock) const;
+
 private:
   bool fail(const char *Mesg, const BlockIterator &Left,
             const BlockIterator &Right) const;
+
+  // Operand-by-operand compare of two already-decoded MCInsts. Used by
+  // nearDiffWasmFramed; the native nearDiff has an inlined copy of the same
+  // logic that we deliberately do not share to keep the hot native path
+  // untouched.
+  bool compareWasmInstOperands(const MCInst &InstL, const MCInst &InstR,
+                               size_t BlockOffset, size_t InstrLen,
+                               const void *UserData) const;
 
   OffsetComparator Comparator;
   OffsetMunger Munger;
@@ -289,6 +363,9 @@ bool CorDisasm::setTarget() {
     case Triple::riscv64:
       TheTargetArch = Target_RiscV64;
       break;
+    case Triple::wasm32:
+      TheTargetArch = Target_Wasm32;
+      break;
     default:
       Print->Error("Unsupported Architecture: %s\n",
                    Triple::getArchTypeName(TheTriple->getArch()));
@@ -314,6 +391,9 @@ bool CorDisasm::setTarget() {
     break;
   case Target_RiscV64:
     TheTriple->setArch(Triple::riscv64);
+    break;
+  case Target_Wasm32:
+    TheTriple->setArch(Triple::wasm32);
     break;
   default:
     Print->Error("Unsupported Architecture: %s\n",
@@ -380,6 +460,12 @@ bool CorDisasm::init() {
       "+zvkng,+zvksg," // RVA23 localized options
       "+zabha,+zacas,+zvbc,+zama16b," // RVA23 development options
       "+zbc,+zfh,+zvfh,+zfbfmin,+zvfbfmin,+zvfbfwma"; // RVA23 expansion options
+  } else if (TheTargetArch == Target_Wasm32) {
+    // Enable the Wasm proposals the LLVM/Wasm RyuJIT backend may emit.
+    // Keep this in sync with the JIT's emitted feature set on each LLVM bump.
+    FeaturesStr = "+simd128,+relaxed-simd,+sign-ext,+nontrapping-fptoint,"
+                  "+mutable-globals,+reference-types,+bulk-memory,+tail-call,"
+                  "+exception-handling,+multivalue";
   }
 
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
@@ -732,6 +818,352 @@ bool CorAsmDiff::fail(const char *Mesg, const BlockIterator &Left,
   return false;
 }
 
+// --- Wasm framed-buffer support ------------------------------------------
+
+// Wasm value types we recognize when printing locals headers. Values not in
+// this table are still consumed by the walker -- they just print as "?<hex>".
+static const char *wasmValTypeName(uint8_t Code) {
+  switch (Code) {
+    case 0x7F: return "i32";
+    case 0x7E: return "i64";
+    case 0x7D: return "f32";
+    case 0x7C: return "f64";
+    case 0x7B: return "v128";
+    case 0x70: return "funcref";
+    case 0x6F: return "externref";
+    default:   return nullptr;
+  }
+}
+
+bool CorDisasm::parseWasmLocals(const uint8_t **Cursor,
+                                const uint8_t *BodyEnd,
+                                uint64_t *NumLocalGroups) const {
+  uint64_t Groups = 0;
+  if (readULEB128(Cursor, BodyEnd, &Groups) == 0) {
+    return false;
+  }
+  for (uint64_t I = 0; I < Groups; I++) {
+    uint64_t Count = 0;
+    if (readULEB128(Cursor, BodyEnd, &Count) == 0) {
+      return false;
+    }
+    if (*Cursor >= BodyEnd) {
+      return false;
+    }
+    uint8_t VT = *(*Cursor)++;
+    if (wasmValTypeName(VT) == nullptr) {
+      Print->Log("Wasm: unrecognized valtype byte 0x%02x in locals header "
+                 "(group %" PRIu64 "); wasmValTypeName needs update",
+                 VT, I);
+    }
+  }
+  *NumLocalGroups = Groups;
+  return true;
+}
+
+// Format a locals header like "(local i32 i32 i64)" given the per-group
+// count + valtype pairs. Cursor must point at the start of the locals
+// declaration; on success it is advanced to the start of the opcode stream
+// and the rendered text is written to *Out (which must not be null).
+// Returns false if the locals declaration is malformed. If Print is
+// non-null, also emits a Log warning when an unrecognized valtype byte is
+// encountered (in addition to rendering it as "?XX" inline).
+static bool formatWasmLocals(const uint8_t **Cursor, const uint8_t *BodyEnd,
+                             std::string *Out, const PrintControl *Print) {
+  uint64_t Groups = 0;
+  if (readULEB128(Cursor, BodyEnd, &Groups) == 0) return false;
+
+  if (Groups == 0) {
+    *Out = "(local)";
+    return true;
+  }
+
+  raw_string_ostream OS(*Out);
+  OS << "(local";
+  for (uint64_t G = 0; G < Groups; G++) {
+    uint64_t Count = 0;
+    if (readULEB128(Cursor, BodyEnd, &Count) == 0) return false;
+    if (*Cursor >= BodyEnd) return false;
+    uint8_t VT = *(*Cursor)++;
+    const char *Name = wasmValTypeName(VT);
+    char Buf[16];
+    if (Name == nullptr) {
+      if (Print != nullptr) {
+        Print->Log("Wasm: unrecognized valtype byte 0x%02x in locals header "
+                   "(group %" PRIu64 "); wasmValTypeName needs update",
+                   VT, G);
+      }
+      snprintf(Buf, sizeof(Buf), "?%02x", VT);
+      Name = Buf;
+    }
+    for (uint64_t I = 0; I < Count; I++) {
+      OS << ' ' << Name;
+    }
+  }
+  OS << ')';
+  OS.flush();
+  return true;
+}
+
+bool CorDisasm::dumpWasmFramedBlock(const BlockInfo &Block) const {
+  Print->Dump("-----------------------------------------------");
+  Print->Dump("Block:   %s\nSize:    %" PRIu64 "\nAddress: %" PRIxPTR
+              "\nCodePtr: %" PRIxPTR " (wasm32 framed)",
+              Block.Name, Block.BlockSize, Block.Addr, (uintptr_t)Block.Ptr);
+  Print->Dump("-----------------------------------------------");
+
+  const uint8_t *Cursor = Block.Ptr;
+  const uint8_t *End = Block.Ptr + Block.BlockSize;
+  uint32_t BodyIndex = 0;
+
+  while (Cursor < End) {
+    const uint8_t *RecordStart = Cursor;
+    uint64_t BodySize = 0;
+    if (readULEB128(&Cursor, End, &BodySize) == 0) {
+      Print->Error("Wasm framed dump: bad ULEB128 body length at offset %tu",
+                   (ptrdiff_t)(RecordStart - Block.Ptr));
+      return false;
+    }
+    if ((uint64_t)(End - Cursor) < BodySize) {
+      Print->Error("Wasm framed dump: body %u truncated (need %" PRIu64
+                   ", have %tu)",
+                   BodyIndex, BodySize, (ptrdiff_t)(End - Cursor));
+      return false;
+    }
+
+    const uint8_t *BodyStart = Cursor;
+    const uint8_t *BodyEnd = Cursor + BodySize;
+
+    Print->Dump("body %u (size=%" PRIu64 ", buf-off=%tu)",
+                BodyIndex, BodySize, (ptrdiff_t)(BodyStart - Block.Ptr));
+
+    std::string LocalsText;
+    if (!formatWasmLocals(&Cursor, BodyEnd, &LocalsText, Print)) {
+      Print->Error("Wasm framed dump: malformed locals header in body %u",
+                   BodyIndex);
+      return false;
+    }
+    Print->Dump("  %s", LocalsText.c_str());
+
+    while (Cursor < BodyEnd) {
+      size_t BufOff = (size_t)(Cursor - Block.Ptr);
+      BlockIterator BIter(Cursor, (uint64_t)(BodyEnd - Cursor),
+                          (uintptr_t)BufOff);
+      if (!decodeInstruction(BIter)) {
+        Print->Error("Wasm framed dump: decode failure in body %u at buf-off %zu",
+                     BodyIndex, BufOff);
+        return false;
+      }
+
+      std::string Line;
+      raw_string_ostream OS(Line);
+      OS << format("  %5zx: ", BufOff);
+      dumpBytes(ArrayRef<uint8_t>(Cursor, BIter.InstrSize), OS);
+      IP->printInst(&BIter.Inst, BIter.Addr, "", *STI, OS);
+      OS.flush();
+      Print->Dump("%s", Line.c_str());
+
+      Cursor += BIter.InstrSize;
+    }
+
+    BodyIndex++;
+  }
+
+  Print->Dump("-----------------------------------------------");
+  return true;
+}
+
+bool CorAsmDiff::compareWasmInstOperands(const MCInst &InstL,
+                                         const MCInst &InstR,
+                                         size_t BlockOffset, size_t InstrLen,
+                                         const void *UserData) const {
+  if (InstL.getOpcode() != InstR.getOpcode()) {
+    Print->Log("Wasm OpCode Mismatch @buf-off %zu", BlockOffset);
+    return false;
+  }
+
+  // Defensive belt: nearDiffWasmFramed pre-screens each instruction-pair
+  // by comparing encoded InstrSize before calling here, so for equal
+  // opcodes the operand counts should already agree. In particular, two
+  // br_tables with different table lengths encode to different sizes and
+  // are rejected before reaching this point. Keep the check anyway in
+  // case future opcodes have variable operand counts at fixed widths.
+  size_t numOperands = InstL.getNumOperands();
+  if (numOperands != InstR.getNumOperands()) {
+    Print->Log("Wasm Operand Count Mismatch @buf-off %zu", BlockOffset);
+    return false;
+  }
+
+  for (size_t i = 0; i < numOperands; i++) {
+    const MCOperand &OperandL = InstL.getOperand(i);
+    const MCOperand &OperandR = InstR.getOperand(i);
+
+    if (OperandL.isExpr() || OperandR.isExpr() || OperandL.isInst() ||
+        OperandR.isInst()) {
+      Print->Log("Wasm Unexpected Operand Kind @buf-off %zu", BlockOffset);
+      return false;
+    } else if (OperandL.isReg()) {
+      if (!OperandR.isReg() || OperandL.getReg() != OperandR.getReg()) {
+        Print->Log("Wasm Operand Reg Mismatch @buf-off %zu", BlockOffset);
+        return false;
+      }
+    } else if (OperandL.isSFPImm()) {
+      if (!OperandR.isSFPImm() ||
+          OperandL.getSFPImm() != OperandR.getSFPImm()) {
+        Print->Log("Wasm Operand SFP Mismatch @buf-off %zu", BlockOffset);
+        return false;
+      }
+    } else if (OperandL.isDFPImm()) {
+      if (!OperandR.isDFPImm() ||
+          OperandL.getDFPImm() != OperandR.getDFPImm()) {
+        Print->Log("Wasm Operand DFP Mismatch @buf-off %zu", BlockOffset);
+        return false;
+      }
+    } else if (OperandL.isImm()) {
+      if (!OperandR.isImm()) {
+        Print->Log("Wasm Operand Kind Mismatch @buf-off %zu", BlockOffset);
+        return false;
+      }
+      int64_t ImmL = OperandL.getImm();
+      int64_t ImmR = OperandR.getImm();
+      if (ImmL == ImmR) {
+        continue;
+      }
+      if (Comparator(UserData, BlockOffset, InstrLen, ImmL, ImmR)) {
+        continue;
+      }
+      Print->Log("Wasm Immediate Mismatch @buf-off %zu (%" PRId64
+                 " vs %" PRId64 ")",
+                 BlockOffset, ImmL, ImmR);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool CorAsmDiff::nearDiffWasmFramed(const BlockInfo &LeftBlock,
+                                    const BlockInfo &RightBlock,
+                                    const void *UserData) const {
+  const uint8_t *LCur = LeftBlock.Ptr;
+  const uint8_t *LEnd = LeftBlock.Ptr + LeftBlock.BlockSize;
+  const uint8_t *RCur = RightBlock.Ptr;
+  const uint8_t *REnd = RightBlock.Ptr + RightBlock.BlockSize;
+  uint32_t BodyIndex = 0;
+
+  while (LCur < LEnd && RCur < REnd) {
+    uint64_t LBodySize = 0, RBodySize = 0;
+    if (readULEB128(&LCur, LEnd, &LBodySize) == 0) {
+      Print->Log("Wasm framed diff: bad ULEB128 body length in baseline");
+      return false;
+    }
+    if (readULEB128(&RCur, REnd, &RBodySize) == 0) {
+      Print->Log("Wasm framed diff: bad ULEB128 body length in diff");
+      return false;
+    }
+    if ((uint64_t)(LEnd - LCur) < LBodySize ||
+        (uint64_t)(REnd - RCur) < RBodySize) {
+      Print->Log("Wasm framed diff: body %u truncated", BodyIndex);
+      return false;
+    }
+
+    const uint8_t *LBodyEnd = LCur + LBodySize;
+    const uint8_t *RBodyEnd = RCur + RBodySize;
+
+    // Locals headers must match byte-for-byte. The JIT picks the locals
+    // declaration deterministically per body, so any difference is a real
+    // codegen change worth flagging.
+    uint64_t LGroups = 0, RGroups = 0;
+    const uint8_t *LLocStart = LCur;
+    const uint8_t *RLocStart = RCur;
+    if (!parseWasmLocals(&LCur, LBodyEnd, &LGroups) ||
+        !parseWasmLocals(&RCur, RBodyEnd, &RGroups)) {
+      Print->Log("Wasm framed diff: malformed locals in body %u", BodyIndex);
+      return false;
+    }
+    size_t LLocLen = (size_t)(LCur - LLocStart);
+    size_t RLocLen = (size_t)(RCur - RLocStart);
+    if (LLocLen != RLocLen || memcmp(LLocStart, RLocStart, LLocLen) != 0) {
+      Print->Log("Wasm framed diff: locals header mismatch in body %u",
+                 BodyIndex);
+      return false;
+    }
+
+    // Mirror the per-body progress trace emitted by dumpWasmFramedBlock so
+    // that callers tailing the dump stream can see how far the diff
+    // iteration reached even when no mismatch was logged.
+    Print->Dump("Wasm framed diff: comparing body %u "
+                "(size=%" PRIu64 ", baseline-off=%tu, diff-off=%tu)",
+                BodyIndex, LBodySize,
+                (ptrdiff_t)(LLocStart - LeftBlock.Ptr),
+                (ptrdiff_t)(RLocStart - RightBlock.Ptr));
+
+    // Opcode-by-opcode comparison.
+    while (LCur < LBodyEnd && RCur < RBodyEnd) {
+      size_t LBufOff = (size_t)(LCur - LeftBlock.Ptr);
+      size_t RBufOff = (size_t)(RCur - RightBlock.Ptr);
+
+      BlockIterator LIter(LCur, (uint64_t)(LBodyEnd - LCur),
+                          (uintptr_t)LBufOff);
+      BlockIterator RIter(RCur, (uint64_t)(RBodyEnd - RCur),
+                          (uintptr_t)RBufOff);
+
+      if (!decodeInstruction(LIter) || !decodeInstruction(RIter)) {
+        Print->Log("Wasm framed diff: decode failure in body %u", BodyIndex);
+        return false;
+      }
+      if (LIter.InstrSize != RIter.InstrSize) {
+        // For Wasm with fixed-width ULEB128 reloc slots, equal opcodes
+        // produce equal instruction widths. A mismatch here is either a
+        // codegen change (different opcode width family) or a JIT regression
+        // around reloc-slot padding -- either way, flag as a real diff in v1.
+        // Variable-length payloads (notably br_table's branch list) also
+        // produce different InstrSizes when the table count differs, so
+        // those mismatches are caught here before reaching the operand
+        // comparator below.
+        Print->Log("Wasm framed diff: instr-size mismatch in body %u "
+                   "@buf-off %zu (%" PRIu64 " vs %" PRIu64 ")",
+                   BodyIndex, LBufOff, LIter.InstrSize, RIter.InstrSize);
+        return false;
+      }
+
+      if (memcmp(LCur, RCur, LIter.InstrSize) != 0) {
+        if (!compareWasmInstOperands(LIter.Inst, RIter.Inst, LBufOff,
+                                     LIter.InstrSize, UserData)) {
+          return false;
+        }
+      }
+
+      LCur += LIter.InstrSize;
+      RCur += RIter.InstrSize;
+    }
+
+    if (LCur != LBodyEnd || RCur != RBodyEnd) {
+      Print->Log("Wasm framed diff: body %u did not consume to end", BodyIndex);
+      return false;
+    }
+
+    BodyIndex++;
+  }
+
+  if (LCur != LEnd || RCur != REnd) {
+    Print->Log("Wasm framed diff: body count mismatch (baseline-rem=%tu, "
+               "diff-rem=%tu)",
+               (ptrdiff_t)(LEnd - LCur), (ptrdiff_t)(REnd - RCur));
+    return false;
+  }
+
+  return true;
+}
+
+void CorAsmDiff::dumpDiffWasmFramed(const BlockInfo &LeftBlock,
+                                    const BlockInfo &RightBlock) const {
+  BlockInfo L = LeftBlock; L.Name = "baseline";
+  BlockInfo R = RightBlock; R.Name = "diff";
+  dumpWasmFramedBlock(L);
+  dumpWasmFramedBlock(R);
+}
+
 // Implementation for CoreDisTools Interface
 
 DllIface CorDisasm *InitDisasm(enum TargetArch Target) {
@@ -806,15 +1238,43 @@ DllIface bool NearDiffCodeBlocks(const CorAsmDiff *AsmDiff,
                                  const uint8_t *Address2, const uint8_t *Bytes2,
                                  size_t Size2) {
 
+  if (AsmDiff->getTargetArch() == Target_Wasm32) {
+    BlockInfo Left(Bytes1, Size1, (uintptr_t)Address1, "Left");
+    BlockInfo Right(Bytes2, Size2, (uintptr_t)Address2, "Right");
+    return AsmDiff->nearDiffWasmFramed(Left, Right, UserData);
+  }
+
   BlockIterator Left(Bytes1, Size1, (uintptr_t)Address1, "Left");
   BlockIterator Right(Bytes2, Size2, (uintptr_t)Address2, "Right");
   return AsmDiff->nearDiff(Left, Right, UserData);
 }
 
+DllIface bool NearDiffCodeBlocksFramed(const CorAsmDiff *AsmDiff,
+                                       const void *UserData,
+                                       const uint8_t *Address1,
+                                       const uint8_t *Bytes1, size_t Size1,
+                                       const uint8_t *Address2,
+                                       const uint8_t *Bytes2, size_t Size2) {
+  BlockInfo Left(Bytes1, Size1, (uintptr_t)Address1, "Left");
+  BlockInfo Right(Bytes2, Size2, (uintptr_t)Address2, "Right");
+  return AsmDiff->nearDiffWasmFramed(Left, Right, UserData);
+}
+
 DllIface void DumpCodeBlock(const CorDisasm *Disasm, const uint8_t *Address,
                             const uint8_t *Bytes, size_t Size) {
   BlockInfo Block(Bytes, Size, (uintptr_t)Address);
+  if (Disasm->getTargetArch() == Target_Wasm32) {
+    Disasm->dumpWasmFramedBlock(Block);
+    return;
+  }
   Disasm->dumpBlock(Block);
+}
+
+DllIface void DumpCodeBlockFramed(const CorDisasm *Disasm,
+                                  const uint8_t *Address,
+                                  const uint8_t *Bytes, size_t Size) {
+  BlockInfo Block(Bytes, Size, (uintptr_t)Address);
+  Disasm->dumpWasmFramedBlock(Block);
 }
 
 // This API is only necessary because we don't expose in the DLL interface
@@ -825,11 +1285,28 @@ DllIface void DumpDiffBlocks(const CorAsmDiff *AsmDiff, const uint8_t *Address1,
                              const uint8_t *Address2, const uint8_t *Bytes2,
                              size_t Size2) {
 
+  if (AsmDiff->getTargetArch() == Target_Wasm32) {
+    BlockInfo Left(Bytes1, Size1, (uintptr_t)Address1, "baseline");
+    BlockInfo Right(Bytes2, Size2, (uintptr_t)Address2, "diff");
+    AsmDiff->dumpDiffWasmFramed(Left, Right);
+    return;
+  }
+
   BlockIterator Left(Bytes1, Size1, (uintptr_t)Address1, "Left");
   BlockIterator Right(Bytes2, Size2, (uintptr_t)Address2, "Right");
 
   AsmDiff->dumpBlock(Left);
   AsmDiff->dumpBlock(Right);
+}
+
+DllIface void DumpDiffBlocksFramed(const CorAsmDiff *AsmDiff,
+                                   const uint8_t *Address1,
+                                   const uint8_t *Bytes1, size_t Size1,
+                                   const uint8_t *Address2,
+                                   const uint8_t *Bytes2, size_t Size2) {
+  BlockInfo Left(Bytes1, Size1, (uintptr_t)Address1, "baseline");
+  BlockInfo Right(Bytes2, Size2, (uintptr_t)Address2, "diff");
+  AsmDiff->dumpDiffWasmFramed(Left, Right);
 }
 
 DllIface const char* GetOutputBuffer() {

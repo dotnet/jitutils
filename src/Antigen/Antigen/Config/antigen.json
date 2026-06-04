@@ -1,0 +1,826 @@
+{
+  "Seed": -1,
+  "OutputDirectory": ".",
+  "NumTestCases": -1,
+  "RunDuration": -1,
+  "ExecuteBaseline": 0.3,
+  "BaselineEnvVars": [
+    {
+      "Name": "Default",
+      "Variables": [
+        {
+          "Name": "JITMinOpts",
+          "Weight": 1.0,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": 1.0,
+          "Values": [
+            "1"
+          ]
+        }
+      ]
+    }
+  ],
+  "TestEnvVars": [
+    {
+      "Name": "Default",
+      "Weight": 0,
+      "Variables": [
+        {
+          "Name": "JitAlignLoops",
+          "Weight": 0.02,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitForceFallback",
+          "Weight": 0.01,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitNoForceFallback",
+          "Weight": 0.01,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitSkipArrayBoundCheck",
+          "Weight": 0.0002,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitSlowDebugChecksEnabled",
+          "Weight": 0.002,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitStackChecks",
+          "Weight": 0.01,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "InjectFault",
+          "Weight": 0.01,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitEnableNoWayAssert",
+          "Weight": 0.01,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitAggressiveInlining",
+          "Weight": 0.05,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitOptRepeat",
+          "Weight": 0.0005,
+          "Values": [
+            "*"
+          ]
+        },
+        {
+          "Name": "JitOptRepeatCount",
+          "Weight": 0.0003,
+          "Values": [
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "10"
+          ]
+        },
+        {
+          "Name": "JitStressEvexEncoding",
+          "Weight": 0.1,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "HeapVerify",
+          "Weight": 0.1,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitELTHookEnabled",
+          "Weight": 0.04,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitFakeProcedureSplitting",
+          "Weight": 0.03,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitStressProcedureSplitting",
+          "Weight": 0.04,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "TailcallStress",
+          "Weight": 0.05,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "ReadyToRun",
+          "Weight": 0.08,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitObjectStackAllocation",
+          "Weight": 0.04,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitClassProfiling",
+          "Weight": 0.04,
+          "Values": [
+            "0"
+          ]
+        },
+        {
+          "Name": "JitDelegateProfiling",
+          "Weight": 0.04,
+          "Values": [
+            "0"
+          ]
+        },
+        {
+          "Name": "JitVTableProfiling",
+          "Weight": 0.04,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitEdgeProfiling",
+          "Weight": 0.04,
+          "Values": [
+            "0"
+          ]
+        },
+        {
+          "Name": "JitRandomGuardedDevirtualization",
+          "Weight": 0.04,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitRandomEdgeCounts",
+          "Weight": 0.04,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitRandomOnStackReplacement",
+          "Weight": 0.04,
+          "Values": [
+            "5",
+            "10",
+            "15"
+          ]
+        },
+        {
+          "Name": "JitGuardedDevirtualizationMaxTypeChecks",
+          "Weight": 0.03,
+          "Values": [
+            "1",
+            "2",
+            "3",
+            "5"
+          ]
+        },
+        {
+          "Name": "JitRandomlyCollect64BitCounts",
+          "Weight": 0.03,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitProfileCasts",
+          "Weight": 0.03,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "TieredPGO_InstrumentedTierAlwaysOptimized",
+          "Weight": 0.03,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitForceControlFlowGuard",
+          "Weight": 0.06,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitCFGUseDispatcher",
+          "Weight": 0.03,
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "JitSynthesizeCounts",
+          "Weight": 0.03,
+          "Values": [
+            "1",
+            "3",
+            "5"
+          ]
+        },
+        {
+          "Name": "JitCheckSynthesizedCounts",
+          "Weight": 0.03,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitRLCSEGreedy",
+          "Weight": 0.03,
+          "Values": [
+            "1"
+          ]
+        },
+        {
+          "Name": "JitDoReversePostOrderLayout",
+          "Weight": 0.03,
+          "Values": [
+            "1"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "JitStress",
+      "Weight": 0.3,
+      "Variables": [
+        {
+          "Name": "JitStress",
+          "Weight": 0.04,
+          "Values": [
+            "0",
+            "1",
+            "2"
+          ]
+        },
+        {
+          "Name": "TailcallStress",
+          "Weight": 0.02,
+          "Values": [
+            "0",
+            "1"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "JitStressRegs",
+      "Weight": 0.3,
+      "Variables": [
+        {
+          "Name": "JitStressRegs",
+          "Weight": 0.04,
+          "Values": [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "8",
+            "0x10",
+            "0x80",
+            "0x1000"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "GCStress",
+      "Weight": 0.3,
+      "Variables": [
+        {
+          "Name": "GCStress",
+          "Weight": 0.04,
+          "Values": [
+            "0x3",
+            "0xC",
+            "0xF"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Hardware",
+      "Weight": 0.2,
+      "Variables": [
+        {
+          "Name": "EnableAES",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableAVX",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableAVX2",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableBMI1",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableBMI2",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableFMA",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableHWIntrinsic",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableIncompleteISAClass",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableLZCNT",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnablePCLMULQDQ",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnablePOPCNT",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableSSE",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableSSE2",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableSSE3",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableSSE3_4",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableSSE41",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableSSE42",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "EnableSSSE3",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        },
+        {
+          "Name": "FeatureSIMD",
+          "Weight": "0.02",
+          "Values": [
+            "0",
+            "1"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "OSR",
+      "Weight": 0.2,
+      "Variables": [
+        {
+          "Name": "TC_OnStackReplacement",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        }
+      ]
+    },
+    {
+      "Name": "OSR_Stress",
+      "Weight": 0.295,
+      "Variables": [
+        {
+          "Name": "TC_OnStackReplacement",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_OnStackReplacement_InitialCounter",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "OSR_HitLimit",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        }
+      ]
+    },
+    {
+      "Name": "OSR_Stress_Random",
+      "Weight": 0.28,
+      "Variables": [
+        {
+          "Name": "TC_OnStackReplacement",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_OnStackReplacement_InitialCounter",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "OSR_HitLimit",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "2" ]
+        },
+        {
+          "Name": "JitRandomOnStackReplacement",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "15" ]
+        }
+      ]
+    },
+    {
+      "Name": "OSR_PGO",
+      "Weight": 0.25,
+      "Variables": [
+        {
+          "Name": "TC_OnStackReplacement",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredPGO",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        }
+      ]
+    },
+    {
+      "Name": "PartialCompile",
+      "Weight": 0.25,
+      "Variables": [
+        {
+          "Name": "TC_PartialCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        }
+      ]
+    },
+    {
+      "Name": "PartialCompile_PGO",
+      "Weight": 0.25,
+      "Variables": [
+        {
+          "Name": "TC_PartialCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredPGO",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        }
+      ]
+    },
+    {
+      "Name": "OSR_PartialCompile",
+      "Weight": 0.258,
+      "Variables": [
+        {
+          "Name": "TC_OnStackReplacement",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_PartialCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        }
+      ]
+    },
+    {
+      "Name": "OSR_PartialCompile_PGO",
+      "Weight": 0.256,
+      "Variables": [
+        {
+          "Name": "TC_OnStackReplacement",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_PartialCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TC_QuickJitForLoops",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredCompilation",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        },
+        {
+          "Name": "TieredPGO",
+          "Weight": "0", /* intentially zero */
+          "Values": [ "1" ]
+        }
+      ]
+    }
+  ],
+  "Configs": [
+    {
+      "Name": "Basic",
+      "MaxStmtDepth": 2,
+      "MaxExprDepth": 3,
+      "MethodCount": 5,
+      "TryCatchFinallyStatementWeight": 0,
+      "CSEUsageProbability": 0.45
+    },
+    {
+      "Name": "Structs",
+      "StructCount": 5,
+      "StructFieldCount": 5,
+      "NestedStructDepth": 3,
+      "NestedStructProbability": 0.4,
+      "StructFieldTypeProbability": 0.5,
+      "StructAliasProbability": 0.5,
+      "StructUsageProbability": 0.8,
+      "CSEUsageProbability": 0.35
+    },
+    {
+      "Name": "MethodCalls",
+      "MethodCount": 100,
+      "MaxStatementCount": 3,
+      "MaxStmtDepth": 2,
+      "MaxExprDepth": 3,
+      "MethodCallStatementWeight": 0.7,
+      "MethodCallWeight": "0.4",
+      "ParamPassingRefProbability": 0.5,
+      "ParamPassingOutProbability": 0.4,
+      "LeafMethodsNoInlineProbability": 0.8,
+      "MaxMethodParametersCount": 20,
+      "StructUsageProbability": 0.7
+    },
+    {
+      "Name": "Full",
+      "MaxStmtDepth": 5,
+      "MaxExprDepth": 5,
+      "VariablesCount": 10,
+      "MethodCount": 5,
+      "MaxStatementCount": 3,
+      "TryCatchFinallyStatementWeight": 0.03,
+      "LocalVariablesLogProbability": 1.0,
+      "CSEUsageProbability": 0.25
+    },
+    {
+      "Name": "ExceptionHandler",
+      "MaxStmtDepth": 3,
+      "MethodCount": 2,
+      "TryCatchFinallyStatementWeight": 0.5,
+      "CatchClausesCount": 5,
+      "FinallyClauseProbability": 0.7
+    },
+    {
+      "Name": "Loops",
+      "MaxStmtDepth": 5,
+      "MethodCount": 2,
+      "ForStatementWeight": 0.5,
+      "DoWhileStatementWeight": 0.5,
+      "WhileStatementWeight": 0.5,
+      "LoopParametersRemovalProbability": 0.4,
+      "LoopForwardProbability": 0.5,
+      "LoopStartFromInvariantProbabilty": 0.3,
+      "LoopStepPreBreakCondProbability": 0.6,
+      "UseLoopInvariantVariableProbability": 1.0,
+      "CSEUsageProbability": 0.32,
+      "AllowLoopCondAtEnd": false
+    },
+    {
+      "Name": "ControlFlow",
+      "MaxCaseCounts": 10,
+      "MaxStmtDepth": 6,
+      "MaxStatementCount": 4,
+      "IfElseStatementWeight": 0.8,
+      "ForStatementWeight": 0.2,
+      "DoWhileStatementWeight": 0.3,
+      "WhileStatementWeight": 0.5,
+      "SwitchStatementWeight": 0.45,
+      "CSEUsageProbability": 0.48
+    }
+  ]
+}

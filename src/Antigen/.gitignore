@@ -1,0 +1,5 @@
+bin
+obj
+.vs
+*.g.cs
+**\*.g.cs
