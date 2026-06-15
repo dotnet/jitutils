@@ -938,6 +938,108 @@ class Worker
         return maxResult;
     }
 
+    // When running with "cctors first", initialize every loaded type up front - before any method
+    // is JIT'd - rather than lazily / per-type. This covers the target assembly and every referenced
+    // assembly, most importantly System.Private.CoreLib. The JIT specializes codegen based on whether
+    // a referenced type is already initialized (initClass / getStaticFieldContent): when a type's
+    // .cctor has run it can drop class-init helpers, fold 'static readonly' fields and inline more
+    // aggressively. Whether some incidental or background-thread execution happened to run a given
+    // .cctor before a particular method was compiled is timing-dependent, which is the main source of
+    // non-deterministic PMI diffs under the parallel load of a jit-diff run. Forcing a fully and
+    // deterministically initialized class state removes that variability.
+    private void RunAllClassConstructorsFirst(Assembly target)
+    {
+        // Pull in the whole reference closure first so that types referenced only from method bodies
+        // (and therefore not necessarily loaded yet) are present and get initialized as well. This
+        // makes the set of initialized types a deterministic function of the assembly's metadata
+        // rather than of whatever happened to be loaded incidentally.
+        LoadReferenceClosure(target);
+
+        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type[] types;
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException e)
+            {
+                types = e.Types;
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            foreach (Type type in types)
+            {
+                // Open generic definitions cannot be initialized.
+                if (type == null || type.ContainsGenericParameters)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+                }
+                catch (Exception)
+                {
+                    // A .cctor may legitimately fail (e.g. platform-specific types); ignore it and keep
+                    // going so the remaining types are still initialized deterministically.
+                }
+            }
+        }
+    }
+
+    // Force the transitive closure of referenced assemblies to be loaded, using the target's load
+    // context so that PMIPATH resolution applies.
+    private static void LoadReferenceClosure(Assembly target)
+    {
+        AssemblyLoadContext context = AssemblyLoadContext.GetLoadContext(target) ?? AssemblyLoadContext.Default;
+        HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Stack<Assembly> pending = new Stack<Assembly>();
+
+        pending.Push(target);
+        seen.Add(target.GetName().Name);
+
+        while (pending.Count > 0)
+        {
+            Assembly assembly = pending.Pop();
+
+            AssemblyName[] references;
+            try
+            {
+                references = assembly.GetReferencedAssemblies();
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            foreach (AssemblyName reference in references)
+            {
+                if (reference.Name == null || !seen.Add(reference.Name))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    Assembly loaded = context.LoadFromAssemblyName(reference);
+                    if (loaded != null)
+                    {
+                        pending.Push(loaded);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Some references may be unresolvable in this environment; skip them.
+                }
+            }
+        }
+    }
+
     public int Work(string assemblyName)
     {
         string assemblyPath = Path.GetFullPath(assemblyName);
@@ -956,6 +1058,11 @@ class Worker
         }
 
         visitor.StartAssembly(assembly, assemblyPath);
+
+        if (compileAndInvokeCctorsFirst)
+        {
+            RunAllClassConstructorsFirst(assembly);
+        }
 
         bool keepGoing = true;
 
