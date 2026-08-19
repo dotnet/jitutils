@@ -81,7 +81,20 @@ namespace ExecutionEngine
         /// <param name="assemblyBytes"></param>
         /// <param name="error"></param>
         /// <returns></returns>
+        // As in Fuzzlyn, run generated code on a dedicated large stack thread.
+        // Generated code has deep call trees and frequently stack overlfows, otherwise
+        private const int GeneratedCodeStackSizeBytes = 64 * 1024 * 1024;
+
         private static RunResult Run(byte[] assemblyBytes)
+        {
+            RunResult result = default;
+            Thread runnerThread = new(() => result = RunOnCurrentThread(assemblyBytes), GeneratedCodeStackSizeBytes);
+            runnerThread.Start();
+            runnerThread.Join();
+            return result;
+        }
+
+        private static RunResult RunOnCurrentThread(byte[] assemblyBytes)
         {
             int hashCode;
             var assembly = s_loader.LoadFromBytes(assemblyBytes);

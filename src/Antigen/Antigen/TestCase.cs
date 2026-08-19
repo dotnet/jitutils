@@ -38,7 +38,6 @@ namespace Antigen
             "Attempted to divide by zero.",
             "Arithmetic operation resulted in an overflow.",
             "isCandidateVar(fieldVarDsc) == isMultiReg", // https://github.com/dotnet/runtime/issues/85628
-            "curSize < maxSplitSize", // https://github.com/dotnet/runtime/issues/91251
         };
 
         private SyntaxNode testCaseRoot;
@@ -177,8 +176,12 @@ namespace Antigen
                             {
                                 return TestResult.Overflow;
                             }
+
+                            // Known error that we have no specific bucket for (e.g. the JIT
+                            // assert in _knownDiffs). Report it, but do not save a repro:
+                            // it is an already-filed issue.
+                            return TestResult.OtherError;
                         }
-                        return TestResult.OtherError;
                     }
                     var parsedError = RslnUtilities.ParseAssertionError(errorMessage);
                     parsedError = parsedError ?? errorMessage;

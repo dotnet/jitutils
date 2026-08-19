@@ -70,6 +70,11 @@ namespace Trimmer
                 AltJitMethodName = result.GetValue(command.AltJitMethodName),
             };
 
+            // Trimmer runs in a separate process, so it does not inherit Antigen's
+            // process-local compiler configuration.
+            string coreRootDirectory = Path.GetDirectoryName(Path.GetFullPath(opts.CoreRunPath));
+            Compiler.SetReferenceDirectory(coreRootDirectory);
+
             int.TryParse(opts.ParentPid, out s_parentProcessId);
             Task monitorTask = Task.Run(() => MonitorParentProcess());
 

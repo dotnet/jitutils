@@ -20,6 +20,13 @@ namespace Antigen.Expressions
             { "Vector4", new List<string>() { "One", "Zero", "UnitW", "UnitX", "UnitY", "UnitZ" } },
         };
 
+        // Reduce the prevelence of vector-of-floats.AllBitsSet(), as NaN's tend to pollute
+        // otherwise interesting computations
+        private const double FloatingPointAllBitsSetProbability = 0.05;
+        private const double IntegralAllBitsSetProbability = 0.5;
+
+        private static readonly List<string> s_nonNaNVectorConstants = new List<string>() { "Zero", "One", "Indices" };
+
         protected ConstantValue(Tree.ValueType valueType, string value) : base(null)
         {
             if (valueType.PrimitiveType == Primitive.Char)
@@ -87,7 +94,13 @@ namespace Antigen.Expressions
                 }
                 else
                 {
-                    constantValue += (PRNG.Decide(0.5) ? ".AllBitsSet" : ".Zero");
+                    double allBitsSetProbability = literalType.HasFloatingPointElement()
+                        ? FloatingPointAllBitsSetProbability
+                        : IntegralAllBitsSetProbability;
+
+                    constantValue += PRNG.Decide(allBitsSetProbability)
+                        ? ".AllBitsSet"
+                        : ("." + s_nonNaNVectorConstants[PRNG.Next(s_nonNaNVectorConstants.Count)]);
                 }
             }
             else if ((literalType.PrimitiveType & Primitive.Numeric) != 0)

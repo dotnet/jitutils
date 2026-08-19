@@ -17,6 +17,8 @@ namespace Antigen
             new("--NumTestCases", "-n") { Description = "Number of test cases to execute. By default, 1000." };
         public Option<int> RunDuration { get; } =
             new("--RunDuration", "-d") { Description = "Duration in minutes to run. By default until NumTestCases, but if Duration is given, will override the NumTestCases." };
+        public Option<bool> AllowFloatToIntegralReinterpret { get; } =
+            new("--AllowFloatToIntegralReinterpret") { Description = "Allow reinterpret-casting floating point vectors to integral types (for example, Vector128.AsInt32()). Can cause false positives due to differing NaN representations." };
 
         public ParseResult Result { get; private set; }
 
@@ -26,6 +28,7 @@ namespace Antigen
             Options.Add(IssuesFolder);
             Options.Add(NumTestCases);
             Options.Add(RunDuration);
+            Options.Add(AllowFloatToIntegralReinterpret);
 
             SetAction(result =>
             {
