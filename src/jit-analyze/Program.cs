@@ -292,7 +292,8 @@ namespace ManagedCodeGen
         public static IEnumerable<MethodInfo> ExtractMethodInfo(string[] filePaths)
         {
             Regex namePattern = new Regex(@"for method (.*)$");
-            Regex codeAndPrologSizePattern = new Regex(@"code ([0-9]{1,}), prolog size ([0-9]{1,})");
+            Regex codeSizePattern = new Regex(@"^; Total bytes of code ([0-9]{1,}).* for method ");
+            Regex prologSizePattern = new Regex(@"prolog size ([0-9]{1,})");
             // use new regex for perf score so we can still parse older files that did not have it.
             Regex perfScorePattern = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
             Regex instrCountPattern = new Regex(@"instruction count ([0-9]{1,})");
@@ -310,7 +311,8 @@ namespace ManagedCodeGen
                              .Select((x) =>
                              {
                                  var nameMatch = namePattern.Match(x.line);
-                                 var codeAndPrologSizeMatch = codeAndPrologSizePattern.Match(x.line);
+                                 var codeSizeMatch = codeSizePattern.Match(x.line);
+                                 var prologSizeMatch = prologSizePattern.Match(x.line);
                                  var perfScoreMatch = perfScorePattern.Match(x.line);
                                  var instrCountMatch = instrCountPattern.Match(x.line);
                                  var allocSizeMatch = allocSizePattern.Match(x.line);
@@ -321,10 +323,10 @@ namespace ManagedCodeGen
                                  {
                                      name = nameMatch.Groups[1].Value,
                                      // Use matched data or default to 0
-                                     totalBytes = codeAndPrologSizeMatch.Success ?
-                                        int.Parse(codeAndPrologSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     prologBytes = codeAndPrologSizeMatch.Success ?
-                                        int.Parse(codeAndPrologSizeMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
+                                     totalBytes = codeSizeMatch.Success ?
+                                        int.Parse(codeSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
+                                     prologBytes = prologSizeMatch.Success ?
+                                        int.Parse(prologSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
                                      perfScore = perfScoreMatch.Success ?
                                         double.Parse(perfScoreMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
                                      instrCount = instrCountMatch.Success ?
@@ -344,7 +346,7 @@ namespace ManagedCodeGen
                                      resolutionWeight = resolutionInfoMatch.Success ?
                                         double.Parse(resolutionInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
                                      // Use function index only from non-data lines (the name line)
-                                     functionOffset = codeAndPrologSizeMatch.Success ?
+                                     functionOffset = codeSizeMatch.Success ?
                                         0 : x.index
                                  };
                              })
@@ -363,14 +365,14 @@ namespace ManagedCodeGen
 
                                  int totalCodeSize = x.Sum(z => z.totalBytes);
                                  int totalAllocSize = x.Sum(z => z.allocSize);
-                                 Debug.Assert(totalCodeSize <= totalAllocSize);
+                                 Debug.Assert((totalAllocSize == 0) || (totalCodeSize <= totalAllocSize));
 
                                  mi.Metrics.Add("CodeSize", totalCodeSize);
                                  mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
                                  mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
                                  mi.Metrics.Add("InstrCount", x.Sum(z => z.instrCount));
                                  mi.Metrics.Add("AllocSize", totalAllocSize);
-                                 mi.Metrics.Add("ExtraAllocBytes", totalAllocSize - totalCodeSize);
+                                 mi.Metrics.Add("ExtraAllocBytes", totalAllocSize == 0 ? 0 : totalAllocSize - totalCodeSize);
                                  mi.Metrics.Add("DebugClauseCount", x.Sum(z => z.debugClauseCount));
                                  mi.Metrics.Add("DebugVarCount", x.Sum(z => z.debugVarCount));
                                  mi.Metrics.Add("SpillCount", x.Sum(z => z.spillCount));
