@@ -28,7 +28,9 @@ namespace ManagedCodeGen
         private readonly int _count;
         private readonly string _basePath;
         private readonly string _diffPath;
+        private readonly string _baseDirectory;
         private Dictionary<string, int> _textDiffCounts;
+        private HashSet<string> _filesNeedingTextDiffCounts;
 
         private static string METRIC_SEP = new string('-', 80);
 
@@ -53,6 +55,7 @@ namespace ManagedCodeGen
             _count = Get(command.Count);
             _basePath = Get(command.BasePath);
             _diffPath = Get(command.DiffPath);
+            _baseDirectory = Directory.Exists(_basePath) ? Path.GetFullPath(_basePath) : Path.GetDirectoryName(Path.GetFullPath(_basePath));
         }
 
         public class FileInfo
@@ -694,12 +697,11 @@ namespace ManagedCodeGen
             {
                 // Show files with text diffs but no metric diffs.
 
-                Dictionary<string, int> diffCounts = _textDiffCounts ??= DiffInText(_diffPath, _basePath);
+                Dictionary<string, int> diffCounts = _textDiffCounts ??= DiffInText(_diffPath, _basePath, _filesNeedingTextDiffCounts);
 
                 // TODO: resolve diffs to particular methods in the files.
-                string baseDirectory = Directory.Exists(_basePath) ? _basePath : Path.GetDirectoryName(Path.GetFullPath(_basePath));
                 var zeroDiffFilesWithDiffs = fileDeltaList
-                    .Select(file => (File: file, Path: Path.GetFullPath(Path.Combine(baseDirectory, file.baseName))))
+                    .Select(file => (File: file, Path: Path.GetFullPath(Path.Combine(_baseDirectory, file.baseName))))
                     .Where(x => !Get(_command.ConcatFiles) && diffCounts.ContainsKey(x.Path) && x.File.deltaMetrics.IsZero())
                     .OrderByDescending(x => diffCounts[x.Path]);
 
@@ -893,7 +895,10 @@ namespace ManagedCodeGen
         // For example:
         // 6\t6\t\0d:\root\dasmset_8\base\Vector3Interop_ro.dasm\0d:\root\dasmset_8\diff\Vector3Interop_ro.dasm\0<next diff information>
         //
-        public static Dictionary<string, int> DiffInText(string diffPath, string basePath)
+        public static Dictionary<string, int> DiffInText(string diffPath, string basePath) =>
+            DiffInText(diffPath, basePath, filesNeedingCounts: null);
+
+        private static Dictionary<string, int> DiffInText(string diffPath, string basePath, HashSet<string> filesNeedingCounts)
         {
             basePath = Path.GetFullPath(basePath);
             diffPath = Path.GetFullPath(diffPath);
@@ -915,15 +920,17 @@ namespace ManagedCodeGen
 
             // Initialize the process manager on the caller thread before starting parallel workers.
             ProcessManager manager = ProcessManager.Instance;
-            var counts = pairs.AsParallel().WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
+            var changes = pairs.AsParallel().WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
                 .Where(pair => !FilesEqual(pair.Base, pair.Diff))
-                .Select(pair => (pair.Base, Count: TextDiffCount(pair.Base, pair.Diff, manager)))
-                .Where(pair => pair.Count.HasValue)
-                .ToDictionary(pair => pair.Base, pair => pair.Count.Value, StringComparer.Ordinal);
+                .Select(pair => (pair.Base, Result: CompareText(pair.Base, pair.Diff, manager,
+                    countLines: filesNeedingCounts == null || filesNeedingCounts.Contains(pair.Base))))
+                .Where(pair => pair.Result.HasChanges)
+                .ToArray();
 
-            if (counts.Count != 0)
-                Console.WriteLine($"Found {counts.Count} files with textual diffs.");
-            return counts;
+            if (changes.Length != 0)
+                Console.WriteLine($"Found {changes.Length} files with textual diffs.");
+            return changes.Where(pair => pair.Result.LineCount.HasValue)
+                .ToDictionary(pair => pair.Base, pair => pair.Result.LineCount.Value, StringComparer.Ordinal);
         }
 
         private static bool IsRealDirectory(string path) =>
@@ -987,7 +994,7 @@ namespace ManagedCodeGen
             }
         }
 
-        private static int? TextDiffCount(string basePath, string diffPath, ProcessManager manager)
+        private static (bool HasChanges, int? LineCount) CompareText(string basePath, string diffPath, ProcessManager manager, bool countLines)
         {
             var startInfo = new ProcessStartInfo("git")
             {
@@ -995,7 +1002,7 @@ namespace ManagedCodeGen
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            foreach (string argument in new[] { "diff", "--no-index", "--diff-filter=M", "--exit-code", "--numstat", "-z", "--", basePath, diffPath })
+            foreach (string argument in new[] { "diff", "--no-index", "--diff-filter=M", "--exit-code", countLines ? "--numstat" : "--quiet", "-z", "--", basePath, diffPath })
                 startInfo.ArgumentList.Add(argument);
 
             using Process process = manager.Start(startInfo);
@@ -1006,15 +1013,18 @@ namespace ManagedCodeGen
             string output = outputTask.GetAwaiter().GetResult();
             string error = errorTask.GetAwaiter().GetResult();
             if (process.ExitCode == 0)
-                return null;
+                return (false, null);
             if (process.ExitCode != 1)
                 throw new InvalidOperationException($"git diff failed for '{basePath}' and '{diffPath}' (exit {process.ExitCode}): {error}");
+
+            if (!countLines)
+                return (true, null);
 
             string[] fields = output.Split('\t', 3);
             if (fields.Length != 3)
                 throw new InvalidOperationException($"Invalid git numstat output for '{basePath}': {output}");
             // Binary files have '-' in both numeric fields.
-            return ParseCount(fields[0]) + ParseCount(fields[1]);
+            return (true, ParseCount(fields[0]) + ParseCount(fields[1]));
 
             static int ParseCount(string value) => value == "-" ? 0 : int.Parse(value, CultureInfo.InvariantCulture);
         }
@@ -1053,6 +1063,12 @@ namespace ManagedCodeGen
                 string md = Get(_command.MD);
                 string[] metricNames = Get(_command.Metrics).ToArray();
                 FileDelta[][] comparisons = Comparator(baseList, diffList, metricNames);
+                // Detailed text counts are only displayed for files with no metric differences.
+                // Still ask Git whether every other file changed, without computing unused numstat data.
+                _filesNeedingTextDiffCounts = comparisons.SelectMany(files => files)
+                    .Where(file => file.deltaMetrics.IsZero() && !Get(_command.ConcatFiles))
+                    .Select(file => Path.GetFullPath(Path.Combine(_baseDirectory, file.baseName)))
+                    .ToHashSet(StringComparer.Ordinal);
                 for (int metricIndex = 0; metricIndex < metricNames.Length; metricIndex++)
                 {
                     string metricName = metricNames[metricIndex];

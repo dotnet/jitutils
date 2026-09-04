@@ -248,6 +248,8 @@ internal static class Tests
         Write("text diff/long.dasm", new string('x', 131072) + "b\n");
         Write("text base/identical.dasm", Method("Unchanged", 5));
         Write("text diff/identical.dasm", Method("Unchanged", 5));
+        string metricChanged = Write("text base/metric-changed.dasm", Method("Changed", 10));
+        Write("text diff/metric-changed.dasm", Method("Changed", 11));
         Write("text base/removed.dasm", "removed");
         Write("text diff/added.dasm", "added");
         if (!OperatingSystem.IsWindows())
@@ -261,10 +263,11 @@ internal static class Tests
         }
 
         Dictionary<string, int> counts = Analyzer.DiffInText(after, before);
-        Equal(OperatingSystem.IsWindows() ? 3 : 6, counts.Count, "text diff file count");
+        Equal(OperatingSystem.IsWindows() ? 4 : 7, counts.Count, "text diff file count");
         Equal(2, counts[textOnly], "text-only diff count");
         Equal(0, counts[binary], "binary diff count");
         Equal(2, counts[longFile], "difference after multiple buffers");
+        Equal(2, counts[metricChanged], "full counts remain available for metric changes");
         Equal(0, Analyzer.DiffInText(before, before).Count, "identical trees");
         Equal(2, Analyzer.DiffInText(Path.Combine(after, "nested/text only.dasm"), textOnly)[textOnly], "single file counts");
         if (!OperatingSystem.IsWindows())
@@ -281,13 +284,15 @@ internal static class Tests
         try
         {
             Console.SetOut(stdout);
-            Equal(0, new JitAnalyzeRootCommand(args).Parse(args).Invoke(), "text-only exit code");
+            Equal(-1, new JitAnalyzeRootCommand(args).Parse(args).Invoke(), "mixed text and metric exit code");
         }
         finally
         {
             Console.SetOut(oldOut);
         }
         Contains(stdout.ToString(), $"nested{Path.DirectorySeparatorChar}text only.dasm had 2 diffs");
+        Contains(stdout.ToString(), $"Found {(OperatingSystem.IsWindows() ? 4 : 6)} files with textual diffs.");
+        Equal(false, stdout.ToString().Contains("metric-changed.dasm had"), "metric changes do not need displayed line counts");
     }
 
     private static void CheckTsv(string tsv, string[] methods, int headers = 1)
