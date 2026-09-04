@@ -14,7 +14,68 @@ To build/setup:
   for directions how.
 * Run analyze --base `<base path>` --diff `<diff path>` to produce a summary of the 
   differences.
-  
+
+## Large disassembly sets
+
+Directory analysis parses and compares independent file pairs in parallel, with at
+most eight workers (or the available processor count, if lower). Each worker
+releases unchanged method data after comparing a pair, and reuses parsed methods
+across requested metrics. Byte-identical pairs only need one parse. Instruction
+lines are scanned using pooled buffers rather than allocated as individual strings.
+
+Textual diff analysis remains enabled by default. It uses the same concurrency
+bound, skips Git for byte-identical files, and reuses counts across metrics.
+Git's added/deleted line counts are retained, including binary-file handling.
+The text-only summary lists files whose text changed but whose metrics did not.
+Directory symlinks are compared as links rather than followed.
+
+To measure the complete analysis on Linux, build Release and run, for example:
+
+```sh
+dotnet build src/jit-analyze -c Release
+/usr/bin/time -v src/jit-analyze/bin/Release/net10.0/jit-analyze \
+    --base /path/to/main --diff /path/to/pr --recursive --count 100
+```
+
+The analyzer returns a nonzero exit code when metrics differ; this does not mean
+the run failed. Compare repeated runs on the same files and machine, and retain
+textual diffs when measuring end-to-end performance. `--skip-text-diff` can isolate
+metric analysis, but measures a different workload. GNU time reports peak resident
+memory for a process, not the simultaneous sum of all Git worker processes.
+
+### Reference benchmark
+
+The assembly artifacts from [MihuBot/runtime-utils#2148](https://github.com/MihuBot/runtime-utils/issues/2148)
+contain 760 `.dasm` files per side, totaling 25,501,489,811 bytes. The files were
+flattened by filename, matching the runner's combined assembly directories, and
+analyzed with `-b main -d pr -r -c 100`, with textual diffs enabled.
+
+On a 16-logical-processor Linux machine with 31 GiB RAM, using a Release build
+with .NET SDK 10.0.111 / runtime 10.0.11:
+
+| Version | Wall time, three runs | Median wall time | Median peak RSS |
+| --- | --- | --- | --- |
+| Original (`e718415`) | 229.39, 229.38, 247.92 s | 229.39 s | 13.30 GiB |
+| Optimized (`f261f89`) | 35.33, 31.87, 32.28 s | 32.28 s | 1.46 GiB |
+
+This is a **7.1x median speedup** and **89% lower peak RSS**. The independently
+measured optimization steps were:
+
+| Commit | Change | Full-run wall time |
+| --- | --- | --- |
+| `27ea778` | Materialize comparisons instead of rebuilding deferred queries | 177.20 s |
+| `b973865` | Parse and compare bounded parallel file pairs | 132.67 s |
+| `bc47d72` | Scan instruction lines with pooled buffers | 111.59 s |
+| `bcb13f8` | Aggregate metrics while parsing with generated regexes | 104.14 s |
+| `c882924` | Store compact metric values and eliminate copies | 71.34 s |
+| `bb910ad` | Parallelize textual diffs and skip identical inputs | 41.65 s |
+| `a816f75` | Reuse parsed methods for identical file pairs | 32.74 s |
+
+The metric reports agree with the original analyzer and the job's published
+totals. The optimized report additionally displays 106 text-only files that the
+original omitted because it looked up relative names in an absolute-path dictionary.
+The displayed line counts agree with a directory-level Git comparison.
+
 The output of analyze looks like the following:
 ```
 $ jit-analyze --base ~/Work/output/base --diff ~/Work/output/diff
