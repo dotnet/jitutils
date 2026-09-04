@@ -646,6 +646,7 @@ namespace ManagedCodeGen
             string m_corerunPath;
             string m_defaultJitName;
             string m_testJitName;
+            string m_testCoreclrName;
 
             public PmiDiffTool(Config config) : base(config)
             {
@@ -653,6 +654,7 @@ namespace ManagedCodeGen
                 m_commandName = s_asmToolJit;
                 m_corerunPath = Path.Combine(m_config.CoreRoot, GetCorerunExecutableName(m_config.PlatformMoniker));
                 m_defaultJitName = GetJitLibraryName(m_config.PlatformMoniker);
+                m_testCoreclrName = GetCoreClrLibraryName(m_config.PlatformMoniker);
                 if (m_config.AltJit != null)
                 {
                     m_testJitName = m_config.AltJit;
@@ -697,57 +699,45 @@ namespace ManagedCodeGen
                 return dasmArgs;
             }
 
-            void InstallBaseJit()
+            void InstallLibs(string libPath)
             {
-                string existingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
-                string testJitPath = Path.Combine(m_config.BasePath, m_testJitName);
-                if (File.Exists(existingJitPath))
+                var libs = new[] { ("jit", m_testJitName), ("coreclr", m_testCoreclrName) };
+                foreach (var (lib, libName) in libs)
                 {
+                    string existingLibPath = Path.Combine(m_config.CoreRoot, libName);
+                    string backupLibPath = Path.Combine(m_config.CoreRoot, "backup-" + libName);
+                    string testLibPath = Path.Combine(libPath, libName);
+                    if (File.Exists(existingLibPath))
+                    {
+                        if (m_config.Verbose)
+                        {
+                            Console.WriteLine($"Saving off existing {lib}: {existingLibPath} ==> {backupLibPath}");
+                        }
+                        File.Copy(existingLibPath, backupLibPath, true);
+                    }
                     if (m_config.Verbose)
                     {
-                        Console.WriteLine($"Saving off existing jit: {existingJitPath} ==> {backupJitPath}");
+                        Console.WriteLine($"Copying in the test {lib}: {testLibPath} ==> {existingLibPath}");
                     }
-                    File.Copy(existingJitPath, backupJitPath, true);
+                    File.Copy(testLibPath, existingLibPath, true);
                 }
-                if (m_config.Verbose)
-                {
-                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {existingJitPath}");
-                }
-                File.Copy(testJitPath, existingJitPath, true);
             }
 
-            void InstallDiffJit()
+            void RestoreLibs()
             {
-                string exitingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
-                string testJitPath = Path.Combine(m_config.DiffPath, m_testJitName);
-                if (File.Exists(exitingJitPath))
+                var libs = new[] { ("jit", m_testJitName), ("coreclr", m_testCoreclrName) };
+                foreach (var (lib, libName) in libs)
                 {
-                    if (m_config.Verbose)
+                    string existingLibPath = Path.Combine(m_config.CoreRoot, libName);
+                    string backupLibPath = Path.Combine(m_config.CoreRoot, "backup-" + libName);
+                    if (File.Exists(backupLibPath))
                     {
-                        Console.WriteLine($"Saving off existing jit: {exitingJitPath} ==> {backupJitPath}");
+                        if (m_config.Verbose)
+                        {
+                            Console.WriteLine($"Restoring existing {lib}: {backupLibPath} ==> {existingLibPath}");
+                        }
+                        File.Copy(backupLibPath, existingLibPath, true);
                     }
-                    File.Copy(exitingJitPath, backupJitPath, true);
-                }
-                if (m_config.Verbose)
-                {
-                    Console.WriteLine($"Copying in the test jit: {testJitPath} ==> {exitingJitPath}");
-                }
-                File.Copy(testJitPath, exitingJitPath, true);
-            }
-
-            void RestoreDefaultJit()
-            {
-                string existingJitPath = Path.Combine(m_config.CoreRoot, m_testJitName);
-                string backupJitPath = Path.Combine(m_config.CoreRoot, "backup-" + m_testJitName);
-                if (File.Exists(backupJitPath))
-                {
-                    if (m_config.Verbose)
-                    {
-                        Console.WriteLine($"Restoring existing jit: {backupJitPath} ==> {existingJitPath}");
-                    }
-                    File.Copy(backupJitPath, existingJitPath, true);
                 }
             }
 
@@ -761,7 +751,7 @@ namespace ManagedCodeGen
                 {
                     try
                     {
-                        InstallBaseJit();
+                        InstallLibs(m_config.BasePath);
                         foreach (var assemblyInfo in assemblyWorkList)
                         {
                             StartDasmWorkOne(DasmWorkKind.Base, commandArgs, "base", m_config.BasePath, assemblyInfo);
@@ -771,7 +761,7 @@ namespace ManagedCodeGen
                     }
                     finally
                     {
-                        RestoreDefaultJit();
+                        RestoreLibs();
                     }
                 }
 
@@ -779,7 +769,7 @@ namespace ManagedCodeGen
                 {
                     try
                     {
-                        InstallDiffJit();
+                        InstallLibs(m_config.DiffPath);
                         foreach (var assemblyInfo in assemblyWorkList)
                         {
                             StartDasmWorkOne(DasmWorkKind.Diff, commandArgs, "diff", m_config.DiffPath, assemblyInfo);
@@ -789,7 +779,7 @@ namespace ManagedCodeGen
                     }
                     finally
                     {
-                        RestoreDefaultJit();
+                        RestoreLibs();
                     }
                 }
             }
