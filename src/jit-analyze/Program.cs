@@ -56,7 +56,7 @@ namespace ManagedCodeGen
         public class FileInfo
         {
             public string name;
-            public IEnumerable<MethodInfo> methodList;
+            public string[] paths;
             public bool isExplicitOnlyFile;
 
             public override string ToString()
@@ -256,17 +256,17 @@ namespace ManagedCodeGen
                         new FileInfo
                         {
                             name = Path.GetFileName(path),
-                            methodList = ExtractMethodInfo(Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption).ToArray()),
+                            paths = Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption).ToArray(),
                             isExplicitOnlyFile = true,
                         },
                     };
                 }
 
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
-                         .AsParallel().Select(p => new FileInfo
+                         .Select(p => new FileInfo
                          {
                              name = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
-                             methodList = ExtractMethodInfo(new[] { p })
+                             paths = new[] { p }
                          }).ToList();
             }
             else
@@ -277,7 +277,7 @@ namespace ManagedCodeGen
                 { new FileInfo
                     {
                         name = Path.GetFileName(path),
-                        methodList = ExtractMethodInfo(new[] {path }),
+                        paths = new[] { path },
                         isExplicitOnlyFile = true,
                     }
                 };
@@ -390,45 +390,59 @@ namespace ManagedCodeGen
         // numbers are regressions. (lower is better)
         //
         // Todo: handle metrics where "higher is better"
-        public IEnumerable<FileDelta> Comparator(IEnumerable<FileInfo> baseInfo,
-            IEnumerable<FileInfo> diffInfo, string metricName)
+        public FileDelta[][] Comparator(IEnumerable<FileInfo> baseInfo,
+            IEnumerable<FileInfo> diffInfo, string[] metricNames)
+        {
+            // Keep only one pair's parsed methods per worker, and reuse them for every metric.
+            return baseInfo.Join(diffInfo, b => b.isExplicitOnlyFile ? "" : b.name,
+                d => d.isExplicitOnlyFile ? "" : d.name, (b, d) => (Base: b, Diff: d))
+                .AsParallel().AsOrdered()
+                .WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
+                .Select(pair =>
+                {
+                    var baseMethods = ExtractMethodInfo(pair.Base.paths);
+                    var diffMethods = ExtractMethodInfo(pair.Diff.paths);
+                    return metricNames.Select(metricName =>
+                        CompareFile(pair.Base.name, pair.Diff.name, baseMethods, diffMethods, metricName)).ToArray();
+                }).ToArray();
+        }
+
+        private FileDelta CompareFile(string baseName, string diffName,
+            IEnumerable<MethodInfo> baseMethods, IEnumerable<MethodInfo> diffMethods, string metricName)
         {
             MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
-            return baseInfo.Join(diffInfo, b => b.isExplicitOnlyFile ? "" : b.name, d => d.isExplicitOnlyFile ? "" : d.name, (b, d) =>
+            var jointList = baseMethods.Join(diffMethods,
+                    x => x.name, y => y.name, (x, y) => new MethodDelta
+                    {
+                        name = x.name,
+                        baseMetrics = new MetricCollection(x.Metrics),
+                        diffMetrics = new MetricCollection(y.Metrics),
+                        baseOffsets = x.functionOffsets,
+                        diffOffsets = y.functionOffsets
+                    })
+                    .OrderByDescending(r => r.deltaMetrics.GetMetric(metricName).Value)
+                    .ToList();
+
+            FileDelta f = new FileDelta
             {
-                var jointList = b.methodList.Join(d.methodList,
-                        x => x.name, y => y.name, (x, y) => new MethodDelta
-                        {
-                            name = x.name,
-                            baseMetrics = new MetricCollection(x.Metrics),
-                            diffMetrics = new MetricCollection(y.Metrics),
-                            baseOffsets = x.functionOffsets,
-                            diffOffsets = y.functionOffsets
-                        })
-                        .OrderByDescending(r => r.deltaMetrics.GetMetric(metricName).Value)
-                        .ToList();
+                baseName = baseName,
+                diffName = diffName,
+                baseMetrics = jointList.Sum(x => x.baseMetrics),
+                diffMetrics = jointList.Sum(x => x.diffMetrics),
+                deltaMetrics = jointList.Sum(x => x.deltaMetrics),
+                relDeltaMetrics = jointList.Sum(x => x.relDeltaMetrics),
+                methodsInBoth = jointList.Count(),
+                methodsOnlyInBase = baseMethods.Except(diffMethods, methodInfoComparer).ToList(),
+                methodsOnlyInDiff = diffMethods.Except(baseMethods, methodInfoComparer).ToList(),
+                methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(metricName).Value != 0).ToList()
+            };
 
-                FileDelta f = new FileDelta
-                {
-                    baseName = b.name,
-                    diffName = d.name,
-                    baseMetrics = jointList.Sum(x => x.baseMetrics),
-                    diffMetrics = jointList.Sum(x => x.diffMetrics),
-                    deltaMetrics = jointList.Sum(x => x.deltaMetrics),
-                    relDeltaMetrics = jointList.Sum(x => x.relDeltaMetrics),
-                    methodsInBoth = jointList.Count(),
-                    methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer).ToList(),
-                    methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer).ToList(),
-                    methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(metricName).Value != 0).ToList()
-                };
+            if (_reconcile)
+            {
+                f.Reconcile();
+            }
 
-                if (_reconcile)
-                {
-                    f.Reconcile();
-                }
-
-                return f;
-            }).ToList();
+            return f;
         }
 
         // Summarize differences across all the files.
@@ -941,9 +955,12 @@ namespace ManagedCodeGen
                 string json = Get(_command.Json);
                 string tsv = Get(_command.Tsv);
                 string md = Get(_command.MD);
-                foreach (var metricName in Get(_command.Metrics))
+                string[] metricNames = Get(_command.Metrics).ToArray();
+                FileDelta[][] comparisons = Comparator(baseList, diffList, metricNames);
+                for (int metricIndex = 0; metricIndex < metricNames.Length; metricIndex++)
                 {
-                    compareList = Comparator(baseList, diffList, metricName);
+                    string metricName = metricNames[metricIndex];
+                    compareList = comparisons.Select(files => files[metricIndex]).ToArray();
 
                     if (tsv != null)
                     {
