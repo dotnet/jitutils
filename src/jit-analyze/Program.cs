@@ -334,26 +334,26 @@ namespace ManagedCodeGen
                     method.functionOffsets.Add(record.index);
                 }
 
-                AddInt(method.Metrics, "CodeSize", totalBytes);
-                AddInt(method.Metrics, "PrologSize", ReadInt(PrologSizePattern().Match(line)));
+                method.Metrics.AddInt("CodeSize", totalBytes);
+                method.Metrics.AddInt("PrologSize", ReadInt(PrologSizePattern().Match(line)));
                 method.Metrics.Add("PerfScore", ReadDouble(PerfScorePattern().Match(line), 2));
-                AddInt(method.Metrics, "InstrCount", ReadInt(InstrCountPattern().Match(line)));
-                AddInt(method.Metrics, "AllocSize", ReadInt(AllocSizePattern().Match(line)));
+                method.Metrics.AddInt("InstrCount", ReadInt(InstrCountPattern().Match(line)));
+                method.Metrics.AddInt("AllocSize", ReadInt(AllocSizePattern().Match(line)));
                 Match debugInfo = DebugInfoPattern().Match(line);
-                AddInt(method.Metrics, "DebugClauseCount", ReadInt(debugInfo));
-                AddInt(method.Metrics, "DebugVarCount", ReadInt(debugInfo, 2));
+                method.Metrics.AddInt("DebugClauseCount", ReadInt(debugInfo));
+                method.Metrics.AddInt("DebugVarCount", ReadInt(debugInfo, 2));
                 Match spillInfo = SpillInfoPattern().Match(line);
-                AddInt(method.Metrics, "SpillCount", ReadInt(spillInfo));
+                method.Metrics.AddInt("SpillCount", ReadInt(spillInfo));
                 method.Metrics.Add("SpillWeight", ReadDouble(spillInfo, 2));
                 Match resolutionInfo = ResolutionInfoPattern().Match(line);
-                AddInt(method.Metrics, "ResolutionCount", ReadInt(resolutionInfo));
+                method.Metrics.AddInt("ResolutionCount", ReadInt(resolutionInfo));
                 method.Metrics.Add("ResolutionWeight", ReadDouble(resolutionInfo, 2));
             }
 
             foreach (MethodInfo method in methods.Values)
             {
-                double totalCodeSize = method.Metrics.GetMetric("CodeSize").Value;
-                double totalAllocSize = method.Metrics.GetMetric("AllocSize").Value;
+                double totalCodeSize = method.Metrics.GetValue("CodeSize");
+                double totalAllocSize = method.Metrics.GetValue("AllocSize");
                 Debug.Assert(totalAllocSize == 0 || totalCodeSize <= totalAllocSize);
                 method.Metrics.Add("ExtraAllocBytes", totalAllocSize == 0 ? 0 : totalAllocSize - totalCodeSize);
             }
@@ -365,11 +365,6 @@ namespace ManagedCodeGen
             static double ReadDouble(Match match, int group) =>
                 match.Success ? double.Parse(match.Groups[group].ValueSpan, CultureInfo.InvariantCulture) : 0;
 
-            static void AddInt(MetricCollection metrics, string name, int value)
-            {
-                Metric metric = metrics.GetMetric(name);
-                metric.Value = checked((int)metric.Value + value);
-            }
         }
 
         [GeneratedRegex(@"^; Total bytes of code ([0-9]{1,}).* for method ")]
@@ -419,12 +414,12 @@ namespace ManagedCodeGen
                     x => x.name, y => y.name, (x, y) => new MethodDelta
                     {
                         name = x.name,
-                        baseMetrics = new MetricCollection(x.Metrics),
-                        diffMetrics = new MetricCollection(y.Metrics),
+                        baseMetrics = x.Metrics,
+                        diffMetrics = y.Metrics,
                         baseOffsets = x.functionOffsets,
                         diffOffsets = y.functionOffsets
                     })
-                    .OrderByDescending(r => r.deltaMetrics.GetMetric(metricName).Value)
+                    .OrderByDescending(r => r.deltaMetrics.GetValue(metricName))
                     .ToList();
 
             FileDelta f = new FileDelta
@@ -438,7 +433,7 @@ namespace ManagedCodeGen
                 methodsInBoth = jointList.Count(),
                 methodsOnlyInBase = baseMethods.Except(diffMethods, methodInfoComparer).ToList(),
                 methodsOnlyInDiff = diffMethods.Except(baseMethods, methodInfoComparer).ToList(),
-                methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(metricName).Value != 0).ToList()
+                methodDeltaList = jointList.Where(x => x.deltaMetrics.GetValue(metricName) != 0).ToList()
             };
 
             if (_reconcile)

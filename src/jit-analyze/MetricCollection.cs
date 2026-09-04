@@ -32,16 +32,14 @@ namespace ManagedCodeGen
             }
         }
 
+        private readonly double[] _values;
+
         [JsonInclude]
-        private Metric[] metrics;
+        private Metric[] metrics => s_metrics.Select(m => GetMetric(m.Name)).ToArray();
 
         public MetricCollection()
         {
-            metrics = new Metric[s_metrics.Length];
-            for (int i = 0; i < s_metrics.Length; i++)
-            {
-                metrics[i] = s_metrics[i].Clone();
-            }
+            _values = new double[s_metrics.Length];
         }
 
         public MetricCollection(MetricCollection other) : this()
@@ -51,14 +49,25 @@ namespace ManagedCodeGen
 
         public static IEnumerable<Metric> AllMetrics => s_metrics;
 
+        // Materialize display metadata only for reports; analysis uses the compact values directly.
         public Metric GetMetric(string metricName)
         {
             int index;
             if (s_metricNameToIndex.TryGetValue(metricName, out index))
             {
-                return metrics[index];
+                Metric metric = s_metrics[index].Clone();
+                metric.Value = _values[index];
+                return metric;
             }
             return null;
+        }
+
+        public double GetValue(string metricName) => _values[s_metricNameToIndex[metricName]];
+
+        public void AddInt(string metricName, int value)
+        {
+            int index = s_metricNameToIndex[metricName];
+            _values[index] = checked((int)_values[index] + value);
         }
 
         public static bool ValidateMetric(string name)
@@ -104,47 +113,43 @@ namespace ManagedCodeGen
 
         public void Add(MetricCollection other)
         {
-            for (int i = 0; i < metrics.Length; i++)
+            for (int i = 0; i < _values.Length; i++)
             {
-                metrics[i].Add(other.metrics[i]);
+                _values[i] += other._values[i];
             }
         }
 
         public void Add(string metricName, double value)
         {
-            Metric m = GetMetric(metricName);
-            m.Value += value;
+            _values[s_metricNameToIndex[metricName]] += value;
         }
 
         public void Sub(MetricCollection other)
         {
-            for (int i = 0; i < metrics.Length; i++)
+            for (int i = 0; i < _values.Length; i++)
             {
-                metrics[i].Sub(other.metrics[i]);
+                _values[i] -= other._values[i];
             }
         }
 
         public void Rel(MetricCollection other)
         {
-            for (int i = 0; i < metrics.Length; i++)
+            for (int i = 0; i < _values.Length; i++)
             {
-                metrics[i].Rel(other.metrics[i]);
+                _values[i] = (_values[i] - other._values[i]) / other._values[i];
             }
         }
 
         public void SetValueFrom(MetricCollection other)
         {
-            for (int i = 0; i < metrics.Length; i++)
-            {
-                metrics[i].SetValueFrom(other.metrics[i]);
-            }
+            other._values.CopyTo(_values, 0);
         }
 
         public bool IsZero()
         {
-            for (int i = 0; i < metrics.Length; i++)
+            for (int i = 0; i < _values.Length; i++)
             {
-                if (metrics[i].Value != 0) return false;
+                if (_values[i] != 0) return false;
             }
             return true;
         }
