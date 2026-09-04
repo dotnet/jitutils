@@ -19,13 +19,16 @@ dotnet run --project test/jit-analyze/Regression -c Release -- /path/to/baseline
 
 Only CRLF output endings are normalized; numeric formatting is invariant. Normal
 runs use explicit assertions, not a baseline executable or the historical
-`../baseline*.out` goldens. Textual git diffs are disabled to isolate analyzer behavior.
+`../baseline*.out` goldens. Baseline comparisons disable textual git diffs to isolate
+metric analysis; separate tests exercise Git and the text-only report.
 
 Coverage includes all 12 metrics; repeated/Unicode method names; absent optional
 metrics; both perf-score spellings; zero-byte records; debug info; concatenated-file
 offsets; LF, CRLF and CR; missing final newlines; empty files; long selected and
 ignored lines; and UTF-8/CRLF around 64 KiB boundaries. CLI tests exercise reconciliation,
 warnings, filtering, multiple metrics, TSV, concatenation and unequal single filenames.
+Text-diff tests cover unchanged files, binary files, long files, nested paths, spaces,
+Unix tabs/newlines in paths, dangling links and directory links without traversal.
 
 Intentionally preserved behavior:
 

@@ -254,15 +254,26 @@ internal static class Tests
         {
             Write("text base/tab\tand\nnewline.dasm", "old\n");
             Write("text diff/tab\tand\nnewline.dasm", "new\n");
+            Directory.CreateSymbolicLink(Path.Combine(before, "directory-link"), before);
+            Directory.CreateSymbolicLink(Path.Combine(after, "directory-link"), after);
+            File.CreateSymbolicLink(Path.Combine(before, "dangling-link"), "missing-base");
+            File.CreateSymbolicLink(Path.Combine(after, "dangling-link"), "missing-diff");
         }
 
         Dictionary<string, int> counts = Analyzer.DiffInText(after, before);
-        Equal(OperatingSystem.IsWindows() ? 3 : 4, counts.Count, "text diff file count");
+        Equal(OperatingSystem.IsWindows() ? 3 : 6, counts.Count, "text diff file count");
         Equal(2, counts[textOnly], "text-only diff count");
         Equal(0, counts[binary], "binary diff count");
         Equal(2, counts[longFile], "difference after multiple buffers");
         Equal(0, Analyzer.DiffInText(before, before).Count, "identical trees");
         Equal(2, Analyzer.DiffInText(Path.Combine(after, "nested/text only.dasm"), textOnly)[textOnly], "single file counts");
+        if (!OperatingSystem.IsWindows())
+        {
+            Equal(2, Analyzer.DiffInText(Path.Combine(after, "directory-link"), Path.Combine(before, "directory-link"))
+                [Path.Combine(before, "directory-link")], "directory links are compared without traversal");
+            Directory.Delete(Path.Combine(before, "directory-link"));
+            Directory.Delete(Path.Combine(after, "directory-link"));
+        }
 
         string[] args = { "--base", before, "--diff", after, "--recursive" };
         TextWriter oldOut = Console.Out;
@@ -323,8 +334,10 @@ internal static class Tests
     private static (int Code, string Output, string Tsv) Invoke(string before, string after, params string[] options)
     {
         string tsv = Path.Combine(root, "result.tsv");
+        string json = Path.Combine(root, "result.json");
+        string markdown = Path.Combine(root, "result.md");
         File.Delete(tsv);
-        string[] args = new[] { "--base", before, "--diff", after, "--skip-text-diff", "--tsv", tsv }.Concat(options).ToArray();
+        string[] args = new[] { "--base", before, "--diff", after, "--skip-text-diff", "--tsv", tsv, "--json", json, "--md", markdown }.Concat(options).ToArray();
         TextWriter oldOut = Console.Out;
         TextWriter oldError = Console.Error;
         using var stdout = new StringWriter();
@@ -344,6 +357,8 @@ internal static class Tests
         Equal("", stderr.ToString(), "CLI stderr");
         string output = stdout.ToString().Replace("\r\n", "\n");
         string table = File.ReadAllText(tsv).Replace("\r\n", "\n");
+        string jsonOutput = File.ReadAllText(json);
+        string markdownOutput = File.ReadAllText(markdown);
         if (baseline != null)
         {
             using var process = new Process();
@@ -361,6 +376,8 @@ internal static class Tests
             Equal("", baselineError.GetAwaiter().GetResult(), "baseline stderr");
             Equal(output, baselineOut.GetAwaiter().GetResult().Replace("\r\n", "\n"), "baseline stdout");
             Equal(table, File.ReadAllText(tsv).Replace("\r\n", "\n"), "baseline TSV");
+            Equal(jsonOutput, File.ReadAllText(json), "baseline JSON");
+            Equal(markdownOutput, File.ReadAllText(markdown), "baseline markdown");
         }
         return (code, output, table);
     }

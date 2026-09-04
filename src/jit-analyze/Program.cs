@@ -898,17 +898,17 @@ namespace ManagedCodeGen
             basePath = Path.GetFullPath(basePath);
             diffPath = Path.GetFullPath(diffPath);
             IEnumerable<(string Base, string Diff)> pairs;
-            if (Directory.Exists(basePath) && Directory.Exists(diffPath))
+            bool baseDirectory = IsRealDirectory(basePath);
+            bool diffDirectory = IsRealDirectory(diffPath);
+            if (baseDirectory && diffDirectory)
             {
-                pairs = Directory.EnumerateFiles(basePath, "*", SearchOption.AllDirectories)
-                    .Select(path => (Base: path, Diff: Path.Combine(diffPath, Path.GetRelativePath(basePath, path))))
-                    .Where(pair => File.Exists(pair.Diff));
+                pairs = EnumerateTextPairs(new DirectoryInfo(basePath), new DirectoryInfo(diffPath));
             }
             else
             {
-                if (Directory.Exists(basePath))
+                if (baseDirectory)
                     basePath = Path.Combine(basePath, Path.GetFileName(diffPath));
-                if (Directory.Exists(diffPath))
+                if (diffDirectory)
                     diffPath = Path.Combine(diffPath, Path.GetFileName(basePath));
                 pairs = new[] { (basePath, diffPath) };
             }
@@ -926,10 +926,40 @@ namespace ManagedCodeGen
             return counts;
         }
 
+        private static bool IsRealDirectory(string path) =>
+            (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == FileAttributes.Directory;
+
+        private static IEnumerable<(string Base, string Diff)> EnumerateTextPairs(DirectoryInfo baseline, DirectoryInfo diff)
+        {
+            var diffEntries = diff.EnumerateFileSystemInfos().ToDictionary(entry => entry.Name, StringComparer.Ordinal);
+            foreach (FileSystemInfo entry in baseline.EnumerateFileSystemInfos())
+            {
+                if (!diffEntries.TryGetValue(entry.Name, out FileSystemInfo other))
+                    continue;
+
+                bool baseDirectory = IsRealDirectory(entry.FullName);
+                bool diffDirectory = IsRealDirectory(other.FullName);
+                if (baseDirectory && diffDirectory)
+                {
+                    foreach (var pair in EnumerateTextPairs((DirectoryInfo)entry, (DirectoryInfo)other))
+                        yield return pair;
+                }
+                else if (!baseDirectory && !diffDirectory)
+                {
+                    yield return (entry.FullName, other.FullName);
+                }
+            }
+        }
+
         private static bool FilesEqual(string basePath, string diffPath)
         {
             // Git compares symbolic links themselves, not the contents of their targets.
-            if (new System.IO.FileInfo(basePath).LinkTarget != null || new System.IO.FileInfo(diffPath).LinkTarget != null)
+            var baseInfo = new System.IO.FileInfo(basePath);
+            var diffInfo = new System.IO.FileInfo(diffPath);
+            if (baseInfo.LinkTarget != null || diffInfo.LinkTarget != null)
+                return false;
+
+            if (baseInfo.Length != diffInfo.Length)
                 return false;
 
             using var baseStream = File.OpenRead(basePath);
