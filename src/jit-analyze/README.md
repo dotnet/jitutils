@@ -25,6 +25,8 @@ lines are scanned using pooled buffers rather than allocated as individual strin
 
 Textual diff analysis remains enabled by default. It uses the same concurrency
 bound, skips Git for byte-identical files, and reuses counts across metrics.
+It requests detailed line counts only for files eligible for the text-only report;
+other files use Git's difference-only query and still contribute to the changed-file count.
 Git's added/deleted line counts are retained, including binary-file handling.
 The text-only summary lists files whose text changed but whose metrics did not.
 Directory symlinks are compared as links rather than followed.
@@ -56,9 +58,10 @@ with .NET SDK 10.0.111 / runtime 10.0.11:
 | Version | Wall time, three runs | Median wall time | Median peak RSS |
 | --- | --- | --- | --- |
 | Original (`e718415`) | 229.39, 229.38, 247.92 s | 229.39 s | 13.30 GiB |
-| Optimized (`f261f89`) | 35.33, 31.87, 32.28 s | 32.28 s | 1.46 GiB |
+| First optimization series (`f261f89`) | 35.33, 31.87, 32.28 s | 32.28 s | 1.46 GiB |
+| Demand-driven text counts (`e80f9a4`) | 15.16, 13.77, 13.55 s | 13.77 s | 0.79 GiB |
 
-This is a **7.1x median speedup** and **89% lower peak RSS**. The independently
+This is a **16.7x median speedup** and **94% lower peak RSS**. The independently
 measured optimization steps were:
 
 | Commit | Change | Full-run wall time |
@@ -70,6 +73,12 @@ measured optimization steps were:
 | `c882924` | Store compact metric values and eliminate copies | 71.34 s |
 | `bb910ad` | Parallelize textual diffs and skip identical inputs | 41.65 s |
 | `a816f75` | Reuse parsed methods for identical file pairs | 32.74 s |
+| `e80f9a4` | Request numstat only for files eligible for the text-only report | 15.16 s |
+
+Per-file profiling found that Git spent about 20 seconds producing unused numstat
+data for `KubernetesClient.dasm`, while its difference-only query took less than
+0.01 seconds. Avoiding unused counts retains Git's change detection and the complete
+report, without replacing line counts that are actually displayed.
 
 The metric reports agree with the original analyzer and the job's published
 totals. The optimized report additionally displays 106 text-only files that the
