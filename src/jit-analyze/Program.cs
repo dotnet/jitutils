@@ -17,7 +17,7 @@ using System.Text.RegularExpressions;
 
 namespace ManagedCodeGen
 {
-    internal sealed class Program
+    internal sealed partial class Program
     {
         private readonly JitAnalyzeRootCommand _command;
         private readonly bool _reconcile;
@@ -92,7 +92,7 @@ namespace ManagedCodeGen
             public MetricCollection Metrics => metrics;
             public string name;
             public int functionCount;
-            public IEnumerable<int> functionOffsets;
+            public List<int> functionOffsets;
 
             public MethodInfo()
             {
@@ -310,95 +310,84 @@ namespace ManagedCodeGen
 
         public static IEnumerable<MethodInfo> ExtractMethodInfo(string[] filePaths)
         {
-            Regex namePattern = new Regex(@"for method (.*)$");
-            Regex codeSizePattern = new Regex(@"^; Total bytes of code ([0-9]{1,}).* for method ");
-            Regex prologSizePattern = new Regex(@"prolog size ([0-9]{1,})");
-            // use new regex for perf score so we can still parse older files that did not have it.
-            Regex perfScorePattern = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
-            Regex instrCountPattern = new Regex(@"instruction count ([0-9]{1,})");
-            Regex allocSizePattern = new Regex(@"allocated bytes for code ([0-9]{1,})");
-            Regex debugInfoPattern = new Regex(@"Variable debug info: ([0-9]{1,}) live range\(s\), ([0-9]{1,}) var\(s\)");
-            Regex spillInfoPattern = new Regex(@"SpillCount (\d+) SpillCountWt (\d+\.\d+)");
-            Regex resolutionInfoPattern = new Regex(@"ResolutionMovs (\d+) ResolutionMovsWt (\d+\.\d+)");
+            var methods = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
+            var lookup = methods.GetAlternateLookup<ReadOnlySpan<char>>();
+            foreach (var record in ReadMetricLines(filePaths))
+            {
+                string line = record.line;
+                int nameStart = line.IndexOf("for method ", StringComparison.Ordinal);
+                ReadOnlySpan<char> name = nameStart < 0 ? ReadOnlySpan<char>.Empty : line.AsSpan(nameStart + 11);
+                if (!lookup.TryGetValue(name, out MethodInfo method))
+                {
+                    method = new MethodInfo { name = name.ToString(), functionOffsets = new List<int>() };
+                    methods.Add(method.name, method);
+                }
 
-            var result =
-             ReadMetricLines(filePaths)
-                             .Select((x) =>
-                             {
-                                 var nameMatch = namePattern.Match(x.line);
-                                 var codeSizeMatch = codeSizePattern.Match(x.line);
-                                 var prologSizeMatch = prologSizePattern.Match(x.line);
-                                 var perfScoreMatch = perfScorePattern.Match(x.line);
-                                 var instrCountMatch = instrCountPattern.Match(x.line);
-                                 var allocSizeMatch = allocSizePattern.Match(x.line);
-                                 var debugInfoMatch = debugInfoPattern.Match(x.line);
-                                 var spillInfoMatch = spillInfoPattern.Match(x.line);
-                                 var resolutionInfoMatch = resolutionInfoPattern.Match(x.line);
-                                 return new
-                                 {
-                                     name = nameMatch.Groups[1].Value,
-                                     // Use matched data or default to 0
-                                     totalBytes = codeSizeMatch.Success ?
-                                        int.Parse(codeSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     prologBytes = prologSizeMatch.Success ?
-                                        int.Parse(prologSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     perfScore = perfScoreMatch.Success ?
-                                        double.Parse(perfScoreMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     instrCount = instrCountMatch.Success ?
-                                        int.Parse(instrCountMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     allocSize = allocSizeMatch.Success ?
-                                        int.Parse(allocSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     debugClauseCount = debugInfoMatch.Success ?
-                                        int.Parse(debugInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     debugVarCount = debugInfoMatch.Success ?
-                                        int.Parse(debugInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     spillCount = spillInfoMatch.Success ?
-                                        int.Parse(spillInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     spillWeight = spillInfoMatch.Success ?
-                                        double.Parse(spillInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     resolutionCount = resolutionInfoMatch.Success ?
-                                        int.Parse(resolutionInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     resolutionWeight = resolutionInfoMatch.Success ?
-                                        double.Parse(resolutionInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     // Use function index only from non-data lines (the name line)
-                                     functionOffset = codeSizeMatch.Success ?
-                                        0 : x.index
-                                 };
-                             })
-                             .GroupBy(x => x.name)
-                             .Select(x =>
-                             {
-                                 MethodInfo mi = new MethodInfo
-                                 {
-                                     name = x.Key,
-                                     functionCount = x.Select(z => z).Where(z => z.totalBytes == 0).Count(),
-                                     // for all non-zero function offsets create list.
-                                     functionOffsets = x.Select(z => z)
-                                                    .Where(z => z.functionOffset != 0)
-                                                    .Select(z => z.functionOffset).ToList()
-                                 };
+                Match codeSize = CodeSizePattern().Match(line);
+                int totalBytes = ReadInt(codeSize);
+                if (totalBytes == 0)
+                {
+                    method.functionCount = checked(method.functionCount + 1);
+                }
+                if (!codeSize.Success && record.index != 0)
+                {
+                    method.functionOffsets.Add(record.index);
+                }
 
-                                 int totalCodeSize = x.Sum(z => z.totalBytes);
-                                 int totalAllocSize = x.Sum(z => z.allocSize);
-                                 Debug.Assert((totalAllocSize == 0) || (totalCodeSize <= totalAllocSize));
+                AddInt(method.Metrics, "CodeSize", totalBytes);
+                AddInt(method.Metrics, "PrologSize", ReadInt(PrologSizePattern().Match(line)));
+                method.Metrics.Add("PerfScore", ReadDouble(PerfScorePattern().Match(line), 2));
+                AddInt(method.Metrics, "InstrCount", ReadInt(InstrCountPattern().Match(line)));
+                AddInt(method.Metrics, "AllocSize", ReadInt(AllocSizePattern().Match(line)));
+                Match debugInfo = DebugInfoPattern().Match(line);
+                AddInt(method.Metrics, "DebugClauseCount", ReadInt(debugInfo));
+                AddInt(method.Metrics, "DebugVarCount", ReadInt(debugInfo, 2));
+                Match spillInfo = SpillInfoPattern().Match(line);
+                AddInt(method.Metrics, "SpillCount", ReadInt(spillInfo));
+                method.Metrics.Add("SpillWeight", ReadDouble(spillInfo, 2));
+                Match resolutionInfo = ResolutionInfoPattern().Match(line);
+                AddInt(method.Metrics, "ResolutionCount", ReadInt(resolutionInfo));
+                method.Metrics.Add("ResolutionWeight", ReadDouble(resolutionInfo, 2));
+            }
 
-                                 mi.Metrics.Add("CodeSize", totalCodeSize);
-                                 mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
-                                 mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
-                                 mi.Metrics.Add("InstrCount", x.Sum(z => z.instrCount));
-                                 mi.Metrics.Add("AllocSize", totalAllocSize);
-                                 mi.Metrics.Add("ExtraAllocBytes", totalAllocSize == 0 ? 0 : totalAllocSize - totalCodeSize);
-                                 mi.Metrics.Add("DebugClauseCount", x.Sum(z => z.debugClauseCount));
-                                 mi.Metrics.Add("DebugVarCount", x.Sum(z => z.debugVarCount));
-                                 mi.Metrics.Add("SpillCount", x.Sum(z => z.spillCount));
-                                 mi.Metrics.Add("SpillWeight", x.Sum(z => z.spillWeight));
-                                 mi.Metrics.Add("ResolutionCount", x.Sum(z => z.resolutionCount));
-                                 mi.Metrics.Add("ResolutionWeight", x.Sum(z => z.resolutionWeight));
-                                 return mi;
-                             }).ToList();
+            foreach (MethodInfo method in methods.Values)
+            {
+                double totalCodeSize = method.Metrics.GetMetric("CodeSize").Value;
+                double totalAllocSize = method.Metrics.GetMetric("AllocSize").Value;
+                Debug.Assert(totalAllocSize == 0 || totalCodeSize <= totalAllocSize);
+                method.Metrics.Add("ExtraAllocBytes", totalAllocSize == 0 ? 0 : totalAllocSize - totalCodeSize);
+            }
+            return methods.Values.ToList();
 
-            return result;
+            static int ReadInt(Match match, int group = 1) =>
+                match.Success ? int.Parse(match.Groups[group].ValueSpan, CultureInfo.InvariantCulture) : 0;
+
+            static double ReadDouble(Match match, int group) =>
+                match.Success ? double.Parse(match.Groups[group].ValueSpan, CultureInfo.InvariantCulture) : 0;
+
+            static void AddInt(MetricCollection metrics, string name, int value)
+            {
+                Metric metric = metrics.GetMetric(name);
+                metric.Value = checked((int)metric.Value + value);
+            }
         }
+
+        [GeneratedRegex(@"^; Total bytes of code ([0-9]{1,}).* for method ")]
+        private static partial Regex CodeSizePattern();
+        [GeneratedRegex(@"prolog size ([0-9]{1,})")]
+        private static partial Regex PrologSizePattern();
+        [GeneratedRegex(@"(PerfScore|perf score) (\d+(\.\d+)?)")]
+        private static partial Regex PerfScorePattern();
+        [GeneratedRegex(@"instruction count ([0-9]{1,})")]
+        private static partial Regex InstrCountPattern();
+        [GeneratedRegex(@"allocated bytes for code ([0-9]{1,})")]
+        private static partial Regex AllocSizePattern();
+        [GeneratedRegex(@"Variable debug info: ([0-9]{1,}) live range\(s\), ([0-9]{1,}) var\(s\)")]
+        private static partial Regex DebugInfoPattern();
+        [GeneratedRegex(@"SpillCount (\d+) SpillCountWt (\d+\.\d+)")]
+        private static partial Regex SpillInfoPattern();
+        [GeneratedRegex(@"ResolutionMovs (\d+) ResolutionMovsWt (\d+\.\d+)")]
+        private static partial Regex ResolutionInfoPattern();
 
         // Compare base and diff file lists and produce a sorted list of method
         // deltas by file.  Delta is computed diffBytes - baseBytes so positive
