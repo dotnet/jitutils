@@ -140,6 +140,14 @@ namespace ManagedCodeGen
             }
         }
 
+        public void AddRelativeDifference(MetricCollection diff, MetricCollection baseline)
+        {
+            for (int i = 0; i < _values.Length; i++)
+            {
+                _values[i] += (diff._values[i] - baseline._values[i]) / baseline._values[i];
+            }
+        }
+
         public void SetValueFrom(MetricCollection other)
         {
             other._values.CopyTo(_values, 0);

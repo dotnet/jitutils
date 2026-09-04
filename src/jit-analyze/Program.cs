@@ -402,7 +402,9 @@ namespace ManagedCodeGen
                 .Select(pair =>
                 {
                     var baseMethods = ExtractMethodInfo(pair.Base.paths);
-                    var diffMethods = ExtractMethodInfo(pair.Diff.paths);
+                    bool identical = pair.Base.paths.Length == pair.Diff.paths.Length &&
+                        pair.Base.paths.Zip(pair.Diff.paths).All(paths => FilesEqual(paths.First, paths.Second));
+                    var diffMethods = identical ? baseMethods : ExtractMethodInfo(pair.Diff.paths);
                     return metricNames.Select(metricName =>
                         CompareFile(pair.Base.name, pair.Diff.name, baseMethods, diffMethods, metricName)).ToArray();
                 }).ToArray();
@@ -411,6 +413,36 @@ namespace ManagedCodeGen
         private FileDelta CompareFile(string baseName, string diffName,
             IEnumerable<MethodInfo> baseMethods, IEnumerable<MethodInfo> diffMethods, string metricName)
         {
+            if (ReferenceEquals(baseMethods, diffMethods))
+            {
+                var total = new MetricCollection();
+                var relative = new MetricCollection();
+                int count = 0;
+                foreach (MethodInfo method in baseMethods)
+                {
+                    total.Add(method.Metrics);
+                    // Preserve 0/0 (NaN) for metrics absent from an otherwise identical method.
+                    relative.AddRelativeDifference(method.Metrics, method.Metrics);
+                    count++;
+                }
+                var unchanged = new FileDelta
+                {
+                    baseName = baseName,
+                    diffName = diffName,
+                    baseMetrics = total,
+                    diffMetrics = new MetricCollection(total),
+                    deltaMetrics = new MetricCollection(),
+                    relDeltaMetrics = relative,
+                    methodsInBoth = count,
+                    methodsOnlyInBase = Array.Empty<MethodInfo>(),
+                    methodsOnlyInDiff = Array.Empty<MethodInfo>(),
+                    methodDeltaList = Array.Empty<MethodDelta>(),
+                };
+                if (_reconcile)
+                    unchanged.Reconcile();
+                return unchanged;
+            }
+
             MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
             var jointList = baseMethods.Join(diffMethods,
                     x => x.name, y => y.name, (x, y) => new MethodDelta
