@@ -18,7 +18,7 @@ using System.Xml;
 
 namespace ManagedCodeGen
 {
-    public partial class jitdiff
+    public partial class @jitdiff
     {
         public static int InstallCommand(Config config)
         {

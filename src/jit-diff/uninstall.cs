@@ -11,7 +11,7 @@ using System.Text.Json.Nodes;
 
 namespace ManagedCodeGen
 {
-    public partial class jitdiff
+    public partial class @jitdiff
     {
         public static int UninstallCommand(Config config)
         {
