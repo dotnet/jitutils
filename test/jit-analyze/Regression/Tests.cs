@@ -43,6 +43,7 @@ internal static class Tests
             ExtractMetrics();
             LineBoundaries();
             CommandLine();
+            TextDiffs();
             Console.WriteLine($"PASS: {checks} assertions (parser, line boundaries, CLI and TSV).");
             return 0;
         }
@@ -233,6 +234,49 @@ internal static class Tests
     private static void Totals(string output, int before, int after, int delta)
     {
         Contains(output, $"Total bytes of base: {before}\nTotal bytes of diff: {after}\nTotal bytes of delta: {delta} (");
+    }
+
+    private static void TextDiffs()
+    {
+        string before = Path.Combine(root, "text base");
+        string after = Path.Combine(root, "text diff");
+        string textOnly = Write("text base/nested/text only.dasm", Method("Same", 10) + "; old\n");
+        Write("text diff/nested/text only.dasm", Method("Same", 10) + "; new\n");
+        string binary = Write("text base/binary.dasm", "\0old");
+        Write("text diff/binary.dasm", "\0new");
+        string longFile = Write("text base/long.dasm", new string('x', 131072) + "a\n");
+        Write("text diff/long.dasm", new string('x', 131072) + "b\n");
+        Write("text base/identical.dasm", Method("Unchanged", 5));
+        Write("text diff/identical.dasm", Method("Unchanged", 5));
+        Write("text base/removed.dasm", "removed");
+        Write("text diff/added.dasm", "added");
+        if (!OperatingSystem.IsWindows())
+        {
+            Write("text base/tab\tand\nnewline.dasm", "old\n");
+            Write("text diff/tab\tand\nnewline.dasm", "new\n");
+        }
+
+        Dictionary<string, int> counts = Analyzer.DiffInText(after, before);
+        Equal(OperatingSystem.IsWindows() ? 3 : 4, counts.Count, "text diff file count");
+        Equal(2, counts[textOnly], "text-only diff count");
+        Equal(0, counts[binary], "binary diff count");
+        Equal(2, counts[longFile], "difference after multiple buffers");
+        Equal(0, Analyzer.DiffInText(before, before).Count, "identical trees");
+        Equal(2, Analyzer.DiffInText(Path.Combine(after, "nested/text only.dasm"), textOnly)[textOnly], "single file counts");
+
+        string[] args = { "--base", before, "--diff", after, "--recursive" };
+        TextWriter oldOut = Console.Out;
+        using var stdout = new StringWriter();
+        try
+        {
+            Console.SetOut(stdout);
+            Equal(0, new JitAnalyzeRootCommand(args).Parse(args).Invoke(), "text-only exit code");
+        }
+        finally
+        {
+            Console.SetOut(oldOut);
+        }
+        Contains(stdout.ToString(), $"nested{Path.DirectorySeparatorChar}text only.dasm had 2 diffs");
     }
 
     private static void CheckTsv(string tsv, string[] methods, int headers = 1)

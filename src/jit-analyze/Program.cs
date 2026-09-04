@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Parsing;
@@ -27,6 +28,7 @@ namespace ManagedCodeGen
         private readonly int _count;
         private readonly string _basePath;
         private readonly string _diffPath;
+        private Dictionary<string, int> _textDiffCounts;
 
         private static string METRIC_SEP = new string('-', 80);
 
@@ -660,11 +662,14 @@ namespace ManagedCodeGen
             {
                 // Show files with text diffs but no metric diffs.
 
-                Dictionary<string, int> diffCounts = DiffInText(_diffPath, _basePath);
+                Dictionary<string, int> diffCounts = _textDiffCounts ??= DiffInText(_diffPath, _basePath);
 
                 // TODO: resolve diffs to particular methods in the files.
-                var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffName) && (x.deltaMetrics.IsZero()))
-                    .OrderByDescending(x => diffCounts[x.baseName]);
+                string baseDirectory = Directory.Exists(_basePath) ? _basePath : Path.GetDirectoryName(Path.GetFullPath(_basePath));
+                var zeroDiffFilesWithDiffs = fileDeltaList
+                    .Select(file => (File: file, Path: Path.GetFullPath(Path.Combine(baseDirectory, file.baseName))))
+                    .Where(x => !Get(_command.ConcatFiles) && diffCounts.ContainsKey(x.Path) && x.File.deltaMetrics.IsZero())
+                    .OrderByDescending(x => diffCounts[x.Path]);
 
                 int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
                 if (zeroDiffFilesWithDiffCount > 0)
@@ -672,7 +677,7 @@ namespace ManagedCodeGen
                     summaryContents.AppendLine($"\n{zeroDiffFilesWithDiffCount} files had text diffs but no metric diffs.");
                     foreach (var zerofile in zeroDiffFilesWithDiffs.Take(_count))
                     {
-                        summaryContents.AppendLine($"{zerofile.baseName} had {diffCounts[zerofile.baseName]} diffs");
+                        summaryContents.AppendLine($"{zerofile.File.baseName} had {diffCounts[zerofile.Path]} diffs");
                     }
                 }
             }
@@ -858,68 +863,98 @@ namespace ManagedCodeGen
         //
         public static Dictionary<string, int> DiffInText(string diffPath, string basePath)
         {
-            // run get diff command to see if we have textual diffs.
-            // (use git diff since it's already a dependency and cross platform)
-            List<string> commandArgs = new List<string>();
-            commandArgs.Add("diff");
-            commandArgs.Add("--no-index");
-            commandArgs.Add("--diff-filter=M");
-            commandArgs.Add("--exit-code");
-            commandArgs.Add("--numstat");
-            commandArgs.Add("-z");
-            commandArgs.Add(basePath);
-            commandArgs.Add(diffPath);
-
-            ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
-            Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>(); ;
-
-            if (result.ExitCode != 0)
+            basePath = Path.GetFullPath(basePath);
+            diffPath = Path.GetFullPath(diffPath);
+            IEnumerable<(string Base, string Diff)> pairs;
+            if (Directory.Exists(basePath) && Directory.Exists(diffPath))
             {
-                // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
-
-                var rawLines = result.StdOut.Split(new[] { "\0", Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-                if (rawLines.Length % 3 != 0)
-                {
-                    Console.WriteLine($"Error parsing output: {result.StdOut}");
-                    return fileToTextDiffCount;
-                }
-
-                for (int i = 0; i < rawLines.Length; i += 3)
-                {
-                    string rawStats = rawLines[i];
-                    string rawBasePath = rawLines[i + 1];
-                    string rawDiffPath = rawLines[i + 2];
-
-                    string[] fields = rawStats.Split(new char[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
-
-                    string parsedFullDiffFilePath = Path.GetFullPath(rawDiffPath);
-                    string parsedFullBaseFilePath = Path.GetFullPath(rawBasePath);
-
-                    if (!File.Exists(parsedFullBaseFilePath))
-                    {
-                        Console.WriteLine($"Error parsing path '{rawBasePath}'. `{parsedFullBaseFilePath}` doesn't exist.");
-                        continue;
-                    }
-
-
-                    if (!File.Exists(parsedFullDiffFilePath))
-                    {
-                        Console.WriteLine($"Error parsing path '{rawDiffPath}'. `{parsedFullDiffFilePath}` doesn't exist.");
-                        continue;
-                    }
-
-                    // Sometimes .dasm is parsed as binary and we don't get numbers, just dashes
-                    int addCount = 0;
-                    int delCount = 0;
-                    Int32.TryParse(fields[0], out addCount);
-                    Int32.TryParse(fields[1], out delCount);
-                    fileToTextDiffCount[parsedFullBaseFilePath] = addCount + delCount;
-                }
-
-                Console.WriteLine($"Found {fileToTextDiffCount.Count()} files with textual diffs.");
+                pairs = Directory.EnumerateFiles(basePath, "*", SearchOption.AllDirectories)
+                    .Select(path => (Base: path, Diff: Path.Combine(diffPath, Path.GetRelativePath(basePath, path))))
+                    .Where(pair => File.Exists(pair.Diff));
+            }
+            else
+            {
+                if (Directory.Exists(basePath))
+                    basePath = Path.Combine(basePath, Path.GetFileName(diffPath));
+                if (Directory.Exists(diffPath))
+                    diffPath = Path.Combine(diffPath, Path.GetFileName(basePath));
+                pairs = new[] { (basePath, diffPath) };
             }
 
-            return fileToTextDiffCount;
+            // Initialize the process manager on the caller thread before starting parallel workers.
+            ProcessManager manager = ProcessManager.Instance;
+            var counts = pairs.AsParallel().WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
+                .Where(pair => !FilesEqual(pair.Base, pair.Diff))
+                .Select(pair => (pair.Base, Count: TextDiffCount(pair.Base, pair.Diff, manager)))
+                .Where(pair => pair.Count.HasValue)
+                .ToDictionary(pair => pair.Base, pair => pair.Count.Value, StringComparer.Ordinal);
+
+            if (counts.Count != 0)
+                Console.WriteLine($"Found {counts.Count} files with textual diffs.");
+            return counts;
+        }
+
+        private static bool FilesEqual(string basePath, string diffPath)
+        {
+            // Git compares symbolic links themselves, not the contents of their targets.
+            if (new System.IO.FileInfo(basePath).LinkTarget != null || new System.IO.FileInfo(diffPath).LinkTarget != null)
+                return false;
+
+            using var baseStream = File.OpenRead(basePath);
+            using var diffStream = File.OpenRead(diffPath);
+            if (baseStream.Length != diffStream.Length)
+                return false;
+
+            byte[] baseBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+            byte[] diffBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+            try
+            {
+                int read;
+                while ((read = baseStream.Read(baseBuffer)) != 0)
+                {
+                    if (diffStream.ReadAtLeast(diffBuffer.AsSpan(0, read), read, throwOnEndOfStream: false) != read ||
+                        !baseBuffer.AsSpan(0, read).SequenceEqual(diffBuffer.AsSpan(0, read)))
+                        return false;
+                }
+                return diffStream.ReadByte() == -1;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(baseBuffer);
+                ArrayPool<byte>.Shared.Return(diffBuffer);
+            }
+        }
+
+        private static int? TextDiffCount(string basePath, string diffPath, ProcessManager manager)
+        {
+            var startInfo = new ProcessStartInfo("git")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            foreach (string argument in new[] { "diff", "--no-index", "--diff-filter=M", "--exit-code", "--numstat", "-z", "--", basePath, diffPath })
+                startInfo.ArgumentList.Add(argument);
+
+            using Process process = manager.Start(startInfo);
+            process.Start();
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            process.WaitForExit();
+            string output = outputTask.GetAwaiter().GetResult();
+            string error = errorTask.GetAwaiter().GetResult();
+            if (process.ExitCode == 0)
+                return null;
+            if (process.ExitCode != 1)
+                throw new InvalidOperationException($"git diff failed for '{basePath}' and '{diffPath}' (exit {process.ExitCode}): {error}");
+
+            string[] fields = output.Split('\t', 3);
+            if (fields.Length != 3)
+                throw new InvalidOperationException($"Invalid git numstat output for '{basePath}': {output}");
+            // Binary files have '-' in both numeric fields.
+            return ParseCount(fields[0]) + ParseCount(fields[1]);
+
+            static int ParseCount(string value) => value == "-" ? 0 : int.Parse(value, CultureInfo.InvariantCulture);
         }
 
         private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
