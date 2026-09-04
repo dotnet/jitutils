@@ -910,8 +910,11 @@ namespace ManagedCodeGen
 
         private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
 
-        private static int Main(string[] args) =>
-            new CommandLineConfiguration(new JitAnalyzeRootCommand(args).UseVersion()).Invoke(args);
+        private static int Main(string[] args)
+        {
+            var command = new JitAnalyzeRootCommand(args).UseVersion();
+            return command.Parse(args).Invoke();
+        }
 
         public int Run()
         {

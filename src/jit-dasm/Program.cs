@@ -84,8 +84,11 @@ namespace ManagedCodeGen
         private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
         private T Get<T>(Argument<T> arg) => _command.Result.GetValue(arg);
 
-        private static int Main(string[] args) =>
-            new CommandLineConfiguration(new JitDasmRootCommand(args).UseVersion()).Invoke(args);
+        private static int Main(string[] args)
+        {
+            var command = new JitDasmRootCommand(args).UseVersion();
+            return command.Parse(args).Invoke();
+        }
 
         public List<AssemblyInfo> GenerateAssemblyWorklist()
         {

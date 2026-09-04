@@ -73,7 +73,7 @@ namespace Utils
         /// </summary>
         /// <param name="output"></param>
         /// <returns></returns>
-        public static string ParseAssertionError(string output)
+        public static string? ParseAssertionError(string output)
         {
             if (string.IsNullOrEmpty(output))
             {

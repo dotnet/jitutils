@@ -7,35 +7,35 @@ using System.CommandLine;
 
 namespace MutateTest
 {
-    internal sealed class MutateTestRootCommand : CliRootCommand
+    internal sealed class MutateTestRootCommand : RootCommand
     {
-        public CliArgument<string> InputFilePath { get; } =
-            new("input-test-case") { Description = "Input test case file or directory (for --recursive)", Arity = ArgumentArity.OneOrMore };
-        public CliOption<bool> EHStress { get; } =
+        public Argument<string> InputFilePath { get; } =
+            new("input-test-case") { Description = "Input test case file or directory (for --recursive)", Arity = ArgumentArity.ExactlyOne };
+        public Option<bool> EHStress { get; } =
             new("--ehStress") { Description = "Add EH to methods" };
-        public CliOption<bool> StructStress { get; } =
+        public Option<bool> StructStress { get; } =
             new("--structStress") { Description = "Replace locals with structs" };
-        public CliOption<bool> ShowResults { get; } =
+        public Option<bool> ShowResults { get; } =
             new("--showResults") { Description = "Add EH to methods" };
-        public CliOption<bool> Verbose { get; } =
+        public Option<bool> Verbose { get; } =
             new("--verbose") { Description = "Describe each transformation" };
-        public CliOption<bool> Quiet { get; } =
+        public Option<bool> Quiet { get; } =
             new("--quiet") { Description = "Produce minimal output" };
-        public CliOption<bool> Recursive { get; } =
+        public Option<bool> Recursive { get; } =
             new("--recursive") { Description = "Process each file recursively" };
-        public CliOption<int> Seed { get; } =
+        public Option<int> Seed { get; } =
             new("--seed") { DefaultValueFactory = _ => 42, Description = "Random seed" };
-        public CliOption<bool> StopAtFirstFailure { get; } =
+        public Option<bool> StopAtFirstFailure { get; } =
             new("--stopAtFirstFailure") { Description = "Stop each test at first failure" };
-        public CliOption<bool> EmptyBlocks { get; } =
+        public Option<bool> EmptyBlocks { get; } =
             new("--emptyBlocks") { Description = "Transform empty blocks" };
-        public CliOption<int> SizeLimit { get; } =
+        public Option<int> SizeLimit { get; } =
             new("--sizeLimit") { DefaultValueFactory = _ => 10000, Description = "Don't process programs larger than this size" };
-        public CliOption<int> TimeLimit { get; } =
+        public Option<int> TimeLimit { get; } =
             new("--timeLimit") { DefaultValueFactory = _ => 10000, Description = "Don't stress programs where compile + run takes more than this many milliseconds" };
-        public CliOption<bool> Projects { get; } =
+        public Option<bool> Projects { get; } =
             new("--projects") { Description = "Look for .csproj files instead of .cs files when doing recursive exploration" };
-        public CliOption<bool> OnlyFailures { get; } =
+        public Option<bool> OnlyFailures { get; } =
             new("--onlyFailures") { Description = "Only emit output for cases that fail at runtime" };
 
         public ParseResult Result { get; private set; }

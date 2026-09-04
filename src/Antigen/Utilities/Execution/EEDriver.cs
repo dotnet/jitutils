@@ -97,9 +97,9 @@ namespace Antigen.Execution
         /// </summary>
         /// <param name="compileResult"></param>
         /// <returns></returns>
-        internal Response Execute(Request request)
+        internal Response? Execute(Request request)
         {
-            EEProxy proxy = null;
+            EEProxy? proxy = null;
             try
             {
                 proxy = Get();

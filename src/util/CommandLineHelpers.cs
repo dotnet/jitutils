@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.CommandLine;
+using System.CommandLine.Help;
+using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using System.IO;
 
-public static class Helpers
+internal static class Helpers
 {
     public static RootCommand UseVersion(this RootCommand command)
     {
@@ -20,6 +23,48 @@ public static class Helpers
         }
 
         return command;
+    }
+
+    public static RootCommand UseExtendedHelp(this RootCommand command, Action<ParseResult> customizer)
+    {
+        ConfigureHelp(command, customizer);
+        return command;
+    }
+
+    private static void ConfigureHelp(Command command, Action<ParseResult> customizer)
+    {
+        foreach (Option option in command.Options)
+        {
+            if (option is HelpOption helpOption)
+            {
+                helpOption.Action = new CustomizedHelpAction(helpOption, customizer);
+                break;
+            }
+        }
+
+        foreach (Command subcommand in command.Subcommands)
+        {
+            ConfigureHelp(subcommand, customizer);
+        }
+    }
+
+    private sealed class CustomizedHelpAction : SynchronousCommandLineAction
+    {
+        private readonly HelpAction _helpAction;
+        private readonly Action<ParseResult> _customizer;
+
+        public CustomizedHelpAction(HelpOption helpOption, Action<ParseResult> customizer)
+        {
+            _helpAction = (HelpAction)helpOption.Action!;
+            _customizer = customizer;
+        }
+
+        public override int Invoke(ParseResult parseResult)
+        {
+            int result = _helpAction.Invoke(parseResult);
+            _customizer(parseResult);
+            return result;
+        }
     }
 
 #nullable enable

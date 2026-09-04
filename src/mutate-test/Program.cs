@@ -232,13 +232,13 @@ namespace MutateTest
 
         private static bool isFirstRun = true;
 
-        private T Get<T>(CliOption<T> option) => _command.Result.GetValue(option);
+        private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
 
-        private static int Main(string[] args) =>
-            new CliConfiguration(new MutateTestRootCommand(args).UseVersion())
-            {
-                EnableParseErrorReporting = true
-            }.Invoke(args);
+        private static int Main(string[] args)
+        {
+            var command = new MutateTestRootCommand(args).UseVersion();
+            return command.Parse(args).Invoke();
+        }
 
         public int Run()
         {

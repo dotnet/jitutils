@@ -124,8 +124,11 @@ internal class Program
     private static string FormatPercentageDiff(double value, string precision = "00") =>
         (value > 0 ? "+" : "") + value.ToString($"0.{precision}") + "%";
 
-    private static void Main(string[] args) =>
-        new CommandLineConfiguration(new JitTpAnalyzeRootCommand().UseVersion()).Invoke(args);
+    private static void Main(string[] args)
+    {
+        var command = new JitTpAnalyzeRootCommand().UseVersion();
+        command.Parse(args).Invoke();
+    }
 
     private struct FunctionDiff
     {

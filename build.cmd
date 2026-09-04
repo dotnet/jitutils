@@ -44,13 +44,16 @@ REM Do as many builds as possible; don't stop on first failure (if any).
 set __ExitCode=0
 
 REM Declare the list of projects
-set projects=jit-diff jit-dasm jit-analyze jit-tp-analyze jit-format pmi jit-dasm-pmi jit-decisions-analyze performance-explorer instructions-retired-explorer
+set projects=Antigen jit-diff jit-dasm jit-analyze jit-tp-analyze jit-format pmi jit-dasm-pmi jit-decisions-analyze performance-explorer instructions-retired-explorer
 
 REM Build each project
 for %%p in (%projects%) do (
     if %publish%==true (
         REM Publish src/pmi project without single-file, so it can be executed with a custom build of the runtime/JIT
         if "%%p"=="pmi" (
+            dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
+        ) else if "%%p"=="Antigen" (
+            REM Publish Antigen without single-file; it resolves corelib/Roslyn reference assemblies by path for compilation
             dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p
         ) else (
             dotnet publish -c %buildType% -o %appInstallDir% .\src\%%p --self-contained -r:%rid% -p:PublishSingleFile=true

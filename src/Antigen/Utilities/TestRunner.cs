@@ -35,7 +35,7 @@ namespace Utils
 
     public class TestRunner
     {
-        private static TestRunner _testRunner;
+        private static TestRunner? _testRunner;
         private readonly string _coreRun;
         private readonly EEDriver _driver;
 
@@ -43,8 +43,8 @@ namespace Utils
         private static readonly MetadataReference[] s_references =
         {
              MetadataReference.CreateFromFile(s_corelibPath),
-             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath), "System.Console.dll")),
-             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath), "System.Runtime.dll")),
+             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath)!, "System.Console.dll")),
+             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath)!, "System.Runtime.dll")),
              MetadataReference.CreateFromFile(typeof(SyntaxTree).Assembly.Location),
              MetadataReference.CreateFromFile(typeof(CSharpSyntaxTree).Assembly.Location),
         };

@@ -7,11 +7,12 @@ using Antigen.Execution;
 using Antigen.Trimmer.Rewriters;
 using Antigen.Trimmer.Rewriters.Expressions;
 using Antigen.Trimmer.Rewriters.Statements;
-using CommandLine;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using System;
 using System.Collections.Generic;
+using System.CommandLine;
+using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -52,11 +53,23 @@ namespace Trimmer
 
         static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<CommandLineOptions>(args).MapResult(Run, err => 1);
+            var command = new TrimmerRootCommand(args).UseVersion();
+            return command.Parse(args).Invoke();
         }
 
-        private static int Run(CommandLineOptions opts)
+        internal static int Run(TrimmerRootCommand command)
         {
+            ParseResult result = command.Result;
+            CommandLineOptions opts = new()
+            {
+                CoreRunPath = result.GetValue(command.CoreRunPath),
+                ParentPid = result.GetValue(command.ParentPid),
+                IssuesFolder = result.GetValue(command.IssuesFolder),
+                ReproFile = result.GetValue(command.ReproFile),
+                AltJitName = result.GetValue(command.AltJitName),
+                AltJitMethodName = result.GetValue(command.AltJitMethodName),
+            };
+
             int.TryParse(opts.ParentPid, out s_parentProcessId);
             Task monitorTask = Task.Run(() => MonitorParentProcess());
 
@@ -615,22 +628,16 @@ TRIMMER_LOOP:
 
     public class CommandLineOptions
     {
-        [Option(shortName: 'c', longName: "CoreRun", Required = true, HelpText = "Path to CoreRun/CoreRun.exe.")]
         public string CoreRunPath { get; set; }
 
-        [Option(shortName: 'p', longName: "ParentPid", Required = false, HelpText = "Antigen process id")]
         public string ParentPid { get; set; }
 
-        [Option(shortName: 'o', longName: "IssuesFolder", Required = false, HelpText = "Path to folder where trimmed issue will be copied.")]
         public string IssuesFolder { get; set; }
 
-        [Option(shortName: 'f', longName: "ReproFile", Required = false, HelpText = "Full path of the repro file.")]
         public string ReproFile { get; set; }
 
-        [Option(shortName: 'j', longName: "AltJitName", Required = false, HelpText = "Name of altjit. By default, current OS/arch.")]
         public string AltJitName { get; set; }
 
-        [Option(shortName: 'm', longName: "AltJitMethodName", Required = false, HelpText = "Name of method for altjit. By default, current OS/arch.")]
         public string AltJitMethodName { get; set; }
     }
 }

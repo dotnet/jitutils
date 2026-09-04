@@ -8,8 +8,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Runtime.ExceptionServices;
 using System.Threading;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
 
 namespace ExecutionEngine
 {
@@ -38,7 +37,7 @@ namespace ExecutionEngine
                 {
                     continue;
                 }
-                Request? request = JsonConvert.DeserializeObject<Request>(lines);
+                Request? request = JsonSerializer.Deserialize<Request>(lines);
                 if (request == null)
                 {
                     continue;
@@ -61,7 +60,7 @@ namespace ExecutionEngine
                     response.IsJitAssert = true;
                 }
 
-                var json = JsonConvert.SerializeObject(response);
+                var json = JsonSerializer.Serialize(response);
                 Console.WriteLine(json);
                 Console.Out.Flush();
                 Console.WriteLine("Done");
@@ -86,13 +85,13 @@ namespace ExecutionEngine
         {
             int hashCode;
             var assembly = s_loader.LoadFromBytes(assemblyBytes);
-            var methodInfo = assembly.GetType("TestClass").GetMethod("Main");
-            var methodExec = methodInfo.CreateDelegate<Func<string[], int>>();
+            var methodInfo = assembly.GetType("TestClass")!.GetMethod("Main");
+            var methodExec = methodInfo!.CreateDelegate<Func<string[], int>>();
 
             // Adopted from Jakob's Fuzzlyn
             int threadID = Environment.CurrentManagedThreadId;
-            List<Exception> exceptions = null;
-            void FirstChanceExceptionHandler(object sender, FirstChanceExceptionEventArgs args)
+            List<Exception>? exceptions = null;
+            void FirstChanceExceptionHandler(object? sender, FirstChanceExceptionEventArgs args)
             {
                 if (Environment.CurrentManagedThreadId == threadID)
                 {
@@ -104,7 +103,7 @@ namespace ExecutionEngine
 
             try
             {
-                hashCode = methodExec(null);
+                hashCode = methodExec(null!);
             }
             catch
             {
@@ -123,7 +122,7 @@ namespace ExecutionEngine
                 // }
                 // We are interested in the JIT assert that was hit, and not the OverflowException
                 // thrown because value = 1 did not get to run.
-                Exception ex = exceptions[0];
+                Exception ex = exceptions![0];
 
                 if (ex is TypeInitializationException && ex.InnerException != null)
                 {

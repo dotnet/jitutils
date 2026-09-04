@@ -5,38 +5,37 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
-using System.CommandLine.Invocation;
 using System.Threading.Tasks;
 
 namespace ManagedCodeGen
 {
-    internal sealed class CIJobsRootCommand : CliRootCommand
+    internal sealed class CIJobsRootCommand : RootCommand
     {
-        public CliOption<string> Server { get; } =
+        public Option<string> Server { get; } =
             new("--server", "-s") { Description = "Url of the server. Defaults to https://ci.dot.net/" };
-        public CliOption<string> JobName { get; } =
+        public Option<string> JobName { get; } =
             new("--job", "-j") { Description = "Name of the job." };
-        public CliOption<string> BranchName { get; } =
+        public Option<string> BranchName { get; } =
             new("--branch", "-b") { DefaultValueFactory = _ => "master", Description = "Name of the branch." };
-        public CliOption<string> RepoName { get; } =
+        public Option<string> RepoName { get; } =
             new("--repo", "-r") { DefaultValueFactory = _ => "dotnet_coreclr", Description = "Name of the repo (e.g. dotnet_corefx or dotnet_coreclr)." };
-        public CliOption<string> MatchPattern { get; } =
+        public Option<string> MatchPattern { get; } =
             new("--match", "-m") { Description = "Regex pattern used to select jobs output." };
-        public CliOption<int> JobNumber { get; } =
+        public Option<int> JobNumber { get; } =
             new("--number", "-n") { Description = "Job number." };
-        public CliOption<bool> ShowLastSuccessful { get; } =
+        public Option<bool> ShowLastSuccessful { get; } =
             new("--last-successful", "-l") { Description = "Show last successful build." };
-        public CliOption<string> Commit { get; } =
+        public Option<string> Commit { get; } =
             new("--commit", "-c") { Description = "List build at this commit." };
-        public CliOption<bool> ShowArtifacts { get; } =
+        public Option<bool> ShowArtifacts { get; } =
             new("--artifacts", "-a") { Description = "Show job artifacts on server." };
-        public CliOption<string> OutputPath { get; } =
+        public Option<string> OutputPath { get; } =
             new("--output", "-o") { Description = "The path where output will be placed." };
-        public CliOption<string> OutputRoot { get; } =
+        public Option<string> OutputRoot { get; } =
             new("--output-root") { Description = "The root directory where output will be placed. A subdirectory named by job and build number will be created within this to store the output." };
-        public CliOption<bool> Unzip { get; } =
+        public Option<bool> Unzip { get; } =
             new("--unzip", "-u") { Description = "Unzip copied artifacts" };
-        public CliOption<string> ContentPath { get; } =
+        public Option<string> ContentPath { get; } =
             new("--ContentPath", "-p") { Description = "Relative product zip path. Default is artifact/bin/Product/*zip*/Product.zip" };
 
         public ParseResult Result;
@@ -45,7 +44,7 @@ namespace ManagedCodeGen
         {
             List<string> errors = new();
 
-            CliCommand listCommand = new("list", "List jobs on ci.dot.net for the repo.")
+            Command listCommand = new("list", "List jobs on ci.dot.net for the repo.")
             {
                 Server,
                 JobName,
@@ -104,7 +103,7 @@ namespace ManagedCodeGen
 
             Subcommands.Add(listCommand);
 
-            CliCommand copyCommand = new("copy", @"Copies job artifacts from ci.dot.net. This
+            Command copyCommand = new("copy", @"Copies job artifacts from ci.dot.net. This
 command copies a zip of artifacts from a repo (defaulted to
 dotnet_coreclr). The default location of the zips is the
 Product sub-directory, though that can be changed using the

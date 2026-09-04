@@ -432,14 +432,14 @@ namespace ManagedCodeGen
             {
                 string assembly1 = assemblyInfo1.Path;
 
-                if (assembly1 == s_CoreLibAssembly)
+                if (assembly1 == CoreLibAssemblyName)
                 {
                     return -1;
                 }
 
                 string assembly2 = assemblyInfo2.Path;
 
-                if (assembly2 == s_CoreLibAssembly)
+                if (assembly2 == CoreLibAssemblyName)
                 {
                     return 1;
                 }
@@ -497,7 +497,7 @@ namespace ManagedCodeGen
                 if (config.CoreLib || config.DoFrameworks)
                 {
                     const bool recursive = false;
-                    string searchPattern = config.DoFrameworks ? "*" : s_CoreLibAssembly;
+                    string searchPattern = config.DoFrameworks ? "*" : CoreLibAssemblyName;
                     List<AssemblyInfo> directoryAssemblyInfoList = IdentifyAssemblies(config.CoreRoot, config.CoreRoot, config, recursive, searchPattern);
                     directoryAssemblyInfoList.Sort(CompareFrameworkAssemblies);
 

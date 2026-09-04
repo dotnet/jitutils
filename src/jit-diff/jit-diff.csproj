@@ -1,14 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="$([MSBuild]::GetPathOfFileAbove(target-framework.props))" />
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\util\util.cs" Link="util.cs" />
-    <PackageReference Include="System.CommandLine" Version="0.1.0-e170320-1" />
   </ItemGroup>
 
 </Project>

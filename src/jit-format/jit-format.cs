@@ -2,14 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-///////////////////////////////////////////////////////////////////////////////
-//
-//  jit-format -
-//
-
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -30,14 +26,13 @@ namespace ManagedCodeGen
             private static string s_configFileName = "config.json";
             private static string s_configFileRootKey = "format";
 
-            private ArgumentSyntax _syntaxResult;
             private string _arch = null;
             private string _os = null;
             private string _build = null;
             private string _runtimePath = null;
             private string _coreclrPath = null;
-            private IReadOnlyList<string> _filenames = Array.Empty<string>();
-            private IReadOnlyList<string> _projects = Array.Empty<string>();
+            private IReadOnlyList<string> _filenames = [];
+            private IReadOnlyList<string> _projects = [];
             private string _srcDirectory = null;
             private bool _untidy = false;
             private bool _noformat = false;
@@ -51,27 +46,29 @@ namespace ManagedCodeGen
             private JsonObject _jObj;
             private string _jitUtilsRoot = null;
 
-            public Config(string[] args)
+            internal Config(JitFormatRootCommand command)
             {
                 LoadFileConfig();
 
-                _syntaxResult = ArgumentSyntax.Parse(args, syntax =>
-                {
-                    syntax.DefineOption("a|arch", ref _arch, "The architecture of the build (options: arm64, x64, x86)");
-                    syntax.DefineOption("o|os", ref _os, "The operating system of the build (options: windows, osx, linux, etc.)");
-                    syntax.DefineOption("b|build", ref _build, "The build type of the build (options: Release, Checked, Debug)");
-                    syntax.DefineOption("r|runtime", ref _runtimePath, "Full path to runtime directory");
-                    syntax.DefineOption("compile-commands", ref _compileCommands, "Full path to compile_commands.json");
-                    syntax.DefineOption("v|verbose", ref _verbose, "Enable verbose output.");
-                    syntax.DefineOption("untidy", ref _untidy, "Do not run clang-tidy");
-                    syntax.DefineOption("noformat", ref _noformat, "Do not run clang-format");
-                    syntax.DefineOption("cross", ref _cross, "If on Linux, run the configure build as a cross build.");
-                    syntax.DefineOption("f|fix", ref _fix, "Fix formatting errors discovered by clang-format and clang-tidy.");
-                    syntax.DefineOption("i|ignore-errors", ref _ignoreErrors, "Ignore clang-tidy errors");
-                    syntax.DefineOptionList("projects", ref _projects, "List of build projects clang-tidy should consider (e.g. dll, standalone, protojit, etc.). Default: dll");
+                ParseResult result = command.Result;
 
-                    syntax.DefineParameterList("filenames", ref _filenames, "Optional list of files that should be formatted.");
-                });
+                bool IsSpecified<T>(Option<T> option) => result.GetResult(option) != null;
+                T Get<T>(Option<T> option) => result.GetValue(option);
+                List<string> GetArgument(Argument<List<string>> arg) => result.GetValue(arg);
+
+                if (IsSpecified(command.Arch)) _arch = Get(command.Arch);
+                if (IsSpecified(command.OS)) _os = Get(command.OS);
+                if (IsSpecified(command.Build)) _build = Get(command.Build);
+                if (IsSpecified(command.RuntimePath)) _runtimePath = Get(command.RuntimePath);
+                if (IsSpecified(command.CompileCommands)) _compileCommands = Get(command.CompileCommands);
+                if (IsSpecified(command.Verbose)) _verbose = Get(command.Verbose);
+                if (IsSpecified(command.Untidy)) _untidy = Get(command.Untidy);
+                if (IsSpecified(command.NoFormat)) _noformat = Get(command.NoFormat);
+                if (IsSpecified(command.Cross)) _cross = Get(command.Cross);
+                if (IsSpecified(command.Fix)) _fix = Get(command.Fix);
+                if (IsSpecified(command.IgnoreErrors)) _ignoreErrors = Get(command.IgnoreErrors);
+                if (IsSpecified(command.Projects)) _projects = Get(command.Projects);
+                _filenames = GetArgument(command.Filenames);
                 
                 // Run validation code on parsed input to ensure we have a sensible scenario.
 
@@ -241,7 +238,7 @@ namespace ManagedCodeGen
 
                 if (!_untidy && ((_arch == null) || (_os == null) || (_build == null)))
                 {
-                    _syntaxResult.ReportError("Specify --arch, --os, and --build for clang-tidy run.");
+                    throw new Exception("Specify --arch, --os, and --build for clang-tidy run.");
                 }
 
                 if (_runtimePath == null)
@@ -253,7 +250,7 @@ namespace ManagedCodeGen
                     _runtimePath = Utility.GetRepoRoot(_verbose);
                     if (_runtimePath == null)
                     {
-                        _syntaxResult.ReportError("Specify --runtime");
+                        throw new Exception("Specify --runtime");
                     }
                     else
                     {
@@ -265,12 +262,12 @@ namespace ManagedCodeGen
                 if (!Directory.Exists(_coreclrPath))
                 {
                     // If _coreclrPath doesn't exist, it is an invalid path
-                    _syntaxResult.ReportError("Invalid path to runtime directory. Specify with --runtime");
+                    throw new Exception("Invalid path to runtime directory. Specify with --runtime");
                 }
                 else if (!File.Exists(Path.Combine(_coreclrPath, "build-runtime.cmd")) || !File.Exists(Path.Combine(_coreclrPath, "build-runtime.sh")) || !File.Exists(Path.Combine(_coreclrPath, "clr.featuredefines.props")))
                 {
                     // Doesn't look like the coreclr directory.
-                    _syntaxResult.ReportError("Invalid path to coreclr directory. Specify with --runtime");
+                    throw new Exception("Invalid path to coreclr directory. Specify with --runtime");
                 }
 
                 // Check that we can find compile_commands.json on windows
@@ -491,10 +488,10 @@ namespace ManagedCodeGen
             }
         }
 
-        public static int Main(string[] args)
+        internal static int Execute(JitFormatRootCommand command)
         {
             // Parse and store comand line options.
-            var config = new Config(args);
+            var config = new Config(command);
 
             int returncode = 0;
             bool verbose = config.DoVerboseOutput;
@@ -623,6 +620,12 @@ namespace ManagedCodeGen
             }
 
             return returncode;
+        }
+
+        public static int Main(string[] args)
+        {
+            var command = new JitFormatRootCommand(args).UseVersion();
+            return command.Parse(args).Invoke();
         }
 
         // This method reads in a compile_command.json file, and writes a new json file with only the entries

@@ -48,7 +48,7 @@ while getopts "hpb:" opt; do
 done
 
 # declare the array of projects   
-declare -a projects=(jit-dasm jit-diff jit-analyze jit-tp-analyze jit-format pmi jit-dasm-pmi jit-decisions-analyze performance-explorer instructions-retired-explorer)
+declare -a projects=(Antigen jit-dasm jit-diff jit-analyze jit-tp-analyze jit-format pmi jit-dasm-pmi jit-decisions-analyze performance-explorer instructions-retired-explorer)
 
 # for each project either build or publish
 for proj in "${projects[@]}"
@@ -57,6 +57,8 @@ do
         case "$proj" in
             # Publish src/pmi project without single-file, so it can be executed with a custom build of the runtime/JIT
             pmi) dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" ;;
+            # Publish Antigen without single-file; it locates reference assemblies (corelib, Roslyn) by path for Roslyn compilation
+            Antigen) dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" ;;
             *)   dotnet publish -c "$buildType" -o "$appInstallDir" ./src/"$proj" --self-contained -r $rid -p:PublishSingleFile=true ;;
         esac
         exit_code=$?
