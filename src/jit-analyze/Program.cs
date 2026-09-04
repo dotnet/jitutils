@@ -405,7 +405,8 @@ namespace ManagedCodeGen
                             baseOffsets = x.functionOffsets,
                             diffOffsets = y.functionOffsets
                         })
-                        .OrderByDescending(r => r.deltaMetrics.GetMetric(metricName).Value);
+                        .OrderByDescending(r => r.deltaMetrics.GetMetric(metricName).Value)
+                        .ToList();
 
                 FileDelta f = new FileDelta
                 {
@@ -416,9 +417,9 @@ namespace ManagedCodeGen
                     deltaMetrics = jointList.Sum(x => x.deltaMetrics),
                     relDeltaMetrics = jointList.Sum(x => x.relDeltaMetrics),
                     methodsInBoth = jointList.Count(),
-                    methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer),
-                    methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer),
-                    methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(metricName).Value != 0)
+                    methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer).ToList(),
+                    methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer).ToList(),
+                    methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(metricName).Value != 0).ToList()
                 };
 
                 if (_reconcile)
