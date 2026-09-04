@@ -289,6 +289,25 @@ namespace ManagedCodeGen
         // and offset in the file.
         //
         // This is the method that knows how to parse jit output and recover the metrics.
+        private static IEnumerable<(string line, int index)> ReadMetricLines(string[] filePaths)
+        {
+            int index = 0;
+            foreach (string path in filePaths)
+            {
+                using var reader = new DisassemblyReader(path);
+                while (reader.ReadLine(out ReadOnlySpan<char> line))
+                {
+                    if (line.StartsWith("; Total bytes of code", StringComparison.Ordinal) ||
+                        line.StartsWith("; Assembly listing for method", StringComparison.Ordinal) ||
+                        line.StartsWith("; Variable debug info:", StringComparison.Ordinal))
+                    {
+                        yield return (line.ToString(), index);
+                    }
+                    index = checked(index + 1);
+                }
+            }
+        }
+
         public static IEnumerable<MethodInfo> ExtractMethodInfo(string[] filePaths)
         {
             Regex namePattern = new Regex(@"for method (.*)$");
@@ -303,11 +322,7 @@ namespace ManagedCodeGen
             Regex resolutionInfoPattern = new Regex(@"ResolutionMovs (\d+) ResolutionMovsWt (\d+\.\d+)");
 
             var result =
-             filePaths.SelectMany(filePath => File.ReadLines(filePath))
-                             .Select((x, i) => new { line = x, index = i })
-                             .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
-                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal)
-                                        || l.line.StartsWith(@"; Variable debug info:", StringComparison.Ordinal))
+             ReadMetricLines(filePaths)
                              .Select((x) =>
                              {
                                  var nameMatch = namePattern.Match(x.line);
