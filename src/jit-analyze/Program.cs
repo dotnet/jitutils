@@ -15,6 +15,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using IOFileInfo = System.IO.FileInfo;
 
 namespace ManagedCodeGen
 {
@@ -932,6 +933,7 @@ namespace ManagedCodeGen
                 .ToDictionary(pair => pair.Base, pair => pair.Result.LineCount.Value, StringComparer.Ordinal);
         }
 
+        // Directory.Exists follows links; Git compares directory links themselves instead.
         private static bool IsRealDirectory(string path) =>
             (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == FileAttributes.Directory;
 
@@ -960,8 +962,8 @@ namespace ManagedCodeGen
         private static bool FilesEqual(string basePath, string diffPath)
         {
             // Git compares symbolic links themselves, not the contents of their targets.
-            var baseInfo = new System.IO.FileInfo(basePath);
-            var diffInfo = new System.IO.FileInfo(diffPath);
+            var baseInfo = new IOFileInfo(basePath);
+            var diffInfo = new IOFileInfo(diffPath);
             if (baseInfo.LinkTarget != null || diffInfo.LinkTarget != null)
                 return false;
 
