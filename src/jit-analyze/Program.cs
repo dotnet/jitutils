@@ -972,8 +972,6 @@ namespace ManagedCodeGen
 
             using var baseStream = File.OpenRead(basePath);
             using var diffStream = File.OpenRead(diffPath);
-            if (baseStream.Length != diffStream.Length)
-                return false;
 
             byte[] baseBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
             byte[] diffBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
