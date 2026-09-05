@@ -21,7 +21,9 @@ Directory analysis parses and compares independent file pairs using PLINQ's defa
 parallelism, based on the available processor count. Each worker
 releases unchanged method data after comparing a pair, and reuses parsed methods
 across requested metrics. Byte-identical pairs only need one parse. Instruction
-lines are scanned using pooled buffers rather than allocated as individual strings.
+lines are scanned using a reusable, reader-owned buffer rather than allocated as
+individual strings. The buffer starts at 32K characters and grows with `Array.Resize`
+when needed for longer lines.
 
 Textual diff analysis remains enabled by default. It uses the same default
 parallelism, skips Git for byte-identical files, and reuses counts across metrics.

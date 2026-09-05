@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
-using System.Buffers;
 using System.IO;
 
 namespace ManagedCodeGen
@@ -11,7 +10,7 @@ namespace ManagedCodeGen
     internal sealed class DisassemblyReader : IDisposable
     {
         private readonly StreamReader _reader;
-        private char[] _buffer = ArrayPool<char>.Shared.Rent(64 * 1024);
+        private char[] _buffer = new char[32 * 1024];
         private int _start;
         private int _end;
         private bool _skipLF;
@@ -58,10 +57,7 @@ namespace ManagedCodeGen
                 scanned = remaining.Length;
                 if (remaining.Length == _buffer.Length)
                 {
-                    char[] larger = ArrayPool<char>.Shared.Rent(checked(_buffer.Length * 2));
-                    remaining.CopyTo(larger);
-                    ArrayPool<char>.Shared.Return(_buffer);
-                    _buffer = larger;
+                    Array.Resize(ref _buffer, checked(_buffer.Length * 2));
                 }
                 else
                 {
@@ -76,10 +72,6 @@ namespace ManagedCodeGen
             }
         }
 
-        public void Dispose()
-        {
-            _reader.Dispose();
-            ArrayPool<char>.Shared.Return(_buffer);
-        }
+        public void Dispose() => _reader.Dispose();
     }
 }
