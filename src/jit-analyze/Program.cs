@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Parsing;
@@ -14,10 +15,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using IOFileInfo = System.IO.FileInfo;
 
 namespace ManagedCodeGen
 {
-    internal sealed class Program
+    internal sealed partial class Program
     {
         private readonly JitAnalyzeRootCommand _command;
         private readonly bool _reconcile;
@@ -27,6 +29,9 @@ namespace ManagedCodeGen
         private readonly int _count;
         private readonly string _basePath;
         private readonly string _diffPath;
+        private readonly string _baseDirectory;
+        private Dictionary<string, int> _textDiffCounts;
+        private HashSet<string> _filesNeedingTextDiffCounts;
 
         private static string METRIC_SEP = new string('-', 80);
 
@@ -51,12 +56,13 @@ namespace ManagedCodeGen
             _count = Get(command.Count);
             _basePath = Get(command.BasePath);
             _diffPath = Get(command.DiffPath);
+            _baseDirectory = Directory.Exists(_basePath) ? Path.GetFullPath(_basePath) : Path.GetDirectoryName(Path.GetFullPath(_basePath));
         }
 
         public class FileInfo
         {
             public string name;
-            public IEnumerable<MethodInfo> methodList;
+            public string[] paths;
             public bool isExplicitOnlyFile;
 
             public override string ToString()
@@ -92,7 +98,7 @@ namespace ManagedCodeGen
             public MetricCollection Metrics => metrics;
             public string name;
             public int functionCount;
-            public IEnumerable<int> functionOffsets;
+            public List<int> functionOffsets;
 
             public MethodInfo()
             {
@@ -256,17 +262,17 @@ namespace ManagedCodeGen
                         new FileInfo
                         {
                             name = Path.GetFileName(path),
-                            methodList = ExtractMethodInfo(Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption).ToArray()),
+                            paths = Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption).ToArray(),
                             isExplicitOnlyFile = true,
                         },
                     };
                 }
 
                 return Directory.EnumerateFiles(fullRootPath, searchPattern, searchOption)
-                         .AsParallel().Select(p => new FileInfo
+                         .Select(p => new FileInfo
                          {
                              name = p.Substring(fullRootPath.Length).TrimStart(Path.DirectorySeparatorChar),
-                             methodList = ExtractMethodInfo(new[] { p })
+                             paths = new[] { p }
                          }).ToList();
             }
             else
@@ -277,7 +283,7 @@ namespace ManagedCodeGen
                 { new FileInfo
                     {
                         name = Path.GetFileName(path),
-                        methodList = ExtractMethodInfo(new[] {path }),
+                        paths = new[] { path },
                         isExplicitOnlyFile = true,
                     }
                 };
@@ -289,145 +295,190 @@ namespace ManagedCodeGen
         // and offset in the file.
         //
         // This is the method that knows how to parse jit output and recover the metrics.
+        private static IEnumerable<(string line, int index)> ReadMetricLines(string[] filePaths)
+        {
+            int index = 0;
+            foreach (string path in filePaths)
+            {
+                using var reader = new DisassemblyReader(path);
+                while (reader.ReadLine(out ReadOnlySpan<char> line))
+                {
+                    if (line.StartsWith("; Total bytes of code", StringComparison.Ordinal) ||
+                        line.StartsWith("; Assembly listing for method", StringComparison.Ordinal) ||
+                        line.StartsWith("; Variable debug info:", StringComparison.Ordinal))
+                    {
+                        yield return (line.ToString(), index);
+                    }
+                    index = checked(index + 1);
+                }
+            }
+        }
+
         public static IEnumerable<MethodInfo> ExtractMethodInfo(string[] filePaths)
         {
-            Regex namePattern = new Regex(@"for method (.*)$");
-            Regex codeSizePattern = new Regex(@"^; Total bytes of code ([0-9]{1,}).* for method ");
-            Regex prologSizePattern = new Regex(@"prolog size ([0-9]{1,})");
-            // use new regex for perf score so we can still parse older files that did not have it.
-            Regex perfScorePattern = new Regex(@"(PerfScore|perf score) (\d+(\.\d+)?)");
-            Regex instrCountPattern = new Regex(@"instruction count ([0-9]{1,})");
-            Regex allocSizePattern = new Regex(@"allocated bytes for code ([0-9]{1,})");
-            Regex debugInfoPattern = new Regex(@"Variable debug info: ([0-9]{1,}) live range\(s\), ([0-9]{1,}) var\(s\)");
-            Regex spillInfoPattern = new Regex(@"SpillCount (\d+) SpillCountWt (\d+\.\d+)");
-            Regex resolutionInfoPattern = new Regex(@"ResolutionMovs (\d+) ResolutionMovsWt (\d+\.\d+)");
+            var methods = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
+            var lookup = methods.GetAlternateLookup<ReadOnlySpan<char>>();
+            foreach (var record in ReadMetricLines(filePaths))
+            {
+                string line = record.line;
+                int nameStart = line.IndexOf("for method ", StringComparison.Ordinal);
+                ReadOnlySpan<char> name = nameStart < 0 ? ReadOnlySpan<char>.Empty : line.AsSpan(nameStart + 11);
+                if (!lookup.TryGetValue(name, out MethodInfo method))
+                {
+                    method = new MethodInfo { name = name.ToString(), functionOffsets = new List<int>() };
+                    methods.Add(method.name, method);
+                }
 
-            var result =
-             filePaths.SelectMany(filePath => File.ReadLines(filePath))
-                             .Select((x, i) => new { line = x, index = i })
-                             .Where(l => l.line.StartsWith(@"; Total bytes of code", StringComparison.Ordinal)
-                                        || l.line.StartsWith(@"; Assembly listing for method", StringComparison.Ordinal)
-                                        || l.line.StartsWith(@"; Variable debug info:", StringComparison.Ordinal))
-                             .Select((x) =>
-                             {
-                                 var nameMatch = namePattern.Match(x.line);
-                                 var codeSizeMatch = codeSizePattern.Match(x.line);
-                                 var prologSizeMatch = prologSizePattern.Match(x.line);
-                                 var perfScoreMatch = perfScorePattern.Match(x.line);
-                                 var instrCountMatch = instrCountPattern.Match(x.line);
-                                 var allocSizeMatch = allocSizePattern.Match(x.line);
-                                 var debugInfoMatch = debugInfoPattern.Match(x.line);
-                                 var spillInfoMatch = spillInfoPattern.Match(x.line);
-                                 var resolutionInfoMatch = resolutionInfoPattern.Match(x.line);
-                                 return new
-                                 {
-                                     name = nameMatch.Groups[1].Value,
-                                     // Use matched data or default to 0
-                                     totalBytes = codeSizeMatch.Success ?
-                                        int.Parse(codeSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     prologBytes = prologSizeMatch.Success ?
-                                        int.Parse(prologSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     perfScore = perfScoreMatch.Success ?
-                                        double.Parse(perfScoreMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     instrCount = instrCountMatch.Success ?
-                                        int.Parse(instrCountMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     allocSize = allocSizeMatch.Success ?
-                                        int.Parse(allocSizeMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     debugClauseCount = debugInfoMatch.Success ?
-                                        int.Parse(debugInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     debugVarCount = debugInfoMatch.Success ?
-                                        int.Parse(debugInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     spillCount = spillInfoMatch.Success ?
-                                        int.Parse(spillInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     spillWeight = spillInfoMatch.Success ?
-                                        double.Parse(spillInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     resolutionCount = resolutionInfoMatch.Success ?
-                                        int.Parse(resolutionInfoMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0,
-                                     resolutionWeight = resolutionInfoMatch.Success ?
-                                        double.Parse(resolutionInfoMatch.Groups[2].Value, CultureInfo.InvariantCulture) : 0,
-                                     // Use function index only from non-data lines (the name line)
-                                     functionOffset = codeSizeMatch.Success ?
-                                        0 : x.index
-                                 };
-                             })
-                             .GroupBy(x => x.name)
-                             .Select(x =>
-                             {
-                                 MethodInfo mi = new MethodInfo
-                                 {
-                                     name = x.Key,
-                                     functionCount = x.Select(z => z).Where(z => z.totalBytes == 0).Count(),
-                                     // for all non-zero function offsets create list.
-                                     functionOffsets = x.Select(z => z)
-                                                    .Where(z => z.functionOffset != 0)
-                                                    .Select(z => z.functionOffset).ToList()
-                                 };
+                Match codeSize = CodeSizePattern().Match(line);
+                int totalBytes = ReadInt(codeSize);
+                if (totalBytes == 0)
+                {
+                    method.functionCount = checked(method.functionCount + 1);
+                }
+                if (!codeSize.Success && record.index != 0)
+                {
+                    method.functionOffsets.Add(record.index);
+                }
 
-                                 int totalCodeSize = x.Sum(z => z.totalBytes);
-                                 int totalAllocSize = x.Sum(z => z.allocSize);
-                                 Debug.Assert((totalAllocSize == 0) || (totalCodeSize <= totalAllocSize));
+                method.Metrics.AddInt("CodeSize", totalBytes);
+                method.Metrics.AddInt("PrologSize", ReadInt(PrologSizePattern().Match(line)));
+                method.Metrics.Add("PerfScore", ReadDouble(PerfScorePattern().Match(line), 2));
+                method.Metrics.AddInt("InstrCount", ReadInt(InstrCountPattern().Match(line)));
+                method.Metrics.AddInt("AllocSize", ReadInt(AllocSizePattern().Match(line)));
+                Match debugInfo = DebugInfoPattern().Match(line);
+                method.Metrics.AddInt("DebugClauseCount", ReadInt(debugInfo));
+                method.Metrics.AddInt("DebugVarCount", ReadInt(debugInfo, 2));
+                Match spillInfo = SpillInfoPattern().Match(line);
+                method.Metrics.AddInt("SpillCount", ReadInt(spillInfo));
+                method.Metrics.Add("SpillWeight", ReadDouble(spillInfo, 2));
+                Match resolutionInfo = ResolutionInfoPattern().Match(line);
+                method.Metrics.AddInt("ResolutionCount", ReadInt(resolutionInfo));
+                method.Metrics.Add("ResolutionWeight", ReadDouble(resolutionInfo, 2));
+            }
 
-                                 mi.Metrics.Add("CodeSize", totalCodeSize);
-                                 mi.Metrics.Add("PrologSize", x.Sum(z => z.prologBytes));
-                                 mi.Metrics.Add("PerfScore", x.Sum(z => z.perfScore));
-                                 mi.Metrics.Add("InstrCount", x.Sum(z => z.instrCount));
-                                 mi.Metrics.Add("AllocSize", totalAllocSize);
-                                 mi.Metrics.Add("ExtraAllocBytes", totalAllocSize == 0 ? 0 : totalAllocSize - totalCodeSize);
-                                 mi.Metrics.Add("DebugClauseCount", x.Sum(z => z.debugClauseCount));
-                                 mi.Metrics.Add("DebugVarCount", x.Sum(z => z.debugVarCount));
-                                 mi.Metrics.Add("SpillCount", x.Sum(z => z.spillCount));
-                                 mi.Metrics.Add("SpillWeight", x.Sum(z => z.spillWeight));
-                                 mi.Metrics.Add("ResolutionCount", x.Sum(z => z.resolutionCount));
-                                 mi.Metrics.Add("ResolutionWeight", x.Sum(z => z.resolutionWeight));
-                                 return mi;
-                             }).ToList();
+            foreach (MethodInfo method in methods.Values)
+            {
+                double totalCodeSize = method.Metrics.GetValue("CodeSize");
+                double totalAllocSize = method.Metrics.GetValue("AllocSize");
+                Debug.Assert(totalAllocSize == 0 || totalCodeSize <= totalAllocSize);
+                method.Metrics.Add("ExtraAllocBytes", totalAllocSize == 0 ? 0 : totalAllocSize - totalCodeSize);
+            }
+            return methods.Values.ToList();
 
-            return result;
+            static int ReadInt(Match match, int group = 1) =>
+                match.Success ? int.Parse(match.Groups[group].ValueSpan, CultureInfo.InvariantCulture) : 0;
+
+            static double ReadDouble(Match match, int group) =>
+                match.Success ? double.Parse(match.Groups[group].ValueSpan, CultureInfo.InvariantCulture) : 0;
+
         }
+
+        [GeneratedRegex(@"^; Total bytes of code ([0-9]{1,}).* for method ")]
+        private static partial Regex CodeSizePattern();
+        [GeneratedRegex(@"prolog size ([0-9]{1,})")]
+        private static partial Regex PrologSizePattern();
+        [GeneratedRegex(@"(PerfScore|perf score) (\d+(\.\d+)?)")]
+        private static partial Regex PerfScorePattern();
+        [GeneratedRegex(@"instruction count ([0-9]{1,})")]
+        private static partial Regex InstrCountPattern();
+        [GeneratedRegex(@"allocated bytes for code ([0-9]{1,})")]
+        private static partial Regex AllocSizePattern();
+        [GeneratedRegex(@"Variable debug info: ([0-9]{1,}) live range\(s\), ([0-9]{1,}) var\(s\)")]
+        private static partial Regex DebugInfoPattern();
+        [GeneratedRegex(@"SpillCount (\d+) SpillCountWt (\d+\.\d+)")]
+        private static partial Regex SpillInfoPattern();
+        [GeneratedRegex(@"ResolutionMovs (\d+) ResolutionMovsWt (\d+\.\d+)")]
+        private static partial Regex ResolutionInfoPattern();
 
         // Compare base and diff file lists and produce a sorted list of method
         // deltas by file.  Delta is computed diffBytes - baseBytes so positive
         // numbers are regressions. (lower is better)
         //
         // Todo: handle metrics where "higher is better"
-        public IEnumerable<FileDelta> Comparator(IEnumerable<FileInfo> baseInfo,
-            IEnumerable<FileInfo> diffInfo, string metricName)
+        public FileDelta[][] Comparator(IEnumerable<FileInfo> baseInfo,
+            IEnumerable<FileInfo> diffInfo, string[] metricNames)
         {
-            MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
-            return baseInfo.Join(diffInfo, b => b.isExplicitOnlyFile ? "" : b.name, d => d.isExplicitOnlyFile ? "" : d.name, (b, d) =>
+            // Keep only one pair's parsed methods per worker, and reuse them for every metric.
+            return baseInfo.Join(diffInfo, b => b.isExplicitOnlyFile ? "" : b.name,
+                d => d.isExplicitOnlyFile ? "" : d.name, (b, d) => (Base: b, Diff: d))
+                .AsParallel().AsOrdered()
+                .Select(pair =>
+                {
+                    var baseMethods = ExtractMethodInfo(pair.Base.paths);
+                    bool identical = pair.Base.paths.Length == pair.Diff.paths.Length &&
+                        pair.Base.paths.Zip(pair.Diff.paths).All(paths => FilesEqual(paths.First, paths.Second));
+                    var diffMethods = identical ? baseMethods : ExtractMethodInfo(pair.Diff.paths);
+                    return metricNames.Select(metricName =>
+                        CompareFile(pair.Base.name, pair.Diff.name, baseMethods, diffMethods, metricName)).ToArray();
+                }).ToArray();
+        }
+
+        private FileDelta CompareFile(string baseName, string diffName,
+            IEnumerable<MethodInfo> baseMethods, IEnumerable<MethodInfo> diffMethods, string metricName)
+        {
+            if (ReferenceEquals(baseMethods, diffMethods))
             {
-                var jointList = b.methodList.Join(d.methodList,
-                        x => x.name, y => y.name, (x, y) => new MethodDelta
-                        {
-                            name = x.name,
-                            baseMetrics = new MetricCollection(x.Metrics),
-                            diffMetrics = new MetricCollection(y.Metrics),
-                            baseOffsets = x.functionOffsets,
-                            diffOffsets = y.functionOffsets
-                        })
-                        .OrderByDescending(r => r.deltaMetrics.GetMetric(metricName).Value);
-
-                FileDelta f = new FileDelta
+                var total = new MetricCollection();
+                var relative = new MetricCollection();
+                int count = 0;
+                foreach (MethodInfo method in baseMethods)
                 {
-                    baseName = b.name,
-                    diffName = d.name,
-                    baseMetrics = jointList.Sum(x => x.baseMetrics),
-                    diffMetrics = jointList.Sum(x => x.diffMetrics),
-                    deltaMetrics = jointList.Sum(x => x.deltaMetrics),
-                    relDeltaMetrics = jointList.Sum(x => x.relDeltaMetrics),
-                    methodsInBoth = jointList.Count(),
-                    methodsOnlyInBase = b.methodList.Except(d.methodList, methodInfoComparer),
-                    methodsOnlyInDiff = d.methodList.Except(b.methodList, methodInfoComparer),
-                    methodDeltaList = jointList.Where(x => x.deltaMetrics.GetMetric(metricName).Value != 0)
-                };
-
-                if (_reconcile)
-                {
-                    f.Reconcile();
+                    total.Add(method.Metrics);
+                    // Preserve 0/0 (NaN) for metrics absent from an otherwise identical method.
+                    relative.AddRelativeDifference(method.Metrics, method.Metrics);
+                    count++;
                 }
+                var unchanged = new FileDelta
+                {
+                    baseName = baseName,
+                    diffName = diffName,
+                    baseMetrics = total,
+                    diffMetrics = new MetricCollection(total),
+                    deltaMetrics = new MetricCollection(),
+                    relDeltaMetrics = relative,
+                    methodsInBoth = count,
+                    methodsOnlyInBase = Array.Empty<MethodInfo>(),
+                    methodsOnlyInDiff = Array.Empty<MethodInfo>(),
+                    methodDeltaList = Array.Empty<MethodDelta>(),
+                };
+                if (_reconcile)
+                    unchanged.Reconcile();
+                return unchanged;
+            }
 
-                return f;
-            }).ToList();
+            MethodInfoComparer methodInfoComparer = new MethodInfoComparer();
+            var jointList = baseMethods.Join(diffMethods,
+                    x => x.name, y => y.name, (x, y) => new MethodDelta
+                    {
+                        name = x.name,
+                        baseMetrics = x.Metrics,
+                        diffMetrics = y.Metrics,
+                        baseOffsets = x.functionOffsets,
+                        diffOffsets = y.functionOffsets
+                    })
+                    .OrderByDescending(r => r.deltaMetrics.GetValue(metricName))
+                    .ToList();
+
+            FileDelta f = new FileDelta
+            {
+                baseName = baseName,
+                diffName = diffName,
+                baseMetrics = jointList.Sum(x => x.baseMetrics),
+                diffMetrics = jointList.Sum(x => x.diffMetrics),
+                deltaMetrics = jointList.Sum(x => x.deltaMetrics),
+                relDeltaMetrics = jointList.Sum(x => x.relDeltaMetrics),
+                methodsInBoth = jointList.Count(),
+                methodsOnlyInBase = baseMethods.Except(diffMethods, methodInfoComparer).ToList(),
+                methodsOnlyInDiff = diffMethods.Except(baseMethods, methodInfoComparer).ToList(),
+                methodDeltaList = jointList.Where(x => x.deltaMetrics.GetValue(metricName) != 0).ToList()
+            };
+
+            if (_reconcile)
+            {
+                f.Reconcile();
+            }
+
+            return f;
         }
 
         // Summarize differences across all the files.
@@ -646,11 +697,13 @@ namespace ManagedCodeGen
             {
                 // Show files with text diffs but no metric diffs.
 
-                Dictionary<string, int> diffCounts = DiffInText(_diffPath, _basePath);
+                Dictionary<string, int> diffCounts = _textDiffCounts ??= DiffInText(_diffPath, _basePath, _filesNeedingTextDiffCounts);
 
                 // TODO: resolve diffs to particular methods in the files.
-                var zeroDiffFilesWithDiffs = fileDeltaList.Where(x => diffCounts.ContainsKey(x.diffName) && (x.deltaMetrics.IsZero()))
-                    .OrderByDescending(x => diffCounts[x.baseName]);
+                var zeroDiffFilesWithDiffs = fileDeltaList
+                    .Select(file => (File: file, Path: Path.GetFullPath(Path.Combine(_baseDirectory, file.baseName))))
+                    .Where(x => !Get(_command.ConcatFiles) && diffCounts.ContainsKey(x.Path) && x.File.deltaMetrics.IsZero())
+                    .OrderByDescending(x => diffCounts[x.Path]);
 
                 int zeroDiffFilesWithDiffCount = zeroDiffFilesWithDiffs.Count();
                 if (zeroDiffFilesWithDiffCount > 0)
@@ -658,7 +711,7 @@ namespace ManagedCodeGen
                     summaryContents.AppendLine($"\n{zeroDiffFilesWithDiffCount} files had text diffs but no metric diffs.");
                     foreach (var zerofile in zeroDiffFilesWithDiffs.Take(_count))
                     {
-                        summaryContents.AppendLine($"{zerofile.baseName} had {diffCounts[zerofile.baseName]} diffs");
+                        summaryContents.AppendLine($"{zerofile.File.baseName} had {diffCounts[zerofile.Path]} diffs");
                     }
                 }
             }
@@ -842,70 +895,125 @@ namespace ManagedCodeGen
         // For example:
         // 6\t6\t\0d:\root\dasmset_8\base\Vector3Interop_ro.dasm\0d:\root\dasmset_8\diff\Vector3Interop_ro.dasm\0<next diff information>
         //
-        public static Dictionary<string, int> DiffInText(string diffPath, string basePath)
+        public static Dictionary<string, int> DiffInText(string diffPath, string basePath) =>
+            DiffInText(diffPath, basePath, filesNeedingCounts: null);
+
+        private static Dictionary<string, int> DiffInText(string diffPath, string basePath, HashSet<string> filesNeedingCounts)
         {
-            // run get diff command to see if we have textual diffs.
-            // (use git diff since it's already a dependency and cross platform)
-            List<string> commandArgs = new List<string>();
-            commandArgs.Add("diff");
-            commandArgs.Add("--no-index");
-            commandArgs.Add("--diff-filter=M");
-            commandArgs.Add("--exit-code");
-            commandArgs.Add("--numstat");
-            commandArgs.Add("-z");
-            commandArgs.Add(basePath);
-            commandArgs.Add(diffPath);
-
-            ProcessResult result = Utility.ExecuteProcess("git", commandArgs, true);
-            Dictionary<string, int> fileToTextDiffCount = new Dictionary<string, int>(); ;
-
-            if (result.ExitCode != 0)
+            basePath = Path.GetFullPath(basePath);
+            diffPath = Path.GetFullPath(diffPath);
+            IEnumerable<(string Base, string Diff)> pairs;
+            bool baseDirectory = IsRealDirectory(basePath);
+            bool diffDirectory = IsRealDirectory(diffPath);
+            if (baseDirectory && diffDirectory)
             {
-                // There are files with diffs. Build up a dictionary mapping base file name to net text diff count.
-
-                var rawLines = result.StdOut.Split(new[] { "\0", Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-                if (rawLines.Length % 3 != 0)
-                {
-                    Console.WriteLine($"Error parsing output: {result.StdOut}");
-                    return fileToTextDiffCount;
-                }
-
-                for (int i = 0; i < rawLines.Length; i += 3)
-                {
-                    string rawStats = rawLines[i];
-                    string rawBasePath = rawLines[i + 1];
-                    string rawDiffPath = rawLines[i + 2];
-
-                    string[] fields = rawStats.Split(new char[] { ' ', '\t', '"' }, StringSplitOptions.RemoveEmptyEntries);
-
-                    string parsedFullDiffFilePath = Path.GetFullPath(rawDiffPath);
-                    string parsedFullBaseFilePath = Path.GetFullPath(rawBasePath);
-
-                    if (!File.Exists(parsedFullBaseFilePath))
-                    {
-                        Console.WriteLine($"Error parsing path '{rawBasePath}'. `{parsedFullBaseFilePath}` doesn't exist.");
-                        continue;
-                    }
-
-
-                    if (!File.Exists(parsedFullDiffFilePath))
-                    {
-                        Console.WriteLine($"Error parsing path '{rawDiffPath}'. `{parsedFullDiffFilePath}` doesn't exist.");
-                        continue;
-                    }
-
-                    // Sometimes .dasm is parsed as binary and we don't get numbers, just dashes
-                    int addCount = 0;
-                    int delCount = 0;
-                    Int32.TryParse(fields[0], out addCount);
-                    Int32.TryParse(fields[1], out delCount);
-                    fileToTextDiffCount[parsedFullBaseFilePath] = addCount + delCount;
-                }
-
-                Console.WriteLine($"Found {fileToTextDiffCount.Count()} files with textual diffs.");
+                pairs = EnumerateTextPairs(new DirectoryInfo(basePath), new DirectoryInfo(diffPath));
+            }
+            else
+            {
+                if (baseDirectory)
+                    basePath = Path.Combine(basePath, Path.GetFileName(diffPath));
+                if (diffDirectory)
+                    diffPath = Path.Combine(diffPath, Path.GetFileName(basePath));
+                pairs = new[] { (basePath, diffPath) };
             }
 
-            return fileToTextDiffCount;
+            // Initialize the process manager on the caller thread before starting parallel workers.
+            _ = ProcessManager.Instance;
+            var changes = pairs.AsParallel()
+                .Select(pair => (pair.Base, Result: CompareText(pair.Base, pair.Diff,
+                    countLines: filesNeedingCounts == null || filesNeedingCounts.Contains(pair.Base))))
+                .Where(pair => pair.Result.HasChanges)
+                .ToArray();
+
+            if (changes.Length != 0)
+                Console.WriteLine($"Found {changes.Length} files with textual diffs.");
+            return changes.Where(pair => pair.Result.LineCount.HasValue)
+                .ToDictionary(pair => pair.Base, pair => pair.Result.LineCount.Value, StringComparer.Ordinal);
+        }
+
+        // Directory.Exists follows links; Git compares directory links themselves instead.
+        private static bool IsRealDirectory(string path) =>
+            (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == FileAttributes.Directory;
+
+        private static IEnumerable<(string Base, string Diff)> EnumerateTextPairs(DirectoryInfo baseline, DirectoryInfo diff)
+        {
+            var diffEntries = diff.EnumerateFileSystemInfos().ToDictionary(entry => entry.Name, StringComparer.Ordinal);
+            foreach (FileSystemInfo entry in baseline.EnumerateFileSystemInfos())
+            {
+                if (!diffEntries.TryGetValue(entry.Name, out FileSystemInfo other))
+                    continue;
+
+                bool baseDirectory = IsRealDirectory(entry.FullName);
+                bool diffDirectory = IsRealDirectory(other.FullName);
+                if (baseDirectory && diffDirectory)
+                {
+                    foreach (var pair in EnumerateTextPairs((DirectoryInfo)entry, (DirectoryInfo)other))
+                        yield return pair;
+                }
+                else if (!baseDirectory && !diffDirectory)
+                {
+                    yield return (entry.FullName, other.FullName);
+                }
+            }
+        }
+
+        private static bool FilesEqual(string basePath, string diffPath)
+        {
+            // Git compares symbolic links themselves, not the contents of their targets.
+            var baseInfo = new IOFileInfo(basePath);
+            var diffInfo = new IOFileInfo(diffPath);
+            if (baseInfo.LinkTarget != null || diffInfo.LinkTarget != null)
+                return false;
+
+            if (baseInfo.Length != diffInfo.Length)
+                return false;
+
+            using var baseStream = File.OpenRead(basePath);
+            using var diffStream = File.OpenRead(diffPath);
+
+            byte[] baseBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+            byte[] diffBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+            try
+            {
+                int read;
+                while ((read = baseStream.Read(baseBuffer)) != 0)
+                {
+                    if (diffStream.ReadAtLeast(diffBuffer.AsSpan(0, read), read, throwOnEndOfStream: false) != read ||
+                        !baseBuffer.AsSpan(0, read).SequenceEqual(diffBuffer.AsSpan(0, read)))
+                        return false;
+                }
+                return diffStream.ReadByte() == -1;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(baseBuffer);
+                ArrayPool<byte>.Shared.Return(diffBuffer);
+            }
+        }
+
+        private static (bool HasChanges, int? LineCount) CompareText(string basePath, string diffPath, bool countLines)
+        {
+            var startInfo = new ProcessStartInfo("git");
+            foreach (string argument in new[] { "diff", "--no-index", "--diff-filter=M", "--exit-code", countLines ? "--numstat" : "--quiet", "-z", "--", basePath, diffPath })
+                startInfo.ArgumentList.Add(argument);
+
+            ProcessResult result = Utility.ExecuteProcess(startInfo, capture: true);
+            if (result.ExitCode == 0)
+                return (false, null);
+            if (result.ExitCode != 1)
+                throw new InvalidOperationException($"git diff failed for '{basePath}' and '{diffPath}' (exit {result.ExitCode}): {result.StdErr}");
+
+            if (!countLines)
+                return (true, null);
+
+            string[] fields = result.StdOut.Split('\t', 3);
+            if (fields.Length != 3)
+                throw new InvalidOperationException($"Invalid git numstat output for '{basePath}': {result.StdOut}");
+            // Binary files have '-' in both numeric fields.
+            return (true, ParseCount(fields[0]) + ParseCount(fields[1]));
+
+            static int ParseCount(string value) => value == "-" ? 0 : int.Parse(value, CultureInfo.InvariantCulture);
         }
 
         private T Get<T>(Option<T> option) => _command.Result.GetValue(option);
@@ -940,9 +1048,18 @@ namespace ManagedCodeGen
                 string json = Get(_command.Json);
                 string tsv = Get(_command.Tsv);
                 string md = Get(_command.MD);
-                foreach (var metricName in Get(_command.Metrics))
+                string[] metricNames = Get(_command.Metrics).ToArray();
+                FileDelta[][] comparisons = Comparator(baseList, diffList, metricNames);
+                // Detailed text counts are only displayed for files with no metric differences.
+                // Still ask Git whether every other file changed, without computing unused numstat data.
+                _filesNeedingTextDiffCounts = comparisons.SelectMany(files => files)
+                    .Where(file => file.deltaMetrics.IsZero() && !Get(_command.ConcatFiles))
+                    .Select(file => Path.GetFullPath(Path.Combine(_baseDirectory, file.baseName)))
+                    .ToHashSet(StringComparer.Ordinal);
+                for (int metricIndex = 0; metricIndex < metricNames.Length; metricIndex++)
                 {
-                    compareList = Comparator(baseList, diffList, metricName);
+                    string metricName = metricNames[metricIndex];
+                    compareList = comparisons.Select(files => files[metricIndex]).ToArray();
 
                     if (tsv != null)
                     {

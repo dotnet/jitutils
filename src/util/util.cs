@@ -175,10 +175,6 @@ namespace ManagedCodeGen
         {
             var startInfo = new ProcessStartInfo
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
                 WorkingDirectory = workingDirectory,
                 FileName = name,
                 Arguments = string.Join(" ", commandArgs)
@@ -192,11 +188,22 @@ namespace ManagedCodeGen
                 }
             }
 
+            return ExecuteProcess(startInfo, capture);
+        }
+
+        // Supports ArgumentList without changing the legacy overload's pre-quoted argument handling.
+        public static ProcessResult ExecuteProcess(ProcessStartInfo startInfo, bool capture = false)
+        {
+            startInfo.UseShellExecute = false;
+            startInfo.CreateNoWindow = true;
+            startInfo.RedirectStandardError = true;
+            startInfo.RedirectStandardOutput = true;
+
             // set up the pipe for the stdout and builder for stderr
             StringBuilder _errorDataStringBuilder = new StringBuilder();
             StringBuilder _outputDataStringBuilder = new StringBuilder();
 
-            Process process = ProcessManager.Instance.Start(startInfo);
+            using Process process = ProcessManager.Instance.Start(startInfo);
 
             if (capture)
             {
@@ -233,7 +240,7 @@ namespace ManagedCodeGen
             catch (System.Exception e)
             {
                 // Maybe the program we're spawning wasn't found (ERROR_FILE_NOT_FOUND == 2).
-                Console.Error.WriteLine($"Error: failed to start '{name} {startInfo.Arguments}': {e.Message}");
+                Console.Error.WriteLine($"Error: failed to start '{startInfo.FileName} {startInfo.Arguments}': {e.Message}");
 
                 return new ProcessResult()
                 {
