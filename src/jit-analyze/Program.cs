@@ -919,10 +919,10 @@ namespace ManagedCodeGen
             }
 
             // Initialize the process manager on the caller thread before starting parallel workers.
-            ProcessManager manager = ProcessManager.Instance;
+            _ = ProcessManager.Instance;
             var changes = pairs.AsParallel()
                 .Where(pair => !FilesEqual(pair.Base, pair.Diff))
-                .Select(pair => (pair.Base, Result: CompareText(pair.Base, pair.Diff, manager,
+                .Select(pair => (pair.Base, Result: CompareText(pair.Base, pair.Diff,
                     countLines: filesNeedingCounts == null || filesNeedingCounts.Contains(pair.Base))))
                 .Where(pair => pair.Result.HasChanges)
                 .ToArray();
@@ -995,35 +995,24 @@ namespace ManagedCodeGen
             }
         }
 
-        private static (bool HasChanges, int? LineCount) CompareText(string basePath, string diffPath, ProcessManager manager, bool countLines)
+        private static (bool HasChanges, int? LineCount) CompareText(string basePath, string diffPath, bool countLines)
         {
-            var startInfo = new ProcessStartInfo("git")
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
+            var startInfo = new ProcessStartInfo("git");
             foreach (string argument in new[] { "diff", "--no-index", "--diff-filter=M", "--exit-code", countLines ? "--numstat" : "--quiet", "-z", "--", basePath, diffPath })
                 startInfo.ArgumentList.Add(argument);
 
-            using Process process = manager.Start(startInfo);
-            process.Start();
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-            process.WaitForExit();
-            string output = outputTask.GetAwaiter().GetResult();
-            string error = errorTask.GetAwaiter().GetResult();
-            if (process.ExitCode == 0)
+            ProcessResult result = Utility.ExecuteProcess(startInfo, capture: true);
+            if (result.ExitCode == 0)
                 return (false, null);
-            if (process.ExitCode != 1)
-                throw new InvalidOperationException($"git diff failed for '{basePath}' and '{diffPath}' (exit {process.ExitCode}): {error}");
+            if (result.ExitCode != 1)
+                throw new InvalidOperationException($"git diff failed for '{basePath}' and '{diffPath}' (exit {result.ExitCode}): {result.StdErr}");
 
             if (!countLines)
                 return (true, null);
 
-            string[] fields = output.Split('\t', 3);
+            string[] fields = result.StdOut.Split('\t', 3);
             if (fields.Length != 3)
-                throw new InvalidOperationException($"Invalid git numstat output for '{basePath}': {output}");
+                throw new InvalidOperationException($"Invalid git numstat output for '{basePath}': {result.StdOut}");
             // Binary files have '-' in both numeric fields.
             return (true, ParseCount(fields[0]) + ParseCount(fields[1]));
 

@@ -44,6 +44,7 @@ internal static class Tests
             LineBoundaries();
             CommandLine();
             TextDiffs();
+            ProcessHelpers();
             Console.WriteLine($"PASS: {checks} assertions (parser, line boundaries, CLI and TSV).");
             return 0;
         }
@@ -234,6 +235,35 @@ internal static class Tests
     private static void Totals(string output, int before, int after, int delta)
     {
         Contains(output, $"Total bytes of base: {before}\nTotal bytes of diff: {after}\nTotal bytes of delta: {delta} (");
+    }
+
+    private static void ProcessHelpers()
+    {
+        const string key = "jit-analyze-test.value";
+        ProcessResult legacy = Utility.ExecuteProcess("git",
+            new[] { "-c", $"\"{key}=two words\"", "config", "--get", key },
+            capture: true, workingDirectory: root);
+        Equal(0, legacy.ExitCode, "legacy process exit code");
+        Equal("two words" + Environment.NewLine, legacy.StdOut, "legacy pre-quoted arguments");
+        Equal("", legacy.StdErr, "legacy process stderr");
+
+        const string value = "spaces \"quotes\" backslash\\ and\ttabs";
+        var startInfo = new ProcessStartInfo("git") { WorkingDirectory = root };
+        foreach (string argument in new[] { "-c", $"{key}={value}", "config", "--get", key })
+            startInfo.ArgumentList.Add(argument);
+        ProcessResult result = Utility.ExecuteProcess(startInfo, capture: true);
+        Equal(0, result.ExitCode, "argument-list process exit code");
+        Equal(value + Environment.NewLine, result.StdOut, "literal argument boundaries");
+        Equal("", result.StdErr, "argument-list process stderr");
+
+        startInfo = new ProcessStartInfo("git");
+        startInfo.ArgumentList.Add("-C");
+        startInfo.ArgumentList.Add(Path.Combine(root, "missing directory"));
+        startInfo.ArgumentList.Add("status");
+        result = Utility.ExecuteProcess(startInfo, capture: true);
+        Equal(128, result.ExitCode, "failed child exit code");
+        Equal("", result.StdOut, "failed child stdout");
+        Equal(true, result.StdErr.Length > 0, "failed child stderr captured");
     }
 
     private static void TextDiffs()

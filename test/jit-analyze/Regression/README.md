@@ -29,6 +29,8 @@ ignored lines; and UTF-8/CRLF around 64 KiB boundaries. CLI tests exercise recon
 warnings, filtering, multiple metrics, TSV, concatenation and unequal single filenames.
 Text-diff tests cover unchanged files, binary files, long files, nested paths, spaces,
 Unix tabs/newlines in paths, dangling links and directory links without traversal.
+Process-helper tests cover legacy pre-quoted arguments, literal `ArgumentList`
+boundaries, and capture of child failures and stderr.
 
 Intentionally preserved behavior:
 
