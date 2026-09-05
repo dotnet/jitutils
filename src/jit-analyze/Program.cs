@@ -921,7 +921,6 @@ namespace ManagedCodeGen
             // Initialize the process manager on the caller thread before starting parallel workers.
             _ = ProcessManager.Instance;
             var changes = pairs.AsParallel()
-                .Where(pair => !FilesEqual(pair.Base, pair.Diff))
                 .Select(pair => (pair.Base, Result: CompareText(pair.Base, pair.Diff,
                     countLines: filesNeedingCounts == null || filesNeedingCounts.Contains(pair.Base))))
                 .Where(pair => pair.Result.HasChanges)

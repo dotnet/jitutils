@@ -26,7 +26,8 @@ individual strings. The buffer starts at 32K characters and grows with `Array.Re
 when needed for longer lines.
 
 Textual diff analysis remains enabled by default. It uses the same default
-parallelism, skips Git for byte-identical files, and reuses counts across metrics.
+parallelism and reuses counts across metrics. Git checks each matched pair directly,
+without a redundant byte comparison before invoking it.
 It requests detailed line counts only for files eligible for the text-only report;
 other files use Git's difference-only query and still contribute to the changed-file count.
 Git's added/deleted line counts are retained, including binary-file handling.
