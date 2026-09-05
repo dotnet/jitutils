@@ -401,7 +401,6 @@ namespace ManagedCodeGen
             return baseInfo.Join(diffInfo, b => b.isExplicitOnlyFile ? "" : b.name,
                 d => d.isExplicitOnlyFile ? "" : d.name, (b, d) => (Base: b, Diff: d))
                 .AsParallel().AsOrdered()
-                .WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
                 .Select(pair =>
                 {
                     var baseMethods = ExtractMethodInfo(pair.Base.paths);
@@ -920,7 +919,7 @@ namespace ManagedCodeGen
 
             // Initialize the process manager on the caller thread before starting parallel workers.
             ProcessManager manager = ProcessManager.Instance;
-            var changes = pairs.AsParallel().WithDegreeOfParallelism(Math.Min(Environment.ProcessorCount, 8))
+            var changes = pairs.AsParallel()
                 .Where(pair => !FilesEqual(pair.Base, pair.Diff))
                 .Select(pair => (pair.Base, Result: CompareText(pair.Base, pair.Diff, manager,
                     countLines: filesNeedingCounts == null || filesNeedingCounts.Contains(pair.Base))))

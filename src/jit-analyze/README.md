@@ -17,14 +17,14 @@ To build/setup:
 
 ## Large disassembly sets
 
-Directory analysis parses and compares independent file pairs in parallel, with at
-most eight workers (or the available processor count, if lower). Each worker
+Directory analysis parses and compares independent file pairs using PLINQ's default
+parallelism, based on the available processor count. Each worker
 releases unchanged method data after comparing a pair, and reuses parsed methods
 across requested metrics. Byte-identical pairs only need one parse. Instruction
 lines are scanned using pooled buffers rather than allocated as individual strings.
 
-Textual diff analysis remains enabled by default. It uses the same concurrency
-bound, skips Git for byte-identical files, and reuses counts across metrics.
+Textual diff analysis remains enabled by default. It uses the same default
+parallelism, skips Git for byte-identical files, and reuses counts across metrics.
 It requests detailed line counts only for files eligible for the text-only report;
 other files use Git's difference-only query and still contribute to the changed-file count.
 Git's added/deleted line counts are retained, including binary-file handling.
@@ -84,6 +84,23 @@ The metric reports agree with the original analyzer and the job's published
 totals. The optimized report additionally displays 106 text-only files that the
 original omitted because it looked up relative names in an absolute-path dictionary.
 The displayed line counts agree with a directory-level Git comparison.
+
+### Default-parallelism comparison
+
+After removing the eight-worker cap from both analysis phases, fresh runs compared
+the capped executable against PLINQ's default parallelism on the same
+16-logical-processor machine and full artifact workload. One warm-up run per
+variant was excluded; the three measured runs were interleaved with alternating order.
+
+| Parallelism | Wall time, three runs | Median wall time | Median peak RSS |
+| --- | --- | --- | --- |
+| Eight-worker cap (`e80f9a4`) | 15.43, 13.93, 13.91 s | 13.93 s | 0.86 GiB |
+| PLINQ default | 14.34, 14.01, 16.51 s | 14.34 s | 1.12 GiB |
+
+Default parallelism did not improve this workload in these runs: the median was
+about 3% slower and peak RSS was about 31% higher. The run ranges overlap, so this
+small timing difference should not be interpreted as a precisely established cost.
+Both phases now use PLINQ's default rather than an application-specific cap.
 
 The output of analyze looks like the following:
 ```
