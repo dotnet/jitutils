@@ -75,7 +75,20 @@ using System.Numerics;
 
                 staticMethodBuilder.AppendLine("public static int Antigen() { ");
                 staticMethodBuilder.AppendLine($"new {MainClassName}().Method0();");
-                staticMethodBuilder.AppendLine("return string.Join(Environment.NewLine, toPrint).GetHashCode();");
+                staticMethodBuilder.AppendLine("return StableHash(string.Join(Environment.NewLine, toPrint));");
+                staticMethodBuilder.AppendLine("}");
+
+                // FNV-1a hash.
+                // Stable run-to-run as opposed to string.GetHashCode()
+                staticMethodBuilder.AppendLine("[MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]");
+                staticMethodBuilder.AppendLine("public static int StableHash(string s) {");
+                staticMethodBuilder.AppendLine("ulong h = 14695981039346656037UL;");
+                staticMethodBuilder.AppendLine("for (int i = 0; i < s.Length; i++) {");
+                staticMethodBuilder.AppendLine("char c = s[i];");
+                staticMethodBuilder.AppendLine("h ^= (byte)c; h *= 1099511628211UL;");
+                staticMethodBuilder.AppendLine("h ^= (byte)(c >> 8); h *= 1099511628211UL;");
+                staticMethodBuilder.AppendLine("}");
+                staticMethodBuilder.AppendLine("return (int)(h ^ (h >> 32));");
                 staticMethodBuilder.AppendLine("}");
 
                 // Log method
