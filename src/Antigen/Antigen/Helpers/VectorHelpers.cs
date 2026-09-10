@@ -354,13 +354,20 @@ namespace Antigen
                     fullMethodName.Contains("MidpointRounding") || fullMethodName.Contains("Unsafe");
         }
 
-        // Look for float->integral reinterpret casts using "Vector.As".
+        // Look for reinterpret casts away from a floating point element type using "Vector.As",
+        // and for the "*WhereAllBitsSet" bit tests applied to a floating point vector.
         // A pretty common source of false positives is
-        //  some_fp_vector -> Vector.As -> some_int_vector -> print_bits
+        //  some_fp_vector -> Vector.As -> some_other_vector -> print_bits
         // The JIT is permitted to choose different bitwise representations for NaN
         private static bool IsFloatToIntegralReinterpretation(MethodInfo method)
         {
-            if (!method.Name.StartsWith("As", StringComparison.Ordinal))
+            if (IsAllBitsSetTestOnFloat(method))
+            {
+                return true;
+            }
+
+            if (!method.Name.StartsWith("As", StringComparison.Ordinal) ||
+                method.Name.Equals("Asin", StringComparison.Ordinal))
             {
                 return false;
             }
@@ -371,8 +378,27 @@ namespace Antigen
                 return false;
             }
 
-            return IsFloatingPointElementVector(parameters[0].ParameterType) &&
-                   IsIntegralElementVector(method.ReturnType);
+            return IsFloatingPointElementVector(parameters[0].ParameterType);
+        }
+
+        // Same issue with "*WhereAllBitsSet" family (CountWhereAllBitsSet, AnyWhereAllBitsSet, ...)
+        // As for Vector.As*
+        private static bool IsAllBitsSetTestOnFloat(MethodInfo method)
+        {
+            if (!method.Name.EndsWith("WhereAllBitsSet", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            foreach (var parameter in method.GetParameters())
+            {
+                if (IsFloatingPointElementVector(parameter.ParameterType))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -398,19 +424,6 @@ namespace Antigen
             // runtime's typeof(float) is always false and this filter would silently stop working.
             return elementType != null &&
                    (elementType.FullName == "System.Single" || elementType.FullName == "System.Double");
-        }
-
-        private static readonly HashSet<string> s_integralElementTypeNames = new HashSet<string>()
-        {
-            "System.Byte", "System.SByte", "System.Int16", "System.UInt16",
-            "System.Int32", "System.UInt32", "System.Int64", "System.UInt64",
-            "System.IntPtr", "System.UIntPtr"
-        };
-
-        private static bool IsIntegralElementVector(Type type)
-        {
-            var elementType = VectorElementType(type);
-            return elementType != null && s_integralElementTypeNames.Contains(elementType.FullName);
         }
 
         private static void RecordIntrinsicMethods(string typeFullName, string vectorTypeName)
