@@ -9,6 +9,7 @@ using System.CommandLine.Parsing;
 using Utils;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Antigen.Compilation;
 using Antigen.Execution;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -89,8 +90,15 @@ namespace Antigen
                 TestCase.s_Driver = EEDriver.GetInstance(s_runOptions.CoreRun, Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "ExecutionEngine.dll"), () => EnvVarOptions.TestVars(includeOsrSwitches: PRNG.Decide(0.3), false));
                 TestCase.s_TestRunner = TestRunner.GetInstance(TestCase.s_Driver, s_runOptions.CoreRun);
 
-                // Generate vector methods
-                VectorHelpers.RecordVectorMethods();
+                // Generate vector methods. The flag must be set before recording, because the
+                // method pool is built once and reused for every test case. The pool and the
+                // compiler both read CORE_ROOT so that the API surface Antigen generates against
+                // is the same one the tests will execute against.
+                string coreRootDirectory = Path.GetDirectoryName(Path.GetFullPath(s_runOptions.CoreRun));
+                Compiler.SetReferenceDirectory(coreRootDirectory);
+                VectorHelpers.AllowFloatToIntegralReinterpret =
+                    result.GetValue(command.AllowFloatToIntegralReinterpret);
+                VectorHelpers.RecordVectorMethods(coreRootDirectory);
 
                 Parallel.For(0, 4, (p) => RunTest());
                 Console.WriteLine($"Executed {s_testId} test cases.");

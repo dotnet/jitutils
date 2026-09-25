@@ -925,12 +925,12 @@ namespace Antigen
                 {
                     if ((methodSig.MethodName.Contains("GetElement") || methodSig.MethodName.Contains("WithElement")) && (parameter.ParamName == "index"))
                     {
-                        // For GetElement/WithElement, the index should not exceed the element count. So perform modulo operation for (argExpr % ElementCount)
+                        // For GetElement/WithElement, the index must stay below the element count.
                         VectorType targetVectorType = methodSig.Parameters[0].ParamType.VectorType;
                         ConstantValue elementCountExpr;
                         if (Tree.ValueType.GetElementCount(targetVectorType) == 1)
                         {
-                            elementCountExpr = ConstantValue.GetConstantValue(1);
+                            elementCountExpr = ConstantValue.GetConstantValue(0);
                         }
                         else
                         {

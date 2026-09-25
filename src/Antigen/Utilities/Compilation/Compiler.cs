@@ -35,15 +35,32 @@ namespace Antigen.Compilation
                 { "SYSLIB5003", ReportDiagnostic.Suppress }
             });
 
-        private static readonly string s_corelibPath = typeof(object).Assembly.Location;
-        private static readonly MetadataReference[] s_references =
-{
-             MetadataReference.CreateFromFile(s_corelibPath),
-             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath)!, "System.Console.dll")),
-             MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(s_corelibPath)!, "System.Runtime.dll")),
-             MetadataReference.CreateFromFile(typeof(SyntaxTree).Assembly.Location),
-             MetadataReference.CreateFromFile(typeof(CSharpSyntaxTree).Assembly.Location),
-        };
+        // Generated tests must compile against CORE_ROOT, not Antigen's own framework, because
+        // they execute under CORE_ROOT's corerun. Initialize to Antigen's framework to preserve
+        // the previous behavior for callers that do not configure a reference directory.
+        private static MetadataReference[] s_references =
+            CreateReferences(Path.GetDirectoryName(typeof(object).Assembly.Location) ??
+                throw new InvalidOperationException("Could not locate Antigen's framework directory."));
+
+        /// <summary>
+        ///     Point compilation at CORE_ROOT. Must be called before the first Compile().
+        /// </summary>
+        public static void SetReferenceDirectory(string referenceDirectory)
+        {
+            s_references = CreateReferences(referenceDirectory);
+        }
+
+        private static MetadataReference[] CreateReferences(string referenceDirectory)
+        {
+            return new MetadataReference[]
+            {
+                MetadataReference.CreateFromFile(Path.Combine(referenceDirectory, "System.Private.CoreLib.dll")),
+                MetadataReference.CreateFromFile(Path.Combine(referenceDirectory, "System.Console.dll")),
+                MetadataReference.CreateFromFile(Path.Combine(referenceDirectory, "System.Runtime.dll")),
+                MetadataReference.CreateFromFile(typeof(SyntaxTree).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(CSharpSyntaxTree).Assembly.Location),
+            };
+        }
 
         private readonly string m_outputDirectory;
 
